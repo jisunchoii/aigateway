@@ -1,0 +1,8 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pyjwt[crypto]==2.10.1
+httpx==0.28.1
+azure-identity==1.19.0
+azure-mgmt-apimanagement==4.0.0
+azure-cosmos==4.9.0
+azure-monitor-query==1.4.0

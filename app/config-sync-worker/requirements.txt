@@ -1,0 +1,4 @@
+azure-identity==1.19.0
+azure-cosmos==4.9.0
+azure-mgmt-apimanagement==4.0.0
+azure-monitor-query==1.4.0

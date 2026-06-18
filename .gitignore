@@ -1,0 +1,27 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan*
+crash.log
+# Secrets / local vars
+*.tfvars
+*.tfvars.*
+!terraform.tfvars.example
+.env
+
+# Python (config-sync worker)
+__pycache__/
+*.pyc
+*.pyo
+
+# Admin UI build artifacts
+app/admin-ui/spa/node_modules/
+app/admin-ui/bff/static/
+
+# Internal one-off scripts / dev tooling — kept on disk, not shipped to customers
+internal/
+
+# Parallel eastus2 test-stack working dir (operator copy, own state) — not shipped
+infra-aigw-eus2/

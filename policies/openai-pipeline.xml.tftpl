@@ -1,0 +1,198 @@
+<policies>
+  <inbound>
+    <base />
+
+%{ if client_auth_mode == "entra-id" ~}
+    <!-- [Privilege] Client auth (Entra ID): validate the caller's token BEFORE the consumerId
+         derivation and BEFORE the backend MI override. Only rendered in entra-id mode. -->
+    <validate-jwt header-name="Authorization" require-scheme="Bearer"
+                  failed-validation-httpcode="401"
+                  failed-validation-error-message="Unauthorized. A valid Entra ID access token is required."
+                  output-token-variable-name="jwt">
+      <openid-config url="https://login.microsoftonline.com/${entra_tenant_id}/v2.0/.well-known/openid-configuration" validate-connectivity="false" />
+      <audiences>
+        <audience>${entra_api_audience}</audience>
+      </audiences>
+      <issuers>
+        <issuer>https://login.microsoftonline.com/${entra_tenant_id}/v2.0</issuer>
+      </issuers>
+    </validate-jwt>
+    <!-- entra-id mode: derive consumerId from the configured claim now, so the shared consumerId
+         logic below picks it up (its ContainsKey check honors this pre-set value). -->
+    <set-variable name="consumerId" value="@{
+        var jwt = (Jwt)context.Variables["jwt"];
+        return jwt.Claims.ContainsKey("${entra_team_claim}") ? (jwt.Claims["${entra_team_claim}"].FirstOrDefault() ?? "unknown-consumer") : "unknown-consumer";
+    }" />
+%{ endif ~}
+
+    <!-- [Privilege] Derive consumerId (the unified counter-key axis, per spec §6 decision 2).
+         A later task sets consumerId from a JWT claim in entra-id mode BEFORE this runs; this
+         honors a pre-set value, else falls back to the subscription id (subscription-key mode). -->
+    <set-variable name="consumerId" value="@{
+        var existing = context.Variables.ContainsKey("consumerId") ? (string)context.Variables["consumerId"] : null;
+        if (!string.IsNullOrEmpty(existing)) { return existing; }
+        // subscription-key mode: the consumer name is the subscription DISPLAY NAME (the Admin UI
+        // issues keys with a random sid like vk-<uuid> but sets displayName = consumer). The bundle,
+        // budget usage, and metric axis are all keyed by consumer name, so use .Name (fall back to
+        // .Id then anonymous if a subscription ever lacks a displayName).
+        return context.Subscription?.Name ?? context.Subscription?.Id ?? "anonymous";
+    }" />
+
+    <!-- [Privilege] Model permission: the requested deployment alias is the path segment
+         after "deployments" in /openai/deployments/{deployment}/... Non-deployment routes
+         (e.g. /openai/models) have no such segment and are allowed through. A request for a
+         deployment NOT in {{allowed-models}} is rejected with 403. -->
+    <set-variable name="requestedDeployment" value="@{
+        var segments = context.Request.OriginalUrl.Path.Split('/');
+        var idx = System.Array.IndexOf(segments, "deployments");
+        return (idx >= 0 && idx + 1 < segments.Length) ? segments[idx + 1] : "";
+    }" />
+    <!-- [Per-consumer config] Decode the worker-published consumer bundle (base64 of JSON) and look up
+         THIS consumer's overrides. Policy never reads Cosmos (spec) — it parses a named value.
+         base64 because {{named-value}} is substituted as raw text pre-compile; JSON quotes would
+         break the C# string literal. Any miss/decode/parse failure → null → global fallback below. -->
+    <set-variable name="consumerCfg" value="@{
+        try {
+            var b64 = "{{consumer-config-json}}";
+            if (string.IsNullOrEmpty(b64)) { return (string)null; }
+            var raw = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(b64));
+            var all = Newtonsoft.Json.Linq.JObject.Parse(raw);
+            var tid = (string)context.Variables["consumerId"];
+            return all[tid] != null ? all[tid].ToString(Newtonsoft.Json.Formatting.None) : (string)null;
+        } catch { return (string)null; }
+    }" />
+    <set-variable name="effectiveAllowedModels" value="@{
+        if (context.Variables["consumerCfg"] != null) {
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+            var v = cfg.Value<string>("allowed_models");
+            if (!string.IsNullOrEmpty(v)) { return v; }
+        }
+        return "{{allowed-models}}";
+    }" />
+    <!-- [Cost] Per-consumer RATE LIMIT via fixed tiers. APIM llm-token-limit requires LITERAL tpm/quota
+         (rejects policy expressions), so each tier is a pre-baked llm-token-limit block with literal
+         named values, and we <choose> by the consumer's tier. The tier set + branches are generated from
+         the rate_tiers Terraform variable (single source of truth). Unknown/absent tier → global
+         fallback. counter-key = consumerId in every branch (one counter axis per consumer across tier changes). -->
+    <set-variable name="effectiveTier" value="@{
+        if (context.Variables["consumerCfg"] != null) {
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+            var t = cfg.Value<string>("tier");
+            if (${join(" || ", [for name, _ in rate_tiers : "t == \"${name}\""])}) { return t; }
+        }
+        return "default";
+    }" />
+    <!-- [Cost] Phase 4 budget downgrade. The worker writes active_downgrade.level (0/1/2) into the
+         consumer's bundle entry when daily token usage crosses 80% / 100%. Here we rewrite the requested
+         deployment DOWN the consumer's downgrade_ladder by `level` steps. URL path segment only (no body
+         buffering, per spec §6.214). No downgrade -> requestedDeployment unchanged. -->
+    <set-variable name="effectiveDeployment" value="@{
+        var req = (string)context.Variables["requestedDeployment"];
+        if (req.Length == 0) { return req; }
+        if (context.Variables["consumerCfg"] == null) { return req; }
+        try {
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+            var ad = cfg["active_downgrade"];
+            int level = (ad != null && ad["level"] != null) ? (int)ad["level"] : 0;
+            if (level <= 0) { return req; }
+            var ladderRaw = cfg.Value<string>("downgrade_ladder");
+            if (string.IsNullOrEmpty(ladderRaw)) { return req; }
+            var ladder = ladderRaw.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+            int idx = ladder.IndexOf(req);
+            if (idx < 0) { return ladder[ladder.Count - 1]; }
+            int target = System.Math.Min(idx + level, ladder.Count - 1);
+            return ladder[target];
+        } catch { return req; }
+    }" />
+    <!-- [Cost] Apply the downgrade. The incoming route is the Azure OpenAI path route (model in the
+         URL). Two cases when effectiveDeployment differs from the request:
+           (a) another gpt alias -> same backend; rewrite the deployment path segment (in-place).
+           (b) an OSS alias      -> cross-backend: switch to the AIServices account's GA OpenAI/v1
+                                    route (/chat/completions, model in body). OSS chat models use
+                                    max_tokens, so translate gpt-5's max_completion_tokens. -->
+    <set-variable name="dgIsOss" value="@(new[]{ ${join(", ", [for a in foundry_aliases : "\"${a}\""])} }.Contains((string)context.Variables["effectiveDeployment"]))" />
+    <choose>
+      <when condition="@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveDeployment"] != (string)context.Variables["requestedDeployment"])">
+        <choose>
+          <when condition="@((bool)context.Variables["dgIsOss"])">
+            <set-backend-service base-url="${foundry_v1_base}" />
+            <!-- copy-unmatched-params=false drops the incoming ?api-version=… ; the AIServices
+                 GA OpenAI/v1 route is version-pinned and 400s on an api-version query param. -->
+            <rewrite-uri template="/chat/completions" copy-unmatched-params="false" />
+            <set-body>@{
+                var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
+                body["model"] = (string)context.Variables["effectiveDeployment"];
+                if (body["max_completion_tokens"] != null && body["max_tokens"] == null) {
+                    body["max_tokens"] = body["max_completion_tokens"];
+                    body.Remove("max_completion_tokens");
+                }
+                return body.ToString(Newtonsoft.Json.Formatting.None);
+            }</set-body>
+          </when>
+          <otherwise>
+            <!-- Same-backend gpt downgrade. rewrite-uri's template is the path AFTER the API path
+                 prefix (the backend serviceUrl already ends in /openai), so we must NOT include the
+                 /openai segment here — building it from OriginalUrl.Path would double it
+                 (.../openai/openai/...) and 404. Rebuild the canonical deployment route relative to
+                 the backend, swapping in the downgraded deployment, and keep the original query. -->
+            <rewrite-uri template="@("/deployments/" + (string)context.Variables["effectiveDeployment"] + "/chat/completions" + context.Request.OriginalUrl.QueryString)" />
+          </otherwise>
+        </choose>
+      </when>
+    </choose>
+    <choose>
+      <when condition="@(((string)context.Variables["effectiveDeployment"]).Length > 0 && !((string)context.Variables["effectiveAllowedModels"]).Split(',').Select(m => m.Trim()).Contains((string)context.Variables["effectiveDeployment"]))">
+        <return-response>
+          <set-status code="403" reason="Forbidden" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-body>@(Newtonsoft.Json.JsonConvert.SerializeObject(new { error = "deployment '" + (string)context.Variables["requestedDeployment"] + "' is not allowed" }))</set-body>
+        </return-response>
+      </when>
+    </choose>
+
+    <choose>
+%{ for name, _ in rate_tiers ~}
+      <when condition='@((string)context.Variables["effectiveTier"] == "${name}")'>
+        <llm-token-limit counter-key="@((string)context.Variables["consumerId"])"
+                         tokens-per-minute="{{tier-${name}-tpm}}" token-quota="{{tier-${name}-quota}}"
+                         token-quota-period="{{tier-${name}-period}}" estimate-prompt-tokens="false"
+                         remaining-tokens-variable-name="remainingTokens" />
+      </when>
+%{ endfor ~}
+      <otherwise>
+        <llm-token-limit counter-key="@((string)context.Variables["consumerId"])"
+                         tokens-per-minute="{{tokens-per-minute}}" token-quota="{{token-quota}}"
+                         token-quota-period="{{token-quota-period}}" estimate-prompt-tokens="false"
+                         remaining-tokens-variable-name="remainingTokens" />
+      </otherwise>
+    </choose>
+
+    <!-- [Audit] Emit token metrics to App Insights with consumer + deployment dimensions. -->
+    <llm-emit-token-metric namespace="llm-gateway">
+      <dimension name="consumer" value="@((string)context.Variables["consumerId"])" />
+      <dimension name="deployment" value="@((string)context.Variables["requestedDeployment"])" />
+      <dimension name="effectiveModel" value="@(context.Variables.ContainsKey("effectiveDeployment") ? (string)context.Variables["effectiveDeployment"] : "")" />
+      <dimension name="API ID" />
+    </llm-emit-token-metric>
+
+    <!-- [Privilege] Backend boundary: APIM authenticates to Azure OpenAI with its managed identity.
+         Key auth is disabled on the account, so this is the only working path. MUST stay last
+         so it overrides any client Authorization with the MI bearer for the backend call. -->
+    <authentication-managed-identity resource="https://cognitiveservices.azure.com"
+                                     output-token-variable-name="msi-access-token" />
+    <set-header name="Authorization" exists-action="override">
+      <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

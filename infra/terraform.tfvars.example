@@ -1,0 +1,13 @@
+prefix               = "aigw"
+env                  = "dev"
+location             = "koreacentral"
+owner                = "platform-team@example.com"
+cost_center          = "CC-1234"
+apim_publisher_name  = "Platform Team"
+apim_publisher_email = "platform-team@example.com"
+apim_sku_name        = "Developer_1"
+
+# Cost guardrail (observability module)
+monthly_budget_amount = 200
+budget_alert_email    = "platform-team@example.com"
+budget_start_date     = "2026-06-01T00:00:00Z"
