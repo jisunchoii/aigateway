@@ -72,47 +72,47 @@ export default function Dashboard({ config }: { config: RuntimeConfig }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
-      <Title3>대시보드 — 사용량 &amp; 오류</Title3>
-      <Text>이 대시보드는 게이트웨이 고유의 컨슈머·모델별 토큰 사용량과 오류율을 보여줍니다. 일반 API 트래픽·지역·응답코드 등 전체 분석은 Azure 포털의 APIM 네이티브 Analytics(Monitoring → Analytics)에서 확인하세요.</Text>
+      <Title3>Dashboard — usage &amp; errors</Title3>
+      <Text>This dashboard shows the gateway's own per-consumer and per-model token usage and error rate. For full analytics (overall API traffic, regions, response codes), use APIM's native Analytics in the Azure portal (Monitoring → Analytics).</Text>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <Dropdown value={range} selectedOptions={[range]}
                   onOptionSelect={(_, d) => d.optionValue && setRange(d.optionValue)} style={{ minWidth: 100 }}>
           {RANGES.map((r) => <Option key={r} value={r}>{r}</Option>)}
         </Dropdown>
-        <Button onClick={load} disabled={loading}>새로고침</Button>
+        <Button onClick={load} disabled={loading}>Refresh</Button>
         {analyticsUrl && (
           <Button appearance="secondary" as="a" href={analyticsUrl} target="_blank" rel="noopener noreferrer"
-                  title="Azure 포털에서 APIM 리소스를 엽니다. 왼쪽 메뉴 Monitoring → Analytics에서 전체 분석을 확인하세요.">
-            Azure 포털에서 APIM 열기 ↗
+                  title="Opens the APIM resource in the Azure portal. See full analytics under Monitoring → Analytics in the left menu.">
+            Open APIM in Azure portal ↗
           </Button>
         )}
       </div>
       {err && <MessageBar intent="error"><MessageBarBody>{err}</MessageBarBody></MessageBar>}
-      {loading ? <Spinner label="불러오는 중…" /> : data && (
+      {loading ? <Spinner label="Loading…" /> : data && (
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Kpi label="총 토큰" value={data.total_tokens.toLocaleString()} />
-            <Kpi label="총 요청" value={data.total_requests.toLocaleString()} />
-            <Kpi label="오류율" value={`${(data.error_rate * 100).toFixed(1)}%`} />
-            <Kpi label="활성 컨슈머" value={String(data.by_consumer.length)} />
-            <Kpi label="모델 거부 (403)" value={(data.blocked_403 ?? 0).toLocaleString()} />
-            <Kpi label="속도 초과 (429)" value={(data.blocked_429 ?? 0).toLocaleString()} />
+            <Kpi label="Total tokens" value={data.total_tokens.toLocaleString()} />
+            <Kpi label="Total requests" value={data.total_requests.toLocaleString()} />
+            <Kpi label="Error rate" value={`${(data.error_rate * 100).toFixed(1)}%`} />
+            <Kpi label="Active consumers" value={String(data.by_consumer.length)} />
+            <Kpi label="Model rejections (403)" value={(data.blocked_403 ?? 0).toLocaleString()} />
+            <Kpi label="Rate exceeded (429)" value={(data.blocked_429 ?? 0).toLocaleString()} />
           </div>
 
-          <Title3>예산 강등 중인 컨슈머</Title3>
+          <Title3>Consumers under budget downgrade</Title3>
           {data.downgrades && data.downgrades.length > 0
             ? <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {data.downgrades.map((d) => (
                   <Badge key={d.consumer} appearance="tint" color={d.level >= 2 ? "danger" : "warning"}>
-                    {`${d.consumer} — ${d.level}단계`}
+                    {`${d.consumer} — level ${d.level}`}
                   </Badge>
                 ))}
               </div>
-            : <Text style={{ color: tokens.colorNeutralForeground3 }}>현재 강등 중인 컨슈머가 없습니다.</Text>}
-          <Title3>컨슈머별 토큰</Title3>
-          <Table aria-label="컨슈머별 토큰">
+            : <Text style={{ color: tokens.colorNeutralForeground3 }}>No consumers are currently downgraded.</Text>}
+          <Title3>Tokens by consumer</Title3>
+          <Table aria-label="Tokens by consumer">
             <TableHeader><TableRow>
-              <TableHeaderCell>컨슈머</TableHeaderCell><TableHeaderCell>토큰</TableHeaderCell>
+              <TableHeaderCell>Consumer</TableHeaderCell><TableHeaderCell>Tokens</TableHeaderCell>
             </TableRow></TableHeader>
             <TableBody>
               {data.by_consumer.length === 0
@@ -125,10 +125,10 @@ export default function Dashboard({ config }: { config: RuntimeConfig }) {
                 ))}
             </TableBody>
           </Table>
-          <Title3>모델별 토큰 · 요청</Title3>
-          <Table aria-label="모델별 토큰 및 요청">
+          <Title3>Tokens · requests by model</Title3>
+          <Table aria-label="Tokens and requests by model">
             <TableHeader><TableRow>
-              <TableHeaderCell>모델(배포)</TableHeaderCell><TableHeaderCell>토큰</TableHeaderCell><TableHeaderCell>요청 수</TableHeaderCell>
+              <TableHeaderCell>Model (deployment)</TableHeaderCell><TableHeaderCell>Tokens</TableHeaderCell><TableHeaderCell>Requests</TableHeaderCell>
             </TableRow></TableHeader>
             <TableBody>
               {data.by_model.length === 0
