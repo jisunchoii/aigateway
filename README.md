@@ -87,10 +87,14 @@ cost-based budget downgrade — all managed from a self-service Admin UI.
 ### 1. Bootstrap the Terraform state backend (once per subscription)
 
 ```powershell
-./scripts/bootstrap-backend.ps1 -Location koreacentral
+./scripts/bootstrap-backend.ps1 `
+  -Location eastus2 `
+  -BackendRg rg-aigw-tfstate-dev-eastus2 `
+  -StoragePrefix staigwtfstate `
+  -StateKey ai-gateway-eus2.tfstate
 ```
 
-Creates a resource group + storage account for remote state (Entra auth, public blob access blocked).
+Creates an eastus2 resource group + storage account for remote state (Entra auth, public blob access blocked).
 Copy the outputs into the `backend "azurerm"` block in `infra/providers.tf`.
 
 ### 2. Set variables
@@ -108,6 +112,7 @@ don't exist yet, and the worker Job / Admin UI app are count-gated on these vari
 ```powershell
 cd infra
 terraform init
+# If you are moving an existing state from another backend, run `terraform init -migrate-state` instead.
 terraform apply
 ```
 

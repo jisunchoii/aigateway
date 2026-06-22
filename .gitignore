@@ -23,5 +23,8 @@ app/admin-ui/bff/static/
 # Internal one-off scripts / dev tooling — kept on disk, not shipped to customers
 internal/
 
+# Local blog drafts
+blog-draft-ko.md
+
 # Parallel eastus2 test-stack working dir (operator copy, own state) — not shipped
 infra-aigw-eus2/

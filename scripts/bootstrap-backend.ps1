@@ -1,11 +1,15 @@
 # One-time bootstrap of the remote Terraform state backend.
 # Run once per subscription before `terraform init`.
 param(
-  [string]$Location      = "koreacentral",
-  [string]$BackendRg     = "rg-llmgw-tfstate-dev-koreacentral",
-  [string]$StoragePrefix = "stllmgwtfstate"
+  [string]$Location      = "eastus2",
+  [string]$BackendRg     = "",
+  [string]$StoragePrefix = "staigwtfstate",
+  [string]$StateKey      = "ai-gateway-eus2.tfstate"
 )
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($BackendRg)) {
+  $BackendRg = "rg-aigw-tfstate-dev-$Location"
+}
 if ($StoragePrefix.Length + 6 -gt 24) {
   Write-Error "StoragePrefix must be <= 18 characters (leaves room for a 6-char suffix)."
   exit 1
@@ -39,4 +43,4 @@ Write-Host "Backend ready. Put these in infra/providers.tf backend block:"
 Write-Host "  resource_group_name  = `"$BackendRg`""
 Write-Host "  storage_account_name = `"$account`""
 Write-Host "  container_name       = `"tfstate`""
-Write-Host "  key                  = `"llm-gateway.tfstate`""
+Write-Host "  key                  = `"$StateKey`""

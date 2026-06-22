@@ -18,10 +18,10 @@ terraform {
 
   # Fill these from scripts/bootstrap-backend.ps1 output, then run `terraform init`.
   backend "azurerm" {
-    resource_group_name  = "rg-llmgw-tfstate-dev-koreacentral"
-    storage_account_name = "stllmgwtfstate4cvsl0"
+    resource_group_name  = "rg-aigw-tfstate-dev-eastus2"
+    storage_account_name = "<replace-with-bootstrap-output>"
     container_name       = "tfstate"
-    key                  = "llm-gateway.tfstate"
+    key                  = "ai-gateway-eus2.tfstate"
     use_azuread_auth     = true
   }
 }
