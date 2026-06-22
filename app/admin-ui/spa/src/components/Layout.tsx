@@ -10,17 +10,17 @@ const NAV: { group: string; items: NavItem[] }[] = [
   {
     group: "Monitor",
     items: [
-      { to: "/dashboard", label: "대시보드", icon: <DataPieRegular /> },
-      { to: "/monitoring", label: "로그", icon: <DocumentBulletListRegular /> },
+      { to: "/dashboard", label: "Dashboard", icon: <DataPieRegular /> },
+      { to: "/monitoring", label: "Logs", icon: <DocumentBulletListRegular /> },
     ],
   },
   {
     group: "Manage",
     items: [
-      { to: "/consumers", label: "컨슈머 & 키", icon: <PeopleTeamRegular /> },
-      { to: "/models", label: "모델", icon: <CubeRegular /> },
-      { to: "/budget", label: "예산", icon: <MoneyRegular /> },
-      { to: "/limits", label: "속도 제한", icon: <GaugeRegular /> },
+      { to: "/consumers", label: "Consumers & keys", icon: <PeopleTeamRegular /> },
+      { to: "/models", label: "Models", icon: <CubeRegular /> },
+      { to: "/budget", label: "Budget", icon: <MoneyRegular /> },
+      { to: "/limits", label: "Rate limits", icon: <GaugeRegular /> },
     ],
   },
 ];
