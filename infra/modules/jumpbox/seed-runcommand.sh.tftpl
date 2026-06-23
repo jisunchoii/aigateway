@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Rendered by Terraform (azurerm_virtual_machine_run_command). Writes the two seed scripts to
+# the jumpbox and runs them against Cosmos using the VM's managed identity. Retries to absorb
+# Cosmos data-plane RBAC propagation delay after the role assignment is created.
+# Waits-on Cosmos role assignment: ${rbac_id}
+set -uo pipefail
+
+ENDPOINT="${endpoint}"
+
+cat > /tmp/seed-cosmos-jumpbox.sh <<'SEED_COSMOS_EOF'
+${cosmos_script}
+SEED_COSMOS_EOF
+
+cat > /tmp/seed-pricing-jumpbox.sh <<'SEED_PRICING_EOF'
+${pricing_script}
+SEED_PRICING_EOF
+
+chmod +x /tmp/seed-cosmos-jumpbox.sh /tmp/seed-pricing-jumpbox.sh
+
+run_with_retry() {
+  script="$1"; shift
+  attempts=10
+  i=1
+  while true; do
+    if bash "$script" "$@"; then
+      return 0
+    fi
+    if [ "$i" -ge "$attempts" ]; then
+      echo "ERROR: $script failed after $attempts attempts" >&2
+      return 1
+    fi
+    echo "Attempt $i for $script failed (Cosmos RBAC may still be propagating); retrying in 30s..." >&2
+    i=$((i + 1))
+    sleep 30
+  done
+}
+
+run_with_retry /tmp/seed-cosmos-jumpbox.sh  "$ENDPOINT"
+run_with_retry /tmp/seed-pricing-jumpbox.sh "$ENDPOINT"
+echo "Seeding complete."

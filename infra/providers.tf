@@ -14,12 +14,16 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.12"
+    }
   }
 
   # Fill these from scripts/bootstrap-backend.ps1 output, then run `terraform init`.
   backend "azurerm" {
     resource_group_name  = "rg-aigw-tfstate-dev-eastus2"
-    storage_account_name = "<replace-with-bootstrap-output>"
+    storage_account_name = "staigwtfstatehabett"
     container_name       = "tfstate"
     key                  = "ai-gateway-eus2.tfstate"
     use_azuread_auth     = true

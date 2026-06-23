@@ -9,7 +9,7 @@ variable "name_suffix" {
 }
 variable "suffix" {
   type        = string
-  description = "Short random suffix used for the Windows computer_name (<=15 chars)."
+  description = "Short random suffix used for the VM computer_name (hostname)."
 }
 variable "resource_group_name" {
   type        = string
@@ -48,9 +48,25 @@ variable "vm_size" {
   default     = "Standard_B2s_v2"
   description = "VM size for the jumpbox. B2s_v2 is available in koreacentral (B2s hit capacity restrictions)."
 }
+variable "cosmos_endpoint" {
+  type        = string
+  default     = null
+  description = "Cosmos DB document endpoint the seed run-command writes to (https://<account>.documents.azure.com:443/)."
+}
+variable "seed_role_assignment_id" {
+  type        = string
+  default     = null
+  description = "Cosmos data-plane role assignment ID the seed run-command must wait for (ordering + propagation)."
+}
+variable "run_seed" {
+  type        = bool
+  default     = true
+  description = "When true (and the jumpbox is enabled), run the Cosmos + pricing seed scripts on the VM via a run-command."
+}
 
 locals {
-  c = var.enabled ? 1 : 0
+  c      = var.enabled ? 1 : 0
+  seed_c = var.enabled && var.run_seed ? 1 : 0
 }
 
 resource "azurerm_public_ip" "bastion" {
@@ -97,11 +113,9 @@ resource "azurerm_network_interface" "vm" {
   }
 }
 
-resource "azurerm_windows_virtual_machine" "vm" {
-  count = local.c
-  name  = "vm-jump-${var.name_suffix}"
-  # Windows computer_name max 15 chars; derive a short stable name from the random suffix
-  # ("jump-" + 6-char suffix = 11) since the full resource name (21 chars) exceeds the limit.
+resource "azurerm_linux_virtual_machine" "vm" {
+  count                 = local.c
+  name                  = "vm-jump-${var.name_suffix}"
   computer_name         = "jump-${var.suffix}"
   resource_group_name   = var.resource_group_name
   location              = var.location
@@ -110,6 +124,9 @@ resource "azurerm_windows_virtual_machine" "vm" {
   admin_password        = var.admin_password
   network_interface_ids = [azurerm_network_interface.vm[0].id]
   tags                  = var.tags
+
+  # Password auth is enabled so you can sign in over Bastion without managing SSH keys.
+  disable_password_authentication = false
 
   identity {
     type = "SystemAssigned"
@@ -121,22 +138,48 @@ resource "azurerm_windows_virtual_machine" "vm" {
   }
 
   source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2022-datacenter-azure-edition"
+    publisher = "Canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
     version   = "latest"
+  }
+}
+
+# One-shot seed job: writes the Cosmos `config`/`pricing` docs from the jumpbox using its
+# managed identity. The script embeds the repo seed scripts verbatim and retries to absorb
+# data-plane RBAC propagation. Referencing seed_role_assignment_id forces this to run only
+# AFTER the Cosmos role assignment exists.
+resource "azurerm_virtual_machine_run_command" "seed" {
+  count              = local.seed_c
+  name               = "seed-cosmos-config"
+  location           = var.location
+  virtual_machine_id = azurerm_linux_virtual_machine.vm[0].id
+
+  source {
+    # Strip CR so the script has LF endings even if the .tftpl / .sh files are saved as CRLF
+    # on Windows (otherwise the Linux shebang becomes "bash\r" and fails with exit 127).
+    script = replace(templatefile("${path.module}/seed-runcommand.sh.tftpl", {
+      endpoint       = var.cosmos_endpoint
+      rbac_id        = coalesce(var.seed_role_assignment_id, "none")
+      cosmos_script  = file("${path.module}/../../../scripts/seed-cosmos-jumpbox.sh")
+      pricing_script = file("${path.module}/../../../scripts/seed-pricing-jumpbox.sh")
+    }), "\r", "")
   }
 }
 
 output "vm_name" {
   description = "Jumpbox VM name (null when disabled)."
-  value       = one(azurerm_windows_virtual_machine.vm[*].name)
+  value       = one(azurerm_linux_virtual_machine.vm[*].name)
 }
 output "vm_principal_id" {
   description = "Jumpbox VM system-assigned identity principal ID (null when disabled)."
-  value       = try(azurerm_windows_virtual_machine.vm[0].identity[0].principal_id, null)
+  value       = try(azurerm_linux_virtual_machine.vm[0].identity[0].principal_id, null)
 }
 output "bastion_name" {
   description = "Bastion host name (null when disabled)."
   value       = one(azurerm_bastion_host.this[*].name)
+}
+output "seed_run_command_name" {
+  description = "Name of the Cosmos seed run-command (null when not run)."
+  value       = one(azurerm_virtual_machine_run_command.seed[*].name)
 }

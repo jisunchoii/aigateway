@@ -69,12 +69,22 @@ resource "azurerm_cognitive_deployment" "models" {
   }
 }
 
+# The cognitive account can still report provisioningState="Accepted" for a short
+# window after create returns, which makes a parallel private-endpoint create fail with
+# 400 AccountProvisioningStateInvalid. Wait for the account to settle before attaching it.
+resource "time_sleep" "openai_settle" {
+  depends_on      = [azurerm_cognitive_account.openai]
+  create_duration = "60s"
+}
+
 resource "azurerm_private_endpoint" "openai" {
   name                = "pe-oai-${var.name_suffix}"
   resource_group_name = var.resource_group_name
   location            = var.location
   subnet_id           = var.pe_subnet_id
   tags                = var.tags
+
+  depends_on = [time_sleep.openai_settle]
 
   private_service_connection {
     name                           = "psc-oai"

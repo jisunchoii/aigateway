@@ -14,3 +14,7 @@ budget_start_date     = "2026-06-01T00:00:00Z"
 
 # eastus2 may restrict B-series VM sizes; use a D-series v7 for the optional jumpbox.
 jumpbox_vm_size = "Standard_D2s_v7"
+
+# App config
+# enable_jumpbox         = true <- uncomment if you want to provision a jumpbox
+# jumpbox_admin_password = "<PASSWORD>" <- <- uncomment and fill in if you want to provision a jumpbox

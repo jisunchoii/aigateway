@@ -182,3 +182,7 @@ output "map_container_name" {
   description = "Name of the team<->subscription mapping container (team_subscription_map)."
   value       = azurerm_cosmosdb_sql_container.team_subscription_map.name
 }
+output "config_writer_role_assignment_ids" {
+  description = "Config-container Data Contributor role assignment IDs keyed by principal name (e.g. jumpbox)."
+  value       = { for k, ra in azurerm_cosmosdb_sql_role_assignment.config_data_writer : k => ra.id }
+}

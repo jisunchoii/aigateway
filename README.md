@@ -84,22 +84,29 @@ cost-based budget downgrade — all managed from a self-service Admin UI.
 
 ## Deployment
 
+Export these variables with your own custom values if needed.
+```bash
+export location=eastus2
+export backend-rg=rg-aigw-tfstate-dev-eastus2
+export storage-prefix=staigwtfstate
+export state-key=ai-gateway-eus2.tfstate
+```
+
 ### 1. Bootstrap the Terraform state backend (once per subscription)
 
-```powershell
-./scripts/bootstrap-backend.ps1 `
-  -Location eastus2 `
-  -BackendRg rg-aigw-tfstate-dev-eastus2 `
-  -StoragePrefix staigwtfstate `
-  -StateKey ai-gateway-eus2.tfstate
+```bash
+./scripts/bootstrap-backend.sh \
+  --location $location \
+  --backend-rg $backend-rg \
+  --storage-prefix $storage-prefix \
+  --state-key $state-key
 ```
 
 Creates an eastus2 resource group + storage account for remote state (Entra auth, public blob access blocked).
-Copy the outputs into the `backend "azurerm"` block in `infra/providers.tf`.
 
 ### 2. Set variables
 
-```powershell
+```bash
 cp infra/terraform.tfvars.example infra/terraform.tfvars
 # Edit infra/terraform.tfvars: prefix, location, owner, cost_center, apim_publisher_*, budget_*
 ```
@@ -109,7 +116,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 On the first apply, leave `worker_image` and `admin_ui_image` empty (default `""`). The images
 don't exist yet, and the worker Job / Admin UI app are count-gated on these variables.
 
-```powershell
+```bash
 cd infra
 terraform init
 # If you are moving an existing state from another backend, run `terraform init -migrate-state` instead.
@@ -122,14 +129,19 @@ terraform apply
 
 After the registry is created, build the worker and Admin UI images remotely (no local Docker needed):
 
-```powershell
-$acr = terraform output -raw registry_login_server
-$reg = terraform output -raw registry_name
+```bash
+acr=$(terraform output -raw registry_login_server)
+reg=$(terraform output -raw registry_name)
 az acr build --registry $reg --image config-sync-worker:latest ../app/config-sync-worker
 az acr build --registry $reg --image admin-ui:latest ../app/admin-ui
 ```
 
 ### 5. Second apply — enable the worker + Admin UI
+
+Before you can access the UI, you will need to register an app registration in EntraID.
+```bash
+./scripts/app-registration.sh
+```
 
 Put the image references and the three Entra variables from the prerequisites into
 `infra/terraform.tfvars` and apply again:
@@ -143,27 +155,53 @@ bff_api_audience      = "api://<bff app id>"
 spa_client_id         = "<spa app id>"
 ```
 
-```powershell
+```bash
 terraform apply
 ```
 
 ### 6. Seed configuration (from inside the VNet)
 
-Cosmos is private with key auth disabled, so seed the initial config from a **jumpbox** inside the
-VNet (enable it with `enable_jumpbox = true` and connect via Bastion). After granting the jumpbox MI
-the `Cosmos DB Built-in Data Contributor` role:
+Cosmos is private with key auth disabled, so the initial config is seeded from a **jumpbox** inside
+the VNet. Enable it with `enable_jumpbox = true` and Terraform handles the rest: it provisions the
+jumpbox VM, grants its managed identity the `Cosmos DB Built-in Data Contributor` role (scoped to the
+`config` container), and runs a **VM run-command** that seeds both documents automatically:
 
-```powershell
+- **Global config** (`id=global`) — allowed models + token limits.
+- **Per-model pricing** (`id=pricing`) — prompt/completion rates for cost-based budgeting.
+
+The run-command retries (10 × 30s) to absorb RBAC propagation delay, so no manual step is required —
+seeding completes as part of `terraform apply`. To re-run it on demand (e.g. after editing the seed
+scripts), taint and re-apply:
+
+```bash
+terraform apply -replace='module.jumpbox.azurerm_virtual_machine_run_command.seed[0]'
+```
+
+To seed manually instead (jumpbox connected via Bastion), the same scripts can be run directly:
+
+```bash
 # Global allowed models + limits
-./scripts/seed-cosmos-jumpbox.ps1 -Endpoint https://<cosmos-account>.documents.azure.com:443/
+./scripts/seed-cosmos-jumpbox.sh https://<cosmos-account>.documents.azure.com:443/
 # Per-model pricing (for cost-based budgeting)
-./scripts/seed-pricing-jumpbox.ps1 -Endpoint https://<cosmos-account>.documents.azure.com:443/
+./scripts/seed-pricing-jumpbox.sh https://<cosmos-account>.documents.azure.com:443/
 ```
 
 The config-sync worker publishes to APIM on its next run (trigger it immediately with:
 `az containerapp job start -g <rg> -n <config_sync_job_name>`).
 
 ### 7. Use it
+
+Update the SPA with your containerapps url
+```bash
+spa_app_id="$(az ad app list --display-name "AI Gateway SPA" --query "[].appId" -o tsv)" # spa_client_id
+fqdn=$(terraform output -raw admin_ui_fqdn) # run from infra/
+oid=$(az ad app show --id "$spa_app_id" --query id -o tsv)
+
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/$oid" \
+  --headers 'Content-Type=application/json' \
+  --body "{\"spa\":{\"redirectUris\":[\"https://$fqdn\"]}}"
+```
 
 - **Admin UI** — connect via the `admin_ui_fqdn` output and sign in (you must be a member of the
   admin group). Register consumers, issue keys, set allowed models/tiers/budgets, and view the

@@ -87,6 +87,9 @@ module "jumpbox" {
   jumpbox_subnet_id   = module.network.jumpbox_subnet_id
   admin_password      = var.jumpbox_admin_password
   vm_size             = var.jumpbox_vm_size
+  # Seed Cosmos config/pricing docs from the VM MI; wait for the data-plane role assignment.
+  cosmos_endpoint         = module.config_store.endpoint
+  seed_role_assignment_id = try(module.config_store.config_writer_role_assignment_ids["jumpbox"], null)
 }
 
 module "apim" {
@@ -127,17 +130,22 @@ module "apim" {
 }
 
 module "config_store" {
-  source                      = "./modules/config_store"
-  name_suffix                 = local.name_suffix
-  suffix                      = local.sfx
-  resource_group_name         = azurerm_resource_group.rg.name
-  location                    = var.location
-  tags                        = local.tags
-  pe_subnet_id                = module.network.pe_subnet_id
-  dns_zone_id                 = module.network.dns_zone_ids["cosmos"]
-  reader_principal_ids        = { config_sync_worker = module.identity.worker_principal_id }
-  writer_principal_ids        = { admin_ui = module.identity.cp_write_principal_id }
-  config_writer_principal_ids = { config_sync_worker = module.identity.worker_principal_id }
+  source               = "./modules/config_store"
+  name_suffix          = local.name_suffix
+  suffix               = local.sfx
+  resource_group_name  = azurerm_resource_group.rg.name
+  location             = var.location
+  tags                 = local.tags
+  pe_subnet_id         = module.network.pe_subnet_id
+  dns_zone_id          = module.network.dns_zone_ids["cosmos"]
+  reader_principal_ids = { config_sync_worker = module.identity.worker_principal_id }
+  writer_principal_ids = { admin_ui = module.identity.cp_write_principal_id }
+  # config-sync worker writes active_downgrade; the jumpbox MI (when enabled) gets the same
+  # config-container write so operators can run the seed scripts (id=global, id=pricing) from it.
+  config_writer_principal_ids = merge(
+    { config_sync_worker = module.identity.worker_principal_id },
+    var.enable_jumpbox ? { jumpbox = module.jumpbox.vm_principal_id } : {}
+  )
 }
 
 module "registry" {
