@@ -10,6 +10,7 @@ crash.log
 *.tfvars.*
 !terraform.tfvars.example
 .env
+.vscode
 
 # Python (config-sync worker)
 __pycache__/
