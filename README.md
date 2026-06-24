@@ -163,6 +163,10 @@ config-sync 워커가 다음 실행 때 APIM에 발행합니다(즉시 트리거
   `/foundry/chat/completions`)을 컨슈머 구독 키로 호출. `scripts/smoke-*.ps1`이 점프박스에서 이를
   검증합니다.
 
+> **단계별 상세 가이드**: 어떤 파일의 어떤 부분을 고쳐서 배포하는지 처음부터 끝까지 따라가려면
+> [단계별 배포 가이드](docs/step-by-step-deployment-guide.md)를 참고하세요. 모델까지 배포(경로 A,
+> 이 저장소 기본)와 기존 모델 endpoint 재사용(경로 B)을 모두 다룹니다.
+
 ## 비용 & 정리
 
 - APIM **Developer_1**은 SLA가 없습니다(개발/데모 전용) — 프로덕션은 `Premium_1`. Internal VNet
