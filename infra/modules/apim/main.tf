@@ -52,6 +52,12 @@ variable "public_ip_id" {
   description = "Resource ID of the Standard-SKU public IP required by stv2-platform APIM even in internal mode."
 }
 
+variable "public" {
+  type        = bool
+  default     = false
+  description = "When true, APIM is created in EXTERNAL VNet mode (gateway published on a public VIP, reachable from the internet). When false (default), Internal mode keeps the gateway private (VNet-only). VNet injection is retained either way so APIM can reach the private model backends."
+}
+
 variable "openai_account_id" {
   type        = string
   description = "Resource ID of the Azure OpenAI account to grant the APIM identity access to."
@@ -185,7 +191,7 @@ resource "azurerm_api_management" "apim" {
   publisher_email     = var.publisher_email
   sku_name            = var.sku_name
 
-  virtual_network_type = "Internal"
+  virtual_network_type = var.public ? "External" : "Internal"
   public_ip_address_id = var.public_ip_id
 
   virtual_network_configuration {

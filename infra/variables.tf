@@ -50,6 +50,12 @@ variable "apim_sku_name" {
   description = "APIM SKU. Developer_1 supports internal VNet injection cheaply (no SLA). Override to Premium_1 for production."
 }
 
+variable "apim_public" {
+  type        = bool
+  default     = false
+  description = "When true, APIM is published in EXTERNAL VNet mode (public gateway VIP) and the APIM NSG admits inbound HTTPS from the internet. Default false = Internal (VNet-only). Switching modes triggers a long-running APIM reconfiguration. Only expose publicly with edge protection (WAF/IP-filter), hardened auth, and tight rate/budget limits."
+}
+
 variable "monthly_budget_amount" {
   type        = number
   default     = 200

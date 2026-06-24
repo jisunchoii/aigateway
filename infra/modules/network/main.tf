@@ -38,6 +38,11 @@ variable "enable_jumpbox" {
   default     = false
   description = "When true, create the Bastion and jumpbox subnets for in-VNet smoke testing."
 }
+variable "apim_public" {
+  type        = bool
+  default     = false
+  description = "When true, the APIM NSG admits inbound HTTPS from the internet (for APIM External VNet mode). When false (default), only VNet-sourced clients may reach the gateway on 443."
+}
 variable "bastion_subnet_cidr" {
   type        = string
   default     = "10.40.3.0/26"
@@ -151,6 +156,23 @@ resource "azurerm_network_security_group" "apim" {
     destination_port_range     = "6390"
     source_address_prefix      = "AzureLoadBalancer"
     destination_address_prefix = "VirtualNetwork"
+  }
+
+  # Public exposure (APIM External mode): admit client HTTPS from the internet. Only rendered when
+  # apim_public = true; otherwise the gateway stays reachable from VirtualNetwork sources only.
+  dynamic "security_rule" {
+    for_each = var.apim_public ? [1] : []
+    content {
+      name                       = "in-internet-https"
+      priority                   = 105
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_range     = "443"
+      source_address_prefix      = "Internet"
+      destination_address_prefix = "VirtualNetwork"
+    }
   }
 }
 

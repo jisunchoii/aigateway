@@ -14,6 +14,7 @@ module "network" {
   location            = var.location
   tags                = local.tags
   enable_jumpbox      = var.enable_jumpbox
+  apim_public         = var.apim_public
 }
 
 module "identity" {
@@ -103,6 +104,7 @@ module "apim" {
   publisher_email              = var.apim_publisher_email
   apim_subnet_id               = module.network.apim_subnet_id
   public_ip_id                 = module.network.apim_public_ip_id
+  public                       = var.apim_public
   openai_account_id            = module.openai.id
   openai_endpoint              = module.openai.endpoint
   foundry_account_id           = module.foundry.id
