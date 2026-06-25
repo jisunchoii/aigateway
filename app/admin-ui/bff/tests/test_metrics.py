@@ -96,3 +96,24 @@ def test_consumer_usage_window_is_utc_midnight_not_rolling():
 
     MetricsQuery(CapturingClient(), "ws").consumer_usage("infra", timedelta(days=1))
     assert "startofday(now())" in captured["query"]
+
+
+def test_monitoring_includes_downgrade_events():
+    client = FakeLogsClient({
+        'top 50 by TimeGenerated desc | project TimeGenerated, Name, ResultCode, DurationMs':
+            FakeTable(["TimeGenerated", "Name", "ResultCode", "DurationMs"], [["t1", "POST /openai", "200", 12]]),
+        'where toint(ResultCode) in (403, 429)':
+            FakeTable(["TimeGenerated", "Name", "ResultCode"], [["t2", "POST /openai", "429"]]),
+        "Message has 'model downgraded'":
+            FakeTable(["TimeGenerated", "Message", "consumer", "requestedModel", "effectiveModel", "downgradeLevel"],
+                      [["t3", "model downgraded from gpt-5.4 to grok-4.3", "ghcp", "gpt-5.4", "grok-4.3", "2"]]),
+    })
+    out = MetricsQuery(client, "ws").monitoring(timedelta(hours=1))
+    assert out["downgrades"] == [{
+        "TimeGenerated": "t3",
+        "Message": "model downgraded from gpt-5.4 to grok-4.3",
+        "consumer": "ghcp",
+        "requestedModel": "gpt-5.4",
+        "effectiveModel": "grok-4.3",
+        "downgradeLevel": "2",
+    }]

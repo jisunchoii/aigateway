@@ -69,6 +69,14 @@
         }
         return "default";
     }" />
+    <set-variable name="downgradeLevel" value="@{
+        if (context.Variables["consumerCfg"] == null) { return 0; }
+        try {
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+            var ad = cfg["active_downgrade"];
+            return (ad != null && ad["level"] != null) ? (int)ad["level"] : 0;
+        } catch { return 0; }
+    }" />
     <!-- [Privilege] allowed-models 403: the REQUESTED model must be in the consumer's (or global) allowlist.
          (Evaluated on requestedDeployment, before any budget downgrade rewrites it.) -->
     <choose>
@@ -93,10 +101,9 @@
         if (req.Length == 0) { return req; }
         if (context.Variables["consumerCfg"] == null) { return req; }
         try {
-            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
-            var ad = cfg["active_downgrade"];
-            int level = (ad != null && ad["level"] != null) ? (int)ad["level"] : 0;
+            int level = (int)context.Variables["downgradeLevel"];
             if (level <= 0) { return req; }
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
             var ladderRaw = cfg.Value<string>("downgrade_ladder");
             if (string.IsNullOrEmpty(ladderRaw)) { return req; }
             var ladder = ladderRaw.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
@@ -143,6 +150,17 @@
         </choose>
       </when>
     </choose>
+    <choose>
+      <when condition='@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveModel"] != (string)context.Variables["requestedDeployment"])'>
+        <trace source="llm-gateway" severity="information">
+          <message>@("model downgraded from " + (string)context.Variables["requestedDeployment"] + " to " + (string)context.Variables["effectiveModel"])</message>
+          <metadata name="consumer" value='@((string)context.Variables["consumerId"])' />
+          <metadata name="requestedModel" value='@((string)context.Variables["requestedDeployment"])' />
+          <metadata name="effectiveModel" value='@((string)context.Variables["effectiveModel"])' />
+          <metadata name="downgradeLevel" value='@(((int)context.Variables["downgradeLevel"]).ToString())' />
+        </trace>
+      </when>
+    </choose>
 
     <choose>
 %{ for name, _ in rate_tiers ~}
@@ -183,6 +201,19 @@
   </backend>
   <outbound>
     <base />
+    <choose>
+      <when condition='@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveModel"] != (string)context.Variables["requestedDeployment"])'>
+        <set-header name="x-ai-gateway-requested-model" exists-action="override">
+          <value>@((string)context.Variables["requestedDeployment"])</value>
+        </set-header>
+        <set-header name="x-ai-gateway-effective-model" exists-action="override">
+          <value>@((string)context.Variables["effectiveModel"])</value>
+        </set-header>
+        <set-header name="x-ai-gateway-downgrade-level" exists-action="override">
+          <value>@(((int)context.Variables["downgradeLevel"]).ToString())</value>
+        </set-header>
+      </when>
+    </choose>
   </outbound>
   <on-error>
     <base />

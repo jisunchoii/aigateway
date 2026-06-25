@@ -28,11 +28,18 @@ _Q_BLOCKED = ('AppRequests | summarize blocked_403=countif(toint(ResultCode) == 
               'blocked_429=countif(toint(ResultCode) == 429)')
 _Q_REQ_BY_MODEL = ('AppMetrics | where Name == "Total Tokens" | extend p=parse_json(Properties) '
                    '| summarize requests=count() by deployment=tostring(p.deployment) | order by requests desc')
-# Monitoring (logs) page: the 50 most recent gateway requests, and recent 403/429 blocked events.
+# Monitoring (logs) page: recent gateway requests, blocked events, and downgrade traces.
 _Q_RECENT_REQUESTS = ('AppRequests | top 50 by TimeGenerated desc '
                       '| project TimeGenerated, Name, ResultCode, DurationMs')
 _Q_BLOCKED_EVENTS = ('AppRequests | where toint(ResultCode) in (403, 429) | top 50 by TimeGenerated desc '
                      '| project TimeGenerated, Name, ResultCode')
+_Q_DOWNGRADE_EVENTS = (
+    "AppTraces | where Message has 'model downgraded' | top 50 by TimeGenerated desc "
+    "| extend p=parse_json(Properties) "
+    "| project TimeGenerated, Message, consumer=tostring(p.consumer), "
+    "requestedModel=tostring(p.requestedModel), effectiveModel=tostring(p.effectiveModel), "
+    "downgradeLevel=tostring(p.downgradeLevel)"
+)
 
 
 def _rows(result) -> list:
@@ -111,9 +118,10 @@ class MetricsQuery:
         }
 
     def monitoring(self, span: timedelta) -> dict:
-        """Recent request log + 403/429 blocked-event log for the Monitoring page. Ingestion lags
-        a few minutes (AppRequests is the APIM gateway request log in Log Analytics)."""
+        """Recent request log + 403/429 blocked-event + downgrade trace log for Monitoring.
+        Ingestion lags a few minutes (AppRequests/AppTraces are APIM logs in Log Analytics)."""
         return {
             "recent": _rows(self._q(_Q_RECENT_REQUESTS, span)),
             "blocked": _rows(self._q(_Q_BLOCKED_EVENTS, span)),
+            "downgrades": _rows(self._q(_Q_DOWNGRADE_EVENTS, span)),
         }

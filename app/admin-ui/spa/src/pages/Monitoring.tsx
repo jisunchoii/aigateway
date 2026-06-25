@@ -11,7 +11,15 @@ import { apiFetch } from "../api";
 interface RequestRow {
   TimeGenerated?: string; Name?: string; ResultCode?: string; DurationMs?: number;
 }
-interface MonitoringData { recent: RequestRow[]; blocked: RequestRow[] }
+interface DowngradeRow {
+  TimeGenerated?: string;
+  Message?: string;
+  consumer?: string;
+  requestedModel?: string;
+  effectiveModel?: string;
+  downgradeLevel?: string;
+}
+interface MonitoringData { recent: RequestRow[]; blocked: RequestRow[]; downgrades?: DowngradeRow[] }
 
 const RANGES = ["1h", "24h", "7d"];
 
@@ -77,6 +85,27 @@ export default function Monitoring({ config }: { config: RuntimeConfig }) {
                     <TableCell>{fmtTime(r.TimeGenerated)}</TableCell>
                     <TableCell>{r.Name ?? "—"}</TableCell>
                     <TableCell><Badge appearance="tint" color={codeColor(r.ResultCode)}>{r.ResultCode ?? "—"}</Badge></TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+          <Text weight="semibold">Downgrade events</Text>
+          <Table aria-label="Downgrade events" size="small">
+            <TableHeader><TableRow>
+              <TableHeaderCell>Time</TableHeaderCell><TableHeaderCell>Consumer</TableHeaderCell>
+              <TableHeaderCell>Requested</TableHeaderCell><TableHeaderCell>Effective</TableHeaderCell>
+              <TableHeaderCell>Level</TableHeaderCell>
+            </TableRow></TableHeader>
+            <TableBody>
+              {(data.downgrades ?? []).length === 0
+                ? <TableRow><TableCell colSpan={5}><Text style={{ color: tokens.colorNeutralForeground3 }}>No downgrades in this period.</Text></TableCell></TableRow>
+                : (data.downgrades ?? []).map((r, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{fmtTime(r.TimeGenerated)}</TableCell>
+                    <TableCell>{r.consumer || "—"}</TableCell>
+                    <TableCell>{r.requestedModel || "—"}</TableCell>
+                    <TableCell>{r.effectiveModel || "—"}</TableCell>
+                    <TableCell><Badge appearance="tint" color="warning">{r.downgradeLevel || "—"}</Badge></TableCell>
                   </TableRow>
                 ))}
             </TableBody>

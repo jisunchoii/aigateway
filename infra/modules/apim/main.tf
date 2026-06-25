@@ -246,7 +246,7 @@ resource "azurerm_api_management_api" "openai" {
 
   subscription_key_parameter_names {
     header = "api-key"
-    query  = "api-key"
+    query  = "subscription-key"
   }
 }
 
@@ -288,6 +288,60 @@ resource "azurerm_api_management_api_policy" "openai" {
   }
 }
 
+# VS Code BYOK facade. VS Code supports custom request headers, including the APIM default
+# `Ocp-Apim-Subscription-Key`; keep it off the URL so keys don't leak via query strings.
+resource "azurerm_api_management_api" "vscode_openai" {
+  name                  = "vscode-openai"
+  resource_group_name   = var.resource_group_name
+  api_management_name   = azurerm_api_management.apim.name
+  revision              = "1"
+  display_name          = "VS Code Azure OpenAI"
+  path                  = "vscode/openai"
+  protocols             = ["https"]
+  subscription_required = true
+  service_url           = "${trimsuffix(var.openai_endpoint, "/")}/openai"
+
+  import {
+    content_format = "openapi+json-link"
+    content_value  = var.openai_openapi_spec_url
+  }
+
+  subscription_key_parameter_names {
+    header = "Ocp-Apim-Subscription-Key"
+    query  = "api-key"
+  }
+}
+
+resource "azurerm_api_management_api_policy" "vscode_openai" {
+  api_name            = azurerm_api_management_api.vscode_openai.name
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = var.resource_group_name
+  xml_content = templatefile(var.policy_template_path, {
+    client_auth_mode   = "subscription-key"
+    entra_tenant_id    = var.entra_tenant_id
+    entra_api_audience = var.entra_api_audience
+    entra_team_claim   = var.entra_team_claim
+    rate_tiers         = var.rate_tiers
+    openai_aliases     = var.openai_aliases
+    foundry_aliases    = var.foundry_aliases
+    openai_path_base   = var.openai_path_base
+    foundry_v1_base    = var.foundry_v1_base
+    openai_api_version = var.openai_api_version
+  })
+
+  depends_on = [
+    azurerm_role_assignment.apim_to_openai,
+    azurerm_role_assignment.apim_to_foundry,
+    azurerm_api_management_named_value.allowed_models,
+    azurerm_api_management_named_value.tokens_per_minute,
+    azurerm_api_management_named_value.token_quota,
+    azurerm_api_management_named_value.token_quota_period,
+    azurerm_api_management_named_value.consumer_config_json,
+    azurerm_api_management_named_value.tier,
+    azurerm_api_management_api_diagnostic.vscode_openai,
+  ]
+}
+
 resource "azurerm_api_management_logger" "appinsights" {
   name                = "appinsights"
   api_management_name = azurerm_api_management.apim.name
@@ -315,10 +369,34 @@ resource "azurerm_api_management_api_diagnostic" "openai" {
   http_correlation_protocol = "W3C"
 }
 
+resource "azurerm_api_management_api_diagnostic" "vscode_openai" {
+  identifier               = "applicationinsights"
+  api_name                 = azurerm_api_management_api.vscode_openai.name
+  api_management_name      = azurerm_api_management.apim.name
+  resource_group_name      = var.resource_group_name
+  api_management_logger_id = azurerm_api_management_logger.appinsights.id
+
+  sampling_percentage       = 100
+  always_log_errors         = true
+  log_client_ip             = true
+  verbosity                 = "information"
+  http_correlation_protocol = "W3C"
+}
+
 # Enable custom metrics on the diagnostic (azurerm 4.x doesn't expose the `metrics` property).
 resource "azapi_update_resource" "openai_diag_metrics" {
   type        = "Microsoft.ApiManagement/service/apis/diagnostics@2022-08-01"
   resource_id = azurerm_api_management_api_diagnostic.openai.id
+  body = {
+    properties = {
+      metrics = true
+    }
+  }
+}
+
+resource "azapi_update_resource" "vscode_openai_diag_metrics" {
+  type        = "Microsoft.ApiManagement/service/apis/diagnostics@2022-08-01"
+  resource_id = azurerm_api_management_api_diagnostic.vscode_openai.id
   body = {
     properties = {
       metrics = true
@@ -341,7 +419,7 @@ resource "azurerm_api_management_api" "foundry" {
   service_url = var.foundry_endpoint
 
   subscription_key_parameter_names {
-    header = "api-key"
+    header = "Ocp-Apim-Subscription-Key"
     query  = "api-key"
   }
 }
@@ -438,6 +516,11 @@ output "principal_id" {
 output "gateway_url" {
   description = "Internal gateway URL for the APIM instance."
   value       = azurerm_api_management.apim.gateway_url
+}
+
+output "vscode_base_url" {
+  description = "Base URL prefix for VS Code BYOK model URLs."
+  value       = "${azurerm_api_management.apim.gateway_url}/vscode"
 }
 
 output "private_ip" {

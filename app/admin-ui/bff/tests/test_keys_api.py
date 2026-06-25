@@ -52,7 +52,10 @@ class FakeMetrics:
 
     def monitoring(self, span):
         return {"recent": [{"TimeGenerated": "t", "Name": "POST /openai", "ResultCode": "200", "DurationMs": 12}],
-                "blocked": [{"TimeGenerated": "t", "Name": "POST /openai", "ResultCode": "429"}]}
+                "blocked": [{"TimeGenerated": "t", "Name": "POST /openai", "ResultCode": "429"}],
+                "downgrades": [{"TimeGenerated": "t", "consumer": "ghcp",
+                                "requestedModel": "gpt-5.4", "effectiveModel": "grok-4.3",
+                                "downgradeLevel": "2"}]}
 
     def dashboard(self, span):
         return {"total_tokens": 999,

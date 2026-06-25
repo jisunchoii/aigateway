@@ -13,6 +13,11 @@ output "apim_gateway_url" {
   value       = module.apim.gateway_url
 }
 
+output "vscode_base_url" {
+  description = "Base URL prefix for VS Code BYOK model URLs."
+  value       = module.apim.vscode_base_url
+}
+
 output "openai_endpoint" {
   description = "Azure OpenAI account endpoint. Use with smoke-direct-blocked.ps1 from outside the VNet."
   value       = module.openai.endpoint

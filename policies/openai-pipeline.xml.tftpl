@@ -82,6 +82,14 @@
         }
         return "default";
     }" />
+    <set-variable name="downgradeLevel" value="@{
+        if (context.Variables["consumerCfg"] == null) { return 0; }
+        try {
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+            var ad = cfg["active_downgrade"];
+            return (ad != null && ad["level"] != null) ? (int)ad["level"] : 0;
+        } catch { return 0; }
+    }" />
     <!-- [Cost] Phase 4 budget downgrade. The worker writes active_downgrade.level (0/1/2) into the
          consumer's bundle entry when daily token usage crosses 80% / 100%. Here we rewrite the requested
          deployment DOWN the consumer's downgrade_ladder by `level` steps. URL path segment only (no body
@@ -91,10 +99,9 @@
         if (req.Length == 0) { return req; }
         if (context.Variables["consumerCfg"] == null) { return req; }
         try {
-            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
-            var ad = cfg["active_downgrade"];
-            int level = (ad != null && ad["level"] != null) ? (int)ad["level"] : 0;
+            int level = (int)context.Variables["downgradeLevel"];
             if (level <= 0) { return req; }
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
             var ladderRaw = cfg.Value<string>("downgrade_ladder");
             if (string.IsNullOrEmpty(ladderRaw)) { return req; }
             var ladder = ladderRaw.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
@@ -104,40 +111,46 @@
             return ladder[target];
         } catch { return req; }
     }" />
-    <!-- [Cost] Apply the downgrade. The incoming route is the Azure OpenAI path route (model in the
-         URL). Two cases when effectiveDeployment differs from the request:
-           (a) another gpt alias -> same backend; rewrite the deployment path segment (in-place).
-           (b) an OSS alias      -> cross-backend: switch to the AIServices account's GA OpenAI/v1
-                                    route (/chat/completions, model in body). OSS chat models use
-                                    max_tokens, so translate gpt-5's max_completion_tokens. -->
+    <!-- [Cost] Apply the target model. The incoming route is the Azure OpenAI path route (model in
+         the URL). This also lets the Copilot CLI Azure-provider facade use the same path route for
+         OSS/partner aliases: if the target is an OSS alias, switch to the AIServices account's GA
+         OpenAI/v1 route (/chat/completions, model in body). OSS chat models use max_tokens, so
+         translate gpt-5's max_completion_tokens. -->
     <set-variable name="dgIsOss" value="@(new[]{ ${join(", ", [for a in foundry_aliases : "\"${a}\""])} }.Contains((string)context.Variables["effectiveDeployment"]))" />
     <choose>
+      <when condition="@(((string)context.Variables["effectiveDeployment"]).Length > 0 && (bool)context.Variables["dgIsOss"])">
+        <set-backend-service base-url="${foundry_v1_base}" />
+        <!-- copy-unmatched-params=false drops the incoming ?api-version=… ; the AIServices
+             GA OpenAI/v1 route is version-pinned and 400s on an api-version query param. -->
+        <rewrite-uri template="/chat/completions" copy-unmatched-params="false" />
+        <set-body>@{
+            var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
+            body["model"] = (string)context.Variables["effectiveDeployment"];
+            if (body["max_completion_tokens"] != null && body["max_tokens"] == null) {
+                body["max_tokens"] = body["max_completion_tokens"];
+                body.Remove("max_completion_tokens");
+            }
+            return body.ToString(Newtonsoft.Json.Formatting.None);
+        }</set-body>
+      </when>
       <when condition="@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveDeployment"] != (string)context.Variables["requestedDeployment"])">
-        <choose>
-          <when condition="@((bool)context.Variables["dgIsOss"])">
-            <set-backend-service base-url="${foundry_v1_base}" />
-            <!-- copy-unmatched-params=false drops the incoming ?api-version=… ; the AIServices
-                 GA OpenAI/v1 route is version-pinned and 400s on an api-version query param. -->
-            <rewrite-uri template="/chat/completions" copy-unmatched-params="false" />
-            <set-body>@{
-                var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
-                body["model"] = (string)context.Variables["effectiveDeployment"];
-                if (body["max_completion_tokens"] != null && body["max_tokens"] == null) {
-                    body["max_tokens"] = body["max_completion_tokens"];
-                    body.Remove("max_completion_tokens");
-                }
-                return body.ToString(Newtonsoft.Json.Formatting.None);
-            }</set-body>
-          </when>
-          <otherwise>
-            <!-- Same-backend gpt downgrade. rewrite-uri's template is the path AFTER the API path
-                 prefix (the backend serviceUrl already ends in /openai), so we must NOT include the
-                 /openai segment here — building it from OriginalUrl.Path would double it
-                 (.../openai/openai/...) and 404. Rebuild the canonical deployment route relative to
-                 the backend, swapping in the downgraded deployment, and keep the original query. -->
-            <rewrite-uri template="@("/deployments/" + (string)context.Variables["effectiveDeployment"] + "/chat/completions" + context.Request.OriginalUrl.QueryString)" />
-          </otherwise>
-        </choose>
+        <!-- Same-backend gpt downgrade. rewrite-uri's template is the path AFTER the API path
+             prefix (the backend serviceUrl already ends in /openai), so we must NOT include the
+             /openai segment here — building it from OriginalUrl.Path would double it
+             (.../openai/openai/...) and 404. Rebuild the canonical deployment route relative to
+             the backend, swapping in the downgraded deployment, and keep the original query. -->
+        <rewrite-uri template="@("/deployments/" + (string)context.Variables["effectiveDeployment"] + "/chat/completions" + context.Request.OriginalUrl.QueryString)" />
+      </when>
+    </choose>
+    <choose>
+      <when condition='@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveDeployment"] != (string)context.Variables["requestedDeployment"])'>
+        <trace source="llm-gateway" severity="information">
+          <message>@("model downgraded from " + (string)context.Variables["requestedDeployment"] + " to " + (string)context.Variables["effectiveDeployment"])</message>
+          <metadata name="consumer" value='@((string)context.Variables["consumerId"])' />
+          <metadata name="requestedModel" value='@((string)context.Variables["requestedDeployment"])' />
+          <metadata name="effectiveModel" value='@((string)context.Variables["effectiveDeployment"])' />
+          <metadata name="downgradeLevel" value='@(((int)context.Variables["downgradeLevel"]).ToString())' />
+        </trace>
       </when>
     </choose>
     <choose>
@@ -191,6 +204,19 @@
   </backend>
   <outbound>
     <base />
+    <choose>
+      <when condition='@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveDeployment"] != (string)context.Variables["requestedDeployment"])'>
+        <set-header name="x-ai-gateway-requested-model" exists-action="override">
+          <value>@((string)context.Variables["requestedDeployment"])</value>
+        </set-header>
+        <set-header name="x-ai-gateway-effective-model" exists-action="override">
+          <value>@((string)context.Variables["effectiveDeployment"])</value>
+        </set-header>
+        <set-header name="x-ai-gateway-downgrade-level" exists-action="override">
+          <value>@(((int)context.Variables["downgradeLevel"]).ToString())</value>
+        </set-header>
+      </when>
+    </choose>
   </outbound>
   <on-error>
     <base />
