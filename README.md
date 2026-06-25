@@ -21,9 +21,14 @@ cost-based budget downgrade — all managed from a self-service Admin UI.
     downgrade is also supported, e.g. gpt → OSS or OSS → gpt).
 - **Self-service Admin UI** (React + FastAPI, Entra ID login, admin-group gated) — issue consumer
   keys, set model/limit/budget policies, and view the usage dashboard + request logs.
-- **Observability** — per-call token metrics (consumer + model dimensions) sent to Application
-  Insights. The Admin UI provides a usage dashboard and a request/blocked-event log.
+- **Observability** — per-call token metrics (consumer + requested/effective model dimensions) sent
+  to Application Insights. The Admin UI provides a usage dashboard, request/blocked-event logs, and
+  budget-downgrade events.
 - **Client authentication** — APIM subscription key by default, or an Entra ID JWT (`client_auth_mode`).
+  Client surfaces use different APIM subscription key header names:
+  - Copilot CLI / Azure-provider clients: `/openai/...` with `api-key`.
+  - VS Code BYOK custom endpoint: `/vscode/openai/...` with `Ocp-Apim-Subscription-Key`.
+  - Direct Foundry body-route API: `/foundry/...` with `Ocp-Apim-Subscription-Key`.
 
 ## Demo
 
@@ -31,9 +36,14 @@ cost-based budget downgrade — all managed from a self-service Admin UI.
 
 ## How it works
 
-- **APIM (Internal VNet)** is the gateway. Two APIs — `/openai` (Azure OpenAI) and
-  `/foundry` (Foundry/AIServices) — share the governance policy (consumer identification, allowed
-  models, rate limits, token metrics, budget downgrade).
+- **APIM (VNet-injected)** is the gateway. It is private by default and can be exposed publicly with
+  `apim_public = true`. The client-facing APIs share the same governance policy (consumer
+  identification, allowed models, rate limits, token metrics, budget downgrade):
+  - `/openai` — Azure OpenAI path-route facade for Copilot CLI / Azure-provider clients. It accepts
+    the APIM subscription key in the `api-key` header.
+  - `/vscode/openai` — VS Code BYOK facade with the same path-route shape. It accepts the APIM
+    subscription key in the `Ocp-Apim-Subscription-Key` header, keeping keys out of URLs.
+  - `/foundry` — Foundry/AIServices OpenAI/v1 body-route API for direct OSS/partner model calls.
 - **Cosmos DB** holds the authoritative configuration (global defaults + per-consumer documents +
   a model price table). It is private with key auth disabled, and the gateway reads it indirectly
   through named values.
@@ -41,6 +51,9 @@ cost-based budget downgrade — all managed from a self-service Admin UI.
   named values and computes daily usage × unit price to record the budget downgrade level.
 - The **Admin UI** (a Container App) reads and writes Cosmos and Log Analytics with managed identity.
   Changing a budget triggers an immediate re-evaluation.
+- When a request is budget-downgraded, APIM adds response headers and emits an App Insights trace:
+  `x-ai-gateway-requested-model`, `x-ai-gateway-effective-model`, and
+  `x-ai-gateway-downgrade-level`. The Admin UI Monitoring page shows these downgrade events.
 - All control/observability flows use **managed identity + RBAC** — no account keys, connection
   strings, or secrets in source or config. Secrets live in **Key Vault**.
 
@@ -108,7 +121,8 @@ Creates an eastus2 resource group + storage account for remote state (Entra auth
 
 ```bash
 cp infra/terraform.tfvars.example infra/terraform.tfvars
-# Edit infra/terraform.tfvars: prefix, location, owner, cost_center, apim_publisher_*, budget_*
+# Edit infra/terraform.tfvars: prefix, location, owner, cost_center, apim_publisher_*, budget_*.
+# Set apim_public = true before the first apply if the APIM gateway must be internet reachable.
 ```
 
 ### 3. First apply — the gateway core
@@ -123,7 +137,8 @@ terraform init
 terraform apply
 ```
 
-> APIM Internal VNet mode takes about 45 minutes on the first apply. This is normal.
+> APIM Developer/Premium VNet injection can take about 45 minutes on the first apply. This is normal.
+> Choose `apim_public` before the first apply; switching Internal/External later recreates APIM.
 
 ### 4. Build + push the container images
 
@@ -205,16 +220,58 @@ az rest --method PATCH \
 
 - **Admin UI** — connect via the `admin_ui_fqdn` output and sign in (you must be a member of the
   admin group). Register consumers, issue keys, set allowed models/tiers/budgets, and view the
-  dashboard + logs.
-- **Call the gateway** — from inside the VNet, call
-  `POST https://<apim-host>/openai/deployments/<model>/chat/completions` (or `/foundry/chat/completions`
-  with the model in the body) using a consumer subscription key. `scripts/smoke-*.ps1` validates this
-  from the jumpbox.
+  dashboard + request, blocked, and downgrade logs.
+- **Call the gateway**:
+  - Copilot CLI / Azure-provider clients call
+    `POST https://<apim-host>/openai/deployments/<model>/chat/completions` with the APIM subscription
+    key in the `api-key` header.
+  - VS Code BYOK custom endpoint models call
+    `POST https://<apim-host>/vscode/openai/deployments/<model>/chat/completions` with the APIM
+    subscription key in the `Ocp-Apim-Subscription-Key` header.
+  - Direct Foundry calls use `POST https://<apim-host>/foundry/chat/completions` with the model in
+    the body and the APIM subscription key in the `Ocp-Apim-Subscription-Key` header.
+
+### VS Code BYOK example
+
+Add models to `chatLanguageModels.json` using the `/vscode/openai` facade:
+
+```json
+{
+  "id": "gpt-5.4",
+  "name": "GPT-5.4 via APIM",
+  "url": "https://<apim-host>/vscode/openai/deployments/gpt-5.4/chat/completions?api-version=2025-01-01-preview",
+  "toolCalling": true,
+  "vision": false,
+  "maxInputTokens": 128000,
+  "maxOutputTokens": 16000,
+  "requestHeaders": {
+    "Ocp-Apim-Subscription-Key": "<APIM subscription key>"
+  }
+}
+```
+
+Register one entry per model that a consumer may choose directly (`gpt-5.4`, `gpt-5.4-mini`,
+`grok-4.3`, `DeepSeek-V4-Pro`). APIM still enforces each consumer's allowed-model policy.
+
+### Copilot CLI BYOK example
+
+Use the APIM host as the Azure provider base URL. Do not include `/openai` or `/vscode/openai`; the
+CLI constructs the Azure OpenAI path itself.
+
+```bash
+export COPILOT_PROVIDER_TYPE=azure
+export COPILOT_PROVIDER_BASE_URL=https://<apim-host>
+export COPILOT_PROVIDER_API_KEY="<APIM subscription key>"
+export COPILOT_PROVIDER_AZURE_API_VERSION=2025-01-01-preview
+export COPILOT_PROVIDER_WIRE_API=completions
+export COPILOT_PROVIDER_MODEL_ID=gpt-5.4
+export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4
+```
 
 ## Cost & cleanup
 
-- APIM **Developer_1** has no SLA (dev/demo only) — use `Premium_1` for production. Internal VNet
-  mode requires the Developer or Premium SKU.
+- APIM **Developer_1** has no SLA (dev/demo only) — use `Premium_1` for production. VNet injection
+  requires the Developer or Premium SKU.
 - Azure OpenAI / Foundry bill per token, and a monthly Cost Management budget only **alerts** — it
   does not hard-stop spend. **Clean up when idle:** `terraform destroy` in `infra/`.
 
