@@ -35,8 +35,14 @@ variable "deployments" {
   }))
   description = "Map of model deployments to create on the Azure OpenAI account. Keys become deployment names."
 }
+variable "enabled" {
+  type        = bool
+  default     = true
+  description = "When false, create no resources (used when the gateway reuses a single AIServices account that already hosts gpt)."
+}
 
 resource "azurerm_cognitive_account" "openai" {
+  count                         = var.enabled ? 1 : 0
   name                          = "oai-${var.name_suffix}"
   resource_group_name           = var.resource_group_name
   location                      = var.location
@@ -53,9 +59,9 @@ resource "azurerm_cognitive_account" "openai" {
 }
 
 resource "azurerm_cognitive_deployment" "models" {
-  for_each             = var.deployments
+  for_each             = var.enabled ? var.deployments : {}
   name                 = each.key
-  cognitive_account_id = azurerm_cognitive_account.openai.id
+  cognitive_account_id = azurerm_cognitive_account.openai[0].id
 
   model {
     format  = "OpenAI"
@@ -73,11 +79,13 @@ resource "azurerm_cognitive_deployment" "models" {
 # window after create returns, which makes a parallel private-endpoint create fail with
 # 400 AccountProvisioningStateInvalid. Wait for the account to settle before attaching it.
 resource "time_sleep" "openai_settle" {
-  depends_on      = [azurerm_cognitive_account.openai]
+  count           = var.enabled ? 1 : 0
+  depends_on      = [azurerm_cognitive_account.openai[0]]
   create_duration = "60s"
 }
 
 resource "azurerm_private_endpoint" "openai" {
+  count               = var.enabled ? 1 : 0
   name                = "pe-oai-${var.name_suffix}"
   resource_group_name = var.resource_group_name
   location            = var.location
@@ -88,7 +96,7 @@ resource "azurerm_private_endpoint" "openai" {
 
   private_service_connection {
     name                           = "psc-oai"
-    private_connection_resource_id = azurerm_cognitive_account.openai.id
+    private_connection_resource_id = azurerm_cognitive_account.openai[0].id
     subresource_names              = ["account"]
     is_manual_connection           = false
   }
@@ -100,16 +108,16 @@ resource "azurerm_private_endpoint" "openai" {
 }
 
 output "id" {
-  description = "Resource ID of the Azure OpenAI cognitive account."
-  value       = azurerm_cognitive_account.openai.id
+  description = "Resource ID of the Azure OpenAI cognitive account (null when disabled)."
+  value       = var.enabled ? azurerm_cognitive_account.openai[0].id : null
 }
 output "name" {
-  description = "Name of the Azure OpenAI cognitive account."
-  value       = azurerm_cognitive_account.openai.name
+  description = "Name of the Azure OpenAI cognitive account (null when disabled)."
+  value       = var.enabled ? azurerm_cognitive_account.openai[0].name : null
 }
 output "endpoint" {
-  description = "HTTPS endpoint URL of the Azure OpenAI account (e.g. https://oai-<suffix>.openai.azure.com/)."
-  value       = azurerm_cognitive_account.openai.endpoint
+  description = "HTTPS endpoint of the Azure OpenAI account (null when disabled)."
+  value       = var.enabled ? azurerm_cognitive_account.openai[0].endpoint : null
 }
 output "deployment_names" {
   description = "List of model deployment names created on the Azure OpenAI account."
