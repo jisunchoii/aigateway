@@ -58,6 +58,11 @@ variable "seed_role_assignment_id" {
   default     = null
   description = "Cosmos data-plane role assignment ID the seed run-command must wait for (ordering + propagation)."
 }
+variable "cosmos_pe_id" {
+  type        = string
+  default     = null
+  description = "Cosmos DB private endpoint resource ID (incl. its inline private_dns_zone_group). Referenced by the seed run-command so it waits for the PE NIC AND the privatelink DNS A-record to exist before the VM tries to resolve the Cosmos host."
+}
 variable "run_seed" {
   type        = bool
   default     = true
@@ -161,6 +166,7 @@ resource "azurerm_virtual_machine_run_command" "seed" {
     script = replace(templatefile("${path.module}/seed-runcommand.sh.tftpl", {
       endpoint       = var.cosmos_endpoint
       rbac_id        = coalesce(var.seed_role_assignment_id, "none")
+      pe_ready       = coalesce(var.cosmos_pe_id, "none")
       cosmos_script  = file("${path.module}/../../../scripts/seed-cosmos-jumpbox.sh")
       pricing_script = file("${path.module}/../../../scripts/seed-pricing-jumpbox.sh")
     }), "\r", "")

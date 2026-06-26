@@ -186,3 +186,7 @@ output "config_writer_role_assignment_ids" {
   description = "Config-container Data Contributor role assignment IDs keyed by principal name (e.g. jumpbox)."
   value       = { for k, ra in azurerm_cosmosdb_sql_role_assignment.config_data_writer : k => ra.id }
 }
+output "private_endpoint_id" {
+  description = "Resource ID of the Cosmos DB private endpoint (includes its inline private_dns_zone_group, i.e. the privatelink A-record). Consumers that reference this wait for the PE NIC AND DNS record to exist before resolving the Cosmos host."
+  value       = azurerm_private_endpoint.cosmos.id
+}

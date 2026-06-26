@@ -93,13 +93,13 @@ variable "openai_deployments" {
       model_name    = "gpt-5.4"
       model_version = "2026-03-05"
       sku_name      = "GlobalStandard"
-      capacity      = 10
+      capacity      = 200
     }
     "gpt-5.4-mini" = {
       model_name    = "gpt-5.4-mini"
       model_version = "2026-03-17"
       sku_name      = "GlobalStandard"
-      capacity      = 10
+      capacity      = 200
     }
   }
   description = "Azure OpenAI deployments. Deployment name = real model name (no alias indirection); gpt-5.4-nano removed."
@@ -290,7 +290,7 @@ variable "rate_tiers" {
   default = {
     small  = { tpm = 500, quota = 20000, period = "Daily" }
     medium = { tpm = 2000, quota = 100000, period = "Daily" }
-    large  = { tpm = 10000, quota = 500000, period = "Monthly" }
+    large  = { tpm = 10000, quota = 500000, period = "Daily" }
   }
   description = "Per-team rate-limit tiers. Single source feeding APIM tier named values (policy enforcement) and the Admin UI RATE_TIERS_JSON env (display)."
   validation {

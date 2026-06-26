@@ -16,5 +16,6 @@ budget_start_date     = "2026-06-01T00:00:00Z"
 jumpbox_vm_size = "Standard_D2s_v7"
 
 # App config
-# enable_jumpbox         = true <- uncomment if you want to provision a jumpbox
-# jumpbox_admin_password = "<PASSWORD>" <- <- uncomment and fill in if you want to provision a jumpbox
+enable_jumpbox         = true <- comment out if you do not want to provision a jumpbox
+jumpbox_admin_password = "<PASSWORD>" <- fill in if you want to provision a jumpbox else comment out
+apim_public            = true <- comment out if you want it to be private.

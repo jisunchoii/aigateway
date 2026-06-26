@@ -3,6 +3,7 @@
 # the jumpbox and runs them against Cosmos using the VM's managed identity. Retries to absorb
 # Cosmos data-plane RBAC propagation delay after the role assignment is created.
 # Waits-on Cosmos role assignment: ${rbac_id}
+# Waits-on Cosmos private endpoint + privatelink DNS record: ${pe_ready}
 set -uo pipefail
 
 ENDPOINT="${endpoint}"

@@ -91,6 +91,9 @@ module "jumpbox" {
   # Seed Cosmos config/pricing docs from the VM MI; wait for the data-plane role assignment.
   cosmos_endpoint         = module.config_store.endpoint
   seed_role_assignment_id = try(module.config_store.config_writer_role_assignment_ids["jumpbox"], null)
+  # Also wait for the Cosmos private endpoint + its inline private_dns_zone_group (privatelink
+  # A-record) so the VM can actually resolve the Cosmos host before the seed run-command fires.
+  cosmos_pe_id = module.config_store.private_endpoint_id
 }
 
 module "apim" {
