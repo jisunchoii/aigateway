@@ -111,37 +111,23 @@
             return ladder[target];
         } catch { return req; }
     }" />
-    <!-- [Cost] Apply the target model. The incoming route is the Azure OpenAI path route (model in
-         the URL). This also lets the Copilot CLI Azure-provider facade use the same path route for
-         OSS/partner aliases: if the target is an OSS alias, switch to the AIServices account's GA
-         OpenAI/v1 route (/chat/completions, model in body). OSS chat models use max_tokens, so
-         translate gpt-5's max_completion_tokens. -->
-    <set-variable name="dgIsOss" value="@(new[]{ ${join(", ", [for a in foundry_aliases : "\"${a}\""])} }.Contains((string)context.Variables["effectiveDeployment"]))" />
-    <choose>
-      <when condition="@(((string)context.Variables["effectiveDeployment"]).Length > 0 && (bool)context.Variables["dgIsOss"])">
-        <set-backend-service base-url="${foundry_v1_base}" />
-        <!-- copy-unmatched-params=false drops the incoming ?api-version=… ; the AIServices
-             GA OpenAI/v1 route is version-pinned and 400s on an api-version query param. -->
-        <rewrite-uri template="/chat/completions" copy-unmatched-params="false" />
-        <set-body>@{
-            var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
-            body["model"] = (string)context.Variables["effectiveDeployment"];
-            if (body["max_completion_tokens"] != null && body["max_tokens"] == null) {
-                body["max_tokens"] = body["max_completion_tokens"];
-                body.Remove("max_completion_tokens");
-            }
-            return body.ToString(Newtonsoft.Json.Formatting.None);
-        }</set-body>
-      </when>
-      <when condition="@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveDeployment"] != (string)context.Variables["requestedDeployment"])">
-        <!-- Same-backend gpt downgrade. rewrite-uri's template is the path AFTER the API path
-             prefix (the backend serviceUrl already ends in /openai), so we must NOT include the
-             /openai segment here — building it from OriginalUrl.Path would double it
-             (.../openai/openai/...) and 404. Rebuild the canonical deployment route relative to
-             the backend, swapping in the downgraded deployment, and keep the original query. -->
-        <rewrite-uri template="@("/deployments/" + (string)context.Variables["effectiveDeployment"] + "/chat/completions" + context.Request.OriginalUrl.QueryString)" />
-      </when>
-    </choose>
+    <!-- [Backend v1] The incoming route is the Azure OpenAI path route (model in the URL,
+         ?api-version=…). The unified backend is the AIServices GA OpenAI/v1 route (model in body,
+         no api-version). Convert EVERY request: point at the v1 base, rewrite to /chat/completions
+         (dropping ?api-version, which the v1 route 400s on), and put the effective deployment in the
+         body "model". gpt-5 reasoning models need max_completion_tokens; if a client sent max_tokens,
+         translate it. effectiveDeployment == requestedDeployment when no budget downgrade applies. -->
+    <set-backend-service base-url="${foundry_v1_base}" />
+    <rewrite-uri template="/chat/completions" copy-unmatched-params="false" />
+    <set-body>@{
+        var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
+        body["model"] = (string)context.Variables["effectiveDeployment"];
+        if (body["max_tokens"] != null && body["max_completion_tokens"] == null) {
+            body["max_completion_tokens"] = body["max_tokens"];
+            body.Remove("max_tokens");
+        }
+        return body.ToString(Newtonsoft.Json.Formatting.None);
+    }</set-body>
     <choose>
       <when condition='@(((string)context.Variables["requestedDeployment"]).Length > 0 && (string)context.Variables["effectiveDeployment"] != (string)context.Variables["requestedDeployment"])'>
         <trace source="llm-gateway" severity="information">
