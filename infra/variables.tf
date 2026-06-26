@@ -137,6 +137,32 @@ variable "foundry_deployments" {
   description = "Foundry OSS/partner model deployments on the AIServices account (PAYG GlobalStandard). Keys become client-facing aliases."
 }
 
+variable "reuse_foundry" {
+  type        = bool
+  default     = false
+  description = "Brownfield: when true, reuse an EXISTING single AIServices (Foundry) account instead of creating one. The account + model deployments are read via a data source (not created); only the Private Endpoint and APIM RBAC are added. When true, the separate Azure OpenAI account is NOT created and gpt traffic is routed to the same AIServices account. The account must already have local_auth disabled and public network access blocked (see GitBook 04)."
+}
+
+variable "existing_foundry_name" {
+  type        = string
+  default     = ""
+  description = "Name of the existing AIServices (Foundry) cognitive account to reuse. Required when reuse_foundry = true. Must be in the same subscription."
+  validation {
+    condition     = !var.reuse_foundry || length(var.existing_foundry_name) > 0
+    error_message = "existing_foundry_name is required when reuse_foundry = true."
+  }
+}
+
+variable "existing_foundry_rg" {
+  type        = string
+  default     = ""
+  description = "Resource group of the existing AIServices account (may differ from the gateway RG; same subscription). Required when reuse_foundry = true."
+  validation {
+    condition     = !var.reuse_foundry || length(var.existing_foundry_rg) > 0
+    error_message = "existing_foundry_rg is required when reuse_foundry = true."
+  }
+}
+
 variable "enable_jumpbox" {
   type        = bool
   default     = false
