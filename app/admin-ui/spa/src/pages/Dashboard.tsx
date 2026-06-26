@@ -99,7 +99,7 @@ export default function Dashboard({ config }: { config: RuntimeConfig }) {
             <Kpi label="속도 초과 (429)" value={(data.blocked_429 ?? 0).toLocaleString()} />
           </div>
 
-          <Title3>예산 강등 중인 컨슈머</Title3>
+          <Title3>예산으로 모델 전환된 컨슈머</Title3>
           {data.downgrades && data.downgrades.length > 0
             ? <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {data.downgrades.map((d) => (
@@ -108,7 +108,7 @@ export default function Dashboard({ config }: { config: RuntimeConfig }) {
                   </Badge>
                 ))}
               </div>
-            : <Text style={{ color: tokens.colorNeutralForeground3 }}>현재 강등 중인 컨슈머가 없습니다.</Text>}
+            : <Text style={{ color: tokens.colorNeutralForeground3 }}>현재 모델 전환 중인 컨슈머가 없습니다.</Text>}
           <Title3>컨슈머별 토큰</Title3>
           <Table aria-label="컨슈머별 토큰">
             <TableHeader><TableRow>

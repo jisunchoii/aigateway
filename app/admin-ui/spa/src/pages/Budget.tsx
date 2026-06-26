@@ -24,14 +24,14 @@ function usd(v: number): string {
 export default function Budget({ config }: { config: RuntimeConfig }) {
   const { instance } = useMsal();
   const scopes = React.useMemo(() => apiScopes(config), [config]);
-  // 모델 목록 = 가격순(비쌈 → 쌈)으로 정렬. 이 순서가 곧 강등 사다리의 비용 순서가 되므로
+  // 모델 목록 = 가격순(비쌈 → 쌈)으로 정렬. 이 순서가 곧 모델 전환 사다리의 비용 순서가 되므로
   // 체크 순서와 무관하게 항상 올바른 비용 내림차순으로 저장된다. (Models 페이지와 동일 정렬)
   const aliases = React.useMemo(() => modelsByPrice(config), [config]);
   const [consumer, setConsumer] = React.useState<string | null>(null);
   const [budget, setBudget] = React.useState("");  // daily_budget_usd ($)
   const [ladder, setLadder] = React.useState<string[]>([]);
   const [isDefault, setIsDefault] = React.useState(false);
-  // level (강등 단계) comes from worker-written active_downgrade; usage_usd/pct are LIVE from the
+  // level (모델 전환 단계) comes from worker-written active_downgrade; usage_usd/pct are LIVE from the
   // config response (BFF computes them from Log Analytics x pricing each GET).
   const [level, setLevel] = React.useState<number | null>(null);
   const [usageUsd, setUsageUsd] = React.useState<number | null>(null);
@@ -167,7 +167,7 @@ export default function Budget({ config }: { config: RuntimeConfig }) {
               쓰는 모델에서 이 순서를 따라 더 저렴한 모델로 한 단계씩 내려갑니다.
             </Text>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: -4 }}>
-              <b>클라이언트가 호출하는 모델도 이 목록에 포함</b>되어야 강등이 동작합니다(보통 ‘모델’
+              <b>클라이언트가 호출하는 모델도 이 목록에 포함</b>되어야 모델 전환이 동작합니다(보통 ‘모델’
               메뉴의 허용 모델과 같게 맞춥니다). OpenAI·Foundry OSS 모델을 섞어도 되며, 종류와 관계없이
               순서상 더 저렴한 모델로 교차 전환됩니다.
             </Text>
@@ -182,11 +182,11 @@ export default function Budget({ config }: { config: RuntimeConfig }) {
                 );
               })}
             </div>
-            {/* 허용 모델 중 우선순위에 빠진 게 있으면 경고 — 그 모델은 강등 대상에서 누락됨 */}
+            {/* 허용 모델 중 우선순위에 빠진 게 있으면 경고 — 그 모델은 모델 전환 대상에서 누락됨 */}
             {allowedModels.some((a) => !ladder.includes(a)) && (
               <Text size={200} style={{ color: tokens.colorPaletteDarkOrangeForeground1, marginTop: 2 }}>
                 ⚠ 허용 모델 중 우선순위에 빠진 것: {allowedModels.filter((a) => !ladder.includes(a)).join(", ")}
-                {" "}— 이 모델로 호출하면 강등이 적용되지 않습니다.
+                {" "}— 이 모델로 호출하면 모델 전환이 적용되지 않습니다.
               </Text>
             )}
           </div>

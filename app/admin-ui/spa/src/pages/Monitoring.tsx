@@ -89,8 +89,8 @@ export default function Monitoring({ config }: { config: RuntimeConfig }) {
                 ))}
             </TableBody>
           </Table>
-          <Text weight="semibold">강등 이벤트</Text>
-          <Table aria-label="강등 이벤트" size="small">
+          <Text weight="semibold">모델 전환 이벤트</Text>
+          <Table aria-label="모델 전환 이벤트" size="small">
             <TableHeader><TableRow>
               <TableHeaderCell>시각</TableHeaderCell><TableHeaderCell>컨슈머</TableHeaderCell>
               <TableHeaderCell>요청 모델</TableHeaderCell><TableHeaderCell>적용 모델</TableHeaderCell>
@@ -98,7 +98,7 @@ export default function Monitoring({ config }: { config: RuntimeConfig }) {
             </TableRow></TableHeader>
             <TableBody>
               {(data.downgrades ?? []).length === 0
-                ? <TableRow><TableCell colSpan={5}><Text style={{ color: tokens.colorNeutralForeground3 }}>기간 내 강등 이벤트가 없습니다.</Text></TableCell></TableRow>
+                ? <TableRow><TableCell colSpan={5}><Text style={{ color: tokens.colorNeutralForeground3 }}>기간 내 모델 전환 이벤트가 없습니다.</Text></TableCell></TableRow>
                 : (data.downgrades ?? []).map((r, i) => (
                   <TableRow key={i}>
                     <TableCell>{fmtTime(r.TimeGenerated)}</TableCell>
