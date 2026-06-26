@@ -8,7 +8,9 @@ description: 게이트웨이 운영자·재무 담당자를 위한 페이지 · 
 
 ---
 
-## 예산 기반 모델 전환 동작 원리
+## 1. 예산 기반 모델 전환 동작 원리
+
+***
 
 각 소비자에게는 Admin UI에서 **일별 USD 예산 한도(per-consumer daily budget)**를 설정합니다. 하루 동안 소비된 토큰 비용이 임계값에 도달하면 APIM 정책이 요청 본문의 `model` 필드를 자동으로 교체합니다.
 
@@ -33,7 +35,9 @@ gpt-5.4 → gpt-5.4-mini → DeepSeek-V4-Pro
 
 ---
 
-## 가격 데이터 관리
+## 2. 가격 데이터 관리
+
+***
 
 모델 단가(per-1k 토큰)는 Cosmos DB의 `pricing` 문서에 저장됩니다. Azure AI 서비스 가격이 변경된 경우 jumpbox에서 다음 스크립트를 실행하여 갱신합니다.
 
@@ -49,7 +53,9 @@ az containerapp job start -g <rg> -n <config_sync_job_name>
 
 ---
 
-## Azure Cost Management 월 예산
+## 3. Azure Cost Management 월 예산
+
+***
 
 Terraform은 `monthly_budget_amount`(기본값: 200 USD) 변수를 기준으로 Azure Cost Management 예산을 자동 생성하고, `budget_alert_email`로 경고 이메일을 발송하도록 구성합니다.
 
@@ -67,7 +73,9 @@ budget_start_date     = "2025-01-01"
 
 ---
 
-## 비용 최적화 팁
+## 4. 비용 최적화 팁
+
+***
 
 - **gpt-5.4-mini 우선 배치:** 저비용 작업에는 Admin UI에서 소비자 기본 모델을 `gpt-5.4-mini`로 설정합니다.
 - **토큰 쿼터 조정:** `token_quota` / `token_quota_period`(기본: Daily) 값을 낮춰 소비자별 일별 토큰 상한을 제한합니다.
@@ -76,7 +84,9 @@ budget_start_date     = "2025-01-01"
 
 ---
 
-## 참고 링크
+## 5. 참고 링크
+
+***
 
 - [Azure Cost Management — 예산 설정](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets)
 - [Azure API Management — 레이트 리밋 정책](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-policy)

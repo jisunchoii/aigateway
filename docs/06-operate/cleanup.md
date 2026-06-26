@@ -8,7 +8,9 @@ description: 게이트웨이 운영자·인프라 담당자를 위한 페이지 
 
 ---
 
-## 기본 정리 절차
+## 1. 기본 정리 절차
+
+***
 
 ```bash
 cd infra
@@ -19,7 +21,9 @@ terraform destroy
 
 ---
 
-## 주의: VNet 주입 APIM의 Named Value 삭제 문제
+## 2. 주의: VNet 주입 APIM의 Named Value 삭제 문제
+
+***
 
 VNet 주입 모드(`apim_public`과 무관하게 Developer/Premium SKU는 VNet 주입)로 배포된 APIM은 `terraform destroy` 실행 중 **Named Value 삭제 단계에서 멈출 수 있습니다.** 이는 APIM 내부 의존성 처리 지연 때문이며, 일시적으로 보이더라도 수십 분 이상 멈춰 있을 수 있습니다.
 
@@ -37,7 +41,9 @@ az group delete -n <rg> --yes
 
 ---
 
-## Brownfield(재사용) 모드에서의 정리
+## 3. Brownfield(재사용) 모드에서의 정리
+
+***
 
 `reuse_foundry = true` 로 배포한 경우, **고객의 기존 Azure AI Foundry 계정은 별도의 리소스 그룹에 있습니다.** `terraform destroy` 또는 `az group delete`로 게이트웨이 RG를 삭제해도 기존 Foundry 계정은 영향을 받지 않습니다.
 
@@ -56,7 +62,9 @@ brownfield 고객의 기존 Azure AI Foundry 계정은 별도 RG에 있으므로
 
 ---
 
-## Entra ID 객체 수동 정리
+## 4. Entra ID 객체 수동 정리
+
+***
 
 `./scripts/app-registration.sh` 로 생성된 Entra ID 앱 등록(BFF API, SPA)과 관리자 보안 그룹은 Terraform 관리 범위 밖입니다. 필요한 경우 다음 명령으로 수동 삭제합니다.
 
@@ -72,7 +80,9 @@ az ad app delete --id "$bff_app_id"
 
 ---
 
-## 참고 링크
+## 5. 참고 링크
+
+***
 
 - [Azure 리소스 그룹 삭제](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/delete-resource-group)
 - [Azure API Management — VNet 통합 정리](https://learn.microsoft.com/en-us/azure/api-management/virtual-network-concepts)

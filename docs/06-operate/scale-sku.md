@@ -8,26 +8,30 @@ description: 게이트웨이 운영자·인프라 담당자를 위한 페이지 
 
 ---
 
-## APIM SKU 변경 (Developer_1 → Premium_1)
+## 1. APIM SKU 변경 (Developer_1 → Premium_1)
+
+***
 
 기본 배포는 `apim_sku_name = "Developer_1"` 을 사용합니다. Developer SKU는 **SLA가 없으며** 개발·데모 목적으로만 적합합니다. 프로덕션 환경에서는 **Premium_1** 이상으로 전환해야 합니다.
 
 ### SKU 변경 절차
 
-1. `infra/terraform.tfvars` 에서 SKU 값을 변경합니다.
+#### Step 1. tfvars 값 변경
+
+`infra/terraform.tfvars` 에서 SKU 값을 변경합니다.
 
 ```hcl
 apim_sku_name = "Premium_1"
 ```
 
-2. 변경 사항을 plan으로 검토합니다.
+#### Step 2. 변경 사항 plan 검토
 
 ```bash
 cd infra
 terraform plan
 ```
 
-3. 이상이 없으면 적용합니다.
+#### Step 3. 적용
 
 ```bash
 terraform apply
@@ -48,7 +52,9 @@ VNet 주입은 Developer와 Premium SKU에서만 지원됩니다. 참고: [Azure
 
 ---
 
-## 모델 Capacity(TPM) 조정
+## 2. 모델 Capacity(TPM) 조정
+
+***
 
 Azure AI Foundry에서 모델 배포별 분당 토큰 수(TPM)는 `infra/terraform.tfvars` 의 `openai_deployments` 및 `foundry_deployments` 맵에서 설정합니다.
 
@@ -79,7 +85,9 @@ brownfield 재사용 모드(`reuse_foundry = true`)에서는 모델 배포를 Te
 
 ---
 
-## APIM 모드 변경 주의 (Internal ↔ External)
+## 3. APIM 모드 변경 주의 (Internal ↔ External)
+
+***
 
 `apim_public` 변수는 APIM 게이트웨이를 인터넷에 노출할지 여부를 제어합니다.
 
@@ -99,7 +107,9 @@ apim_public = true
 
 ---
 
-## 참고 링크
+## 4. 참고 링크
+
+***
 
 - [Azure API Management SKU 및 기능 비교](https://learn.microsoft.com/en-us/azure/api-management/api-management-features)
 - [Azure API Management 스케일링](https://learn.microsoft.com/en-us/azure/api-management/upgrade-and-scale)

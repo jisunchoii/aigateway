@@ -8,7 +8,9 @@ Admin UI의 **Monitoring** 페이지와 Azure Application Insights를 통해 게
 
 ---
 
-## Admin UI Monitoring 페이지
+## 1. Admin UI Monitoring 페이지
+
+***
 
 Monitoring 페이지에는 세 가지 테이블이 제공됩니다.
 
@@ -24,7 +26,9 @@ UI 상의 한국어 용어는 **"모델 전환"** 입니다. 코드 식별자(`d
 
 ---
 
-## 모델 전환 이벤트 추적
+## 2. 모델 전환 이벤트 추적
+
+***
 
 모델 전환이 발생한 요청은 응답 헤더에 다음 세 가지 값이 포함됩니다.
 
@@ -38,7 +42,9 @@ UI 상의 한국어 용어는 **"모델 전환"** 입니다. 코드 식별자(`d
 
 ---
 
-## Application Insights 토큰 메트릭
+## 3. Application Insights 토큰 메트릭
+
+***
 
 게이트웨이는 APIM 정책에서 처리된 토큰 수를 Application Insights로 내보냅니다. 다음 두 가지 차원으로 집계됩니다.
 
@@ -68,7 +74,9 @@ Application Insights 리소스는 Terraform이 자동으로 생성하며, Worksp
 
 ---
 
-## 알림 설정
+## 4. 알림 설정
+
+***
 
 Application Insights에서 임계값 기반 알림을 구성하면 레이트 리밋 초과나 오류율 급증 시 이메일·Teams 알림을 받을 수 있습니다.
 

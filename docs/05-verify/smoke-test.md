@@ -10,7 +10,9 @@ description: 배포 담당자 / 게이트웨이 운영자를 위한 페이지 ·
 
 ---
 
-## 전제 조건
+## 1. 전제 조건
+
+***
 
 | 항목 | 확인 방법 |
 |---|---|
@@ -26,7 +28,9 @@ description: 배포 담당자 / 게이트웨이 운영자를 위한 페이지 ·
 
 ---
 
-## 스모크 스크립트 실행
+## 2. 스모크 스크립트 실행
+
+***
 
 ```bash
 ./scripts/smoke-v1-gateway.sh <apim-host> <subscription-key>
@@ -47,7 +51,9 @@ description: 배포 담당자 / 게이트웨이 운영자를 위한 페이지 ·
 
 ---
 
-## 결과 해석
+## 3. 결과 해석
+
+***
 
 | 결과 | 의미 | 다음 단계 |
 |---|---|---|
@@ -59,7 +65,9 @@ description: 배포 담당자 / 게이트웨이 운영자를 위한 페이지 ·
 
 ---
 
-## 응답 헤더로 모델 전환 확인
+## 4. 응답 헤더로 모델 전환 확인
+
+***
 
 APIM은 요청 처리 결과를 응답 헤더로 반환합니다. `curl -v` 출력에서 확인할 수 있습니다.
 
@@ -73,7 +81,9 @@ x-ai-gateway-downgrade-level: 1
 
 ---
 
-## 관련 문서
+## 5. 관련 문서
+
+***
 
 - 백엔드 격리 진단 → [backend-isolation.md](backend-isolation.md)
 - 변수 레퍼런스 (`apim_public`, `allowed_models`) → [../10-reference/variables.md](../10-reference/variables.md)
