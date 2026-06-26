@@ -1,4 +1,6 @@
-> 읽는 사람: 인프라·아키텍트 · 선행: Entra ID 객체
+---
+description: 인프라·아키텍트를 위한 페이지 · 선행: Entra ID 객체
+---
 
 # Greenfield vs Brownfield 결정
 
@@ -65,7 +67,15 @@
 
 2. **계정 잠금 사전 준비 필요.** Brownfield 경로에서는 Terraform `apply` 전에 `az` CLI로 기존 계정의 `disableLocalAuth=true`, `publicNetworkAccess=Disabled`를 수동으로 설정해야 합니다. Terraform의 `precondition`이 이를 검증합니다.
 
+{% hint style="warning" %}
+Brownfield 경로에서는 `terraform apply` 전에 반드시 기존 AIServices 계정에 `disableLocalAuth=true`, `publicNetworkAccess=Disabled`를 설정하세요. 사전 준비 없이 apply하면 `precondition` 검증에서 실패합니다.
+{% endhint %}
+
 3. **foundry_deployments 키 = 실제 배포 이름.** `foundry_deployments` tfvars의 map 키가 계정에 실제로 존재하는 배포 이름과 **정확히 일치**해야 합니다. 이 값이 `allowed_models`, 라우팅, Admin UI 레이블에 모두 사용됩니다.
+
+{% hint style="danger" %}
+`foundry_deployments` map 키가 실제 배포 이름과 다르면 라우팅이 조용히 실패하거나 잘못된 모델로 연결됩니다. apply 전에 `az cognitiveservices account deployment list` 출력과 대조해 키를 정확히 맞추세요.
+{% endhint %}
 
 ---
 
@@ -92,7 +102,10 @@ foundry_deployments = {
 
 ## 결정 후 다음 단계
 
-| 결정 | 이동할 챕터 |
-|---|---|
-| **Greenfield** — 새 AIServices 계정 포함 전체 스택 | [03 배포](../03-deploy/overview.md) |
-| **Brownfield** — 기존 Foundry 계정 재사용 | [04 기존 Foundry 재사용](../04-reuse-foundry/overview.md) |
+{% content-ref url="../03-deploy/overview.md" %}
+[03 배포 — 새 AIServices 계정 포함 전체 스택 (Greenfield)](../03-deploy/overview.md)
+{% endcontent-ref %}
+
+{% content-ref url="../04-reuse-foundry/overview.md" %}
+[04 기존 Foundry 재사용 — 기존 Foundry 계정 재사용 (Brownfield)](../04-reuse-foundry/overview.md)
+{% endcontent-ref %}

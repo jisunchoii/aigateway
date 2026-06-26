@@ -1,4 +1,6 @@
-> 읽는 사람: 아키텍트·플랫폼 엔지니어 · 선행: 무엇인가
+---
+description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행: 무엇인가
+---
 
 # 동작 방식
 
@@ -36,7 +38,9 @@ AIServices 계정 /openai/v1/chat/completions
 | `/vscode/openai` | VS Code BYOK | path-route, `Ocp-Apim-Subscription-Key` 헤더 | 동일 |
 | `/foundry` | opencode / 직접 호출 | body-route, model in body | 거의 그대로 → `/openai/v1/chat/completions` |
 
-> **v1 백엔드 통일:** path-route(URL에 모델명 포함)로 들어온 요청도 APIM 정책이 body에 `"model"` 필드를 주입해 동일한 `/openai/v1/chat/completions` 엔드포인트로 라우팅합니다. 클라이언트는 이 변환을 인식할 필요가 없습니다.
+{% hint style="info" %}
+**v1 백엔드 통일:** path-route(URL에 모델명 포함)로 들어온 요청도 APIM 정책이 body에 `"model"` 필드를 주입해 동일한 `/openai/v1/chat/completions` 엔드포인트로 라우팅합니다. 클라이언트는 이 변환을 인식할 필요가 없습니다.
+{% endhint %}
 
 ---
 

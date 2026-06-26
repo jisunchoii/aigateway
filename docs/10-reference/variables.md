@@ -1,4 +1,6 @@
-> 읽는 사람: 배포 담당자 / 인프라 엔지니어 · 선행: [첫 번째 `terraform apply`](../03-deploy/first-apply.md)
+---
+description: 배포 담당자 / 인프라 엔지니어를 위한 페이지 · 선행: 첫 번째 terraform apply
+---
 
 # 변수 레퍼런스
 
@@ -88,6 +90,10 @@
 | `existing_foundry_name` | `string` | `""` | 재사용할 AIServices 계정 이름. `reuse_foundry = true` 시 필수. |
 | `existing_foundry_rg` | `string` | `""` | 기존 AIServices 계정의 리소스 그룹. `reuse_foundry = true` 시 필수. 게이트웨이 RG와 달라도 됨(동일 구독). |
 
+{% hint style="info" %}
+`reuse_foundry = true` 사용 시 `existing_foundry_name`과 `existing_foundry_rg`를 반드시 함께 지정해야 합니다. 어느 하나라도 비어 있으면 `terraform plan`에서 precondition 오류가 발생합니다.
+{% endhint %}
+
 ---
 
 ## 인증 (client_auth_mode / Entra ID)
@@ -122,6 +128,10 @@
 | `monthly_budget_amount` | `number` | `200` | Cost Management 월 예산(구독 통화). 알림 전용, 하드 스톱 아님. |
 | `budget_alert_email` * | `string` | — | 예산 임계값 알림 이메일. |
 | `budget_start_date` | `string` | `"2026-06-01T00:00:00Z"` | 예산 시작일(UTC, ISO 8601). 과거 날짜로 첫 apply 시 오류. |
+
+{% hint style="warning" %}
+`budget_start_date`는 첫 `terraform apply` 시점보다 과거 날짜이면 오류가 발생합니다. 현재 날짜 이후의 월 초 날짜를 사용하세요.
+{% endhint %}
 
 ---
 

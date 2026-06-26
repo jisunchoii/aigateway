@@ -1,4 +1,6 @@
-> 읽는 사람: 개발자 (GitHub Copilot CLI 사용자) · 선행: 07-connect-clients/overview.md
+---
+description: 개발자 (GitHub Copilot CLI 사용자)를 위한 페이지 · 선행: 07-connect-clients/overview.md
+---
 
 # GitHub Copilot CLI (GHCP CLI) 연동
 
@@ -28,7 +30,9 @@ export COPILOT_PROVIDER_MODEL_ID=gpt-5.4
 export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4
 ```
 
-> **중요:** `COPILOT_PROVIDER_BASE_URL` 에 `/openai` 를 포함하지 마십시오. CLI가 azure provider 모드에서 경로를 자동으로 구성합니다. 예를 들어 `https://<apim-host>/openai` 로 설정하면 경로가 중복되어 요청이 실패합니다.
+{% hint style="warning" %}
+`COPILOT_PROVIDER_BASE_URL` 에 `/openai` 를 포함하지 마십시오. CLI가 azure provider 모드에서 경로를 자동으로 구성합니다. 예를 들어 `https://<apim-host>/openai` 로 설정하면 경로가 중복되어 요청이 실패합니다.
+{% endhint %}
 
 ---
 

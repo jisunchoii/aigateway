@@ -1,4 +1,6 @@
-> 읽는 사람: 아키텍트·플랫폼 엔지니어 · 선행: [클라이언트 개요](../07-connect-clients/overview.md)
+---
+description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행: 클라이언트 개요
+---
 
 # 향후 확장 개요
 
@@ -30,6 +32,14 @@
 
 ## 각 확장 상세
 
-- [C — Entra ID 클라이언트 인증](extension-c-entra-client-auth.md)
-- [A — Claude Code 입구](extension-a-claude-code.md)
-- [B — Responses API](extension-b-responses-api.md)
+{% content-ref url="extension-c-entra-client-auth.md" %}
+[C — Entra ID 클라이언트 인증](extension-c-entra-client-auth.md)
+{% endcontent-ref %}
+
+{% content-ref url="extension-a-claude-code.md" %}
+[A — Claude Code 입구](extension-a-claude-code.md)
+{% endcontent-ref %}
+
+{% content-ref url="extension-b-responses-api.md" %}
+[B — Responses API](extension-b-responses-api.md)
+{% endcontent-ref %}

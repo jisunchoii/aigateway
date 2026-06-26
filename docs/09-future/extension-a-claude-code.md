@@ -1,8 +1,14 @@
-> 읽는 사람: 플랫폼 엔지니어·AI 도구 담당자 · 선행: [확장 개요](overview.md)
+---
+description: 플랫폼 엔지니어·AI 도구 담당자를 위한 페이지 · 선행: 확장 개요
+---
 
 # 확장 A — Claude Code 입구
 
 Claude Code는 Anthropic Messages API(`/v1/messages`) 형식으로만 통신한다. 현재 llm-gateway의 입구(`/openai`, `/foundry`)는 OpenAI 호환 형식만 처리하므로, **Claude Code는 현재 이 게이트웨이에 직접 연결할 수 없다**. 이 확장은 신규 APIM API를 추가하여 Claude Code를 게이트웨이로 라우팅하는 방법을 설명한다.
+
+{% hint style="info" %}
+이 확장은 현재 미구현 상태다. 신규 APIM API 추가가 필요하며 운영 환경에서 검증되지 않았다.
+{% endhint %}
 
 ---
 
@@ -63,7 +69,9 @@ Anthropic Messages API는 요청에 아래 헤더를 사용한다.
 | `anthropic-version` | API 버전 지정 (예: `2023-06-01`) |
 | `anthropic-beta` | 베타 기능 활성화 |
 
-**이 헤더들을 APIM 정책에서 제거(strip)해서는 안 된다.** 백엔드로 그대로 전달해야 Claude 모델이 올바르게 동작한다.
+{% hint style="warning" %}
+`anthropic-version` 및 `anthropic-beta` 헤더를 APIM 정책에서 제거(strip)해서는 안 된다. 백엔드로 그대로 전달해야 Claude 모델이 올바르게 동작한다.
+{% endhint %}
 
 ---
 

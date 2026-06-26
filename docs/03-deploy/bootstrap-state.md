@@ -1,4 +1,6 @@
-> 읽는 사람: 운영자·DevOps 엔지니어 · 선행: [배포 개요](overview.md)
+---
+description: 운영자·DevOps 엔지니어를 위한 페이지 · 선행: 배포 개요
+---
 
 # Terraform 원격 state 백엔드 부트스트랩
 
@@ -24,7 +26,9 @@ export state-key=ai-gateway-eus2.tfstate
 | `storage-prefix` | `staigwtfstate` | 스토리지 계정 이름 접두사(전역 고유) |
 | `state-key` | `ai-gateway-eus2.tfstate` | state 파일 블롭 이름 |
 
-> **리전 선택:** `location`은 이후 `terraform.tfvars`의 `location` 값과 같은 리전으로 맞추는 것을 권장합니다.
+{% hint style="info" %}
+**리전 선택:** `location`은 이후 `terraform.tfvars`의 `location` 값과 같은 리전으로 맞추는 것을 권장합니다.
+{% endhint %}
 
 ## 부트스트랩 실행
 

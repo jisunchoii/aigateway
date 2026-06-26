@@ -1,4 +1,6 @@
-> 읽는 사람: 운영자·DevOps 엔지니어 · 선행: [Greenfield vs Brownfield 결정](../02-prerequisites/decide-greenfield-vs-brownfield.md)
+---
+description: 운영자·DevOps 엔지니어를 위한 페이지 · 선행: Greenfield vs Brownfield 결정
+---
 
 # 배포 개요
 
@@ -15,12 +17,35 @@ Brownfield 경로를 선택했다면 이 챕터의 절차를 따른 뒤 [기존 
 
 ## 전체 배포 단계
 
-1. **상태 백엔드 부트스트랩** — 구독당 1회, Terraform 원격 state 저장소 생성 ([→ 상세](bootstrap-state.md))
-2. **tfvars 구성** — 배포 대상 구독·위치·비용 센터 등 핵심 변수 설정 ([→ 상세](configure-tfvars.md))
-3. **첫 번째 `terraform apply`** — 코어 인프라(APIM, VNet, Cosmos, ACR, Jumpbox) 배포, 약 45분 ([→ 상세](first-apply.md))
-4. **이미지 빌드·푸시** — ACR remote build로 worker/admin-ui 컨테이너 이미지 빌드 ([→ 상세](build-push-images.md))
-5. **앱 등록 및 두 번째 apply** — Entra ID 앱 등록 후 나머지 컨테이너 앱 배포 ([→ 상세](app-registration-second-apply.md))
-6. **Seed 및 최종 설정** — Cosmos DB 초기 데이터 주입, config-sync 트리거 ([→ 상세](seed-and-finalize.md))
+{% columns %}
+{% column width="50%" %}
+{% content-ref url="bootstrap-state.md" %}
+[상태 백엔드 부트스트랩](bootstrap-state.md)
+{% endcontent-ref %}
+
+{% content-ref url="configure-tfvars.md" %}
+[tfvars 구성](configure-tfvars.md)
+{% endcontent-ref %}
+
+{% content-ref url="first-apply.md" %}
+[첫 번째 terraform apply](first-apply.md)
+{% endcontent-ref %}
+{% endcolumn %}
+
+{% column width="50%" %}
+{% content-ref url="build-push-images.md" %}
+[이미지 빌드·푸시](build-push-images.md)
+{% endcontent-ref %}
+
+{% content-ref url="app-registration-second-apply.md" %}
+[앱 등록 및 두 번째 apply](app-registration-second-apply.md)
+{% endcontent-ref %}
+
+{% content-ref url="seed-and-finalize.md" %}
+[Seed 및 최종 설정](seed-and-finalize.md)
+{% endcontent-ref %}
+{% endcolumn %}
+{% endcolumns %}
 
 ## 전제 조건 확인
 
@@ -31,4 +56,10 @@ Brownfield 경로를 선택했다면 이 챕터의 절차를 따른 뒤 [기존 
 - Azure CLI 최신 버전
 - [사전 준비 챕터](../02-prerequisites/azure-requirements.md)의 모든 항목 완료
 
-> **Brownfield 경로:** `reuse_foundry = true`를 설정하기 전에 [기존 Foundry 재사용 — 계정 잠금 준비](../04-reuse-foundry/prepare-account.md)를 먼저 완료하십시오.
+{% hint style="warning" %}
+**Brownfield 경로:** `reuse_foundry = true`를 설정하기 전에 [기존 Foundry 재사용 — 계정 잠금 준비](../04-reuse-foundry/prepare-account.md)를 먼저 완료하십시오.
+{% endhint %}
+
+{% content-ref url="../04-reuse-foundry/overview.md" %}
+[기존 Foundry 재사용](../04-reuse-foundry/overview.md)
+{% endcontent-ref %}

@@ -1,4 +1,6 @@
-> 읽는 사람: 플랫폼 엔지니어 (Terraform 담당) · 선행: [tfvars 설정](configure-tfvars.md)
+---
+description: 플랫폼 엔지니어 (Terraform 담당)를 위한 페이지 · 선행: tfvars 설정
+---
 
 # Plan & Apply
 
@@ -33,9 +35,13 @@ Plan: 5 to add, 0 to change, 0 to destroy.
 
 생성될 리소스 목록에서 `azurerm_cognitive_account`나 `azurerm_cognitive_deployment`가 보인다면 `reuse_foundry=true`가 올바르게 설정되지 않은 것이다. tfvars를 재확인한 뒤 다시 plan을 실행한다.
 
-반대로 `destroy` 항목이 있다면 기존 리소스에 영향을 줄 수 있으므로 반드시 내용을 확인한 후 진행한다.
+{% hint style="success" %}
+plan 결과에서 `azurerm_cognitive_account` 생성 수 = 0, `azurerm_cognitive_deployment` 생성 수 = 0이고 PE + RBAC 역할 할당만 추가된다면 재사용 단언이 충족된 것이다. 이 plan 단언은 **라이브 환경에서 검증 완료**된 동작이다.
+{% endhint %}
 
-이 plan 단언은 **라이브 환경에서 검증 완료**된 동작이다.
+{% hint style="warning" %}
+`destroy` 항목이 있다면 기존 리소스에 영향을 줄 수 있으므로 반드시 내용을 확인한 후 진행한다.
+{% endhint %}
 
 ### data 소스 precondition이 작동하지 않는 경우 (gotcha 4)
 
@@ -61,10 +67,13 @@ terraform apply
 
 ### 소요 시간
 
+{% hint style="warning" %}
 첫 apply는 약 **45분** 소요된다. APIM Developer/Premium SKU의 VNet 주입이 오래 걸리는 것이 정상이다.
+{% endhint %}
 
 ### OpenAPI import 400 오류 시 재-apply (gotcha 2)
 
+{% hint style="warning" %}
 첫 apply에서 APIM OpenAPI import 단계가 400 오류로 실패할 수 있다.
 이는 APIM 리소스 생성 직후 API import가 일시적으로 실패하는 레이스 컨디션이며, 정상 범위의 동작이다.
 
@@ -73,6 +82,7 @@ terraform apply   # 재-apply 하면 해결됨
 ```
 
 Foundry API는 wildcard 방식이라 OpenAPI import가 없어 해당 없다.
+{% endhint %}
 
 ## Apply 완료 후
 

@@ -1,4 +1,6 @@
-> 읽는 사람: 배포 담당자 / SRE / 운영자 · 선행: 없음 (트러블슈팅 레퍼런스)
+---
+description: 배포 담당자 / SRE / 운영자를 위한 페이지 · 선행: 없음 (트러블슈팅 레퍼런스)
+---
 
 # Gotchas & 트러블슈팅
 
@@ -14,7 +16,9 @@
 
 **원인:** Developer 또는 Premium SKU의 VNet 주입 모드(Internal/External) 활성화는 Azure 내부에서 약 45분이 걸립니다. 이는 정상 동작입니다.
 
-**해결:** 기다립니다. 타임아웃 없이 apply가 완료될 때까지 대기합니다. 중단하지 마세요.
+{% hint style="warning" %}
+기다립니다. 타임아웃 없이 apply가 완료될 때까지 대기합니다. 중단하지 마세요.
+{% endhint %}
 
 ---
 
@@ -24,7 +28,9 @@
 
 **원인:** APIM 게이트웨이 프로비저닝이 완료되기 전에 OpenAPI spec import가 시도되는 일시적 레이스 컨디션. Foundry API는 wildcard 라우팅이므로 별도 import가 없어 영향받지 않습니다.
 
-**해결:** `terraform apply`를 다시 실행합니다. 두 번째 apply에서 정상 완료됩니다.
+{% hint style="info" %}
+`terraform apply`를 다시 실행합니다. 두 번째 apply에서 정상 완료됩니다.
+{% endhint %}
 
 ---
 
@@ -42,6 +48,10 @@ az group delete -n <resource_group_name> --yes
 
 `<resource_group_name>`은 `terraform output -raw resource_group_name`으로 확인합니다. 이후 Terraform state와 동기화가 필요하면 state를 초기화하세요.
 
+{% hint style="warning" %}
+`az group delete`는 RG 내 모든 리소스를 영구 삭제합니다. 이후 같은 스택을 재배포할 때는 `terraform init`부터 다시 시작하세요.
+{% endhint %}
+
 ---
 
 ### Gotcha 4 — `data.azurerm_cognitive_account` `local_auth_enabled` 미노출
@@ -50,13 +60,15 @@ az group delete -n <resource_group_name> --yes
 
 **원인:** `azurerm` provider 버전에 따라 `data.azurerm_cognitive_account`가 `local_auth_enabled` 속성을 노출하지 않을 수 있습니다.
 
-**해결:** provider 업그레이드를 검토하거나, `az` CLI로 사전 점검하여 precondition을 대체합니다.
+{% hint style="info" %}
+provider 업그레이드를 검토하거나, `az` CLI로 사전 점검하여 precondition을 대체합니다.
 
 ```bash
 az resource show --ids <aiservices-account-id> \
   --query "properties.{disableLocalAuth:disableLocalAuth, publicNetworkAccess:publicNetworkAccess}" -o jsonc
 # 기대값: disableLocalAuth: true, publicNetworkAccess: "Disabled"
 ```
+{% endhint %}
 
 ---
 
@@ -66,7 +78,9 @@ az resource show --ids <aiservices-account-id> \
 
 **원인:** xAI(grok), DeepSeek 등 파트너 모델은 테넌트에서 Azure Marketplace 약관에 동의해야 배포할 수 있습니다.
 
-**해결:** Azure Portal에서 해당 모델의 배포 플로우를 진행하여 약관에 동의한 후 `terraform apply`를 재실행합니다.
+{% hint style="info" %}
+Azure Portal에서 해당 모델의 배포 플로우를 진행하여 약관에 동의한 후 `terraform apply`를 재실행합니다.
+{% endhint %}
 
 ---
 
@@ -140,7 +154,9 @@ x-ai-gateway-downgrade-level: 1
 
 **원인:** Azure Private Endpoint DNS 전파 또는 RBAC 역할 할당 전파에 수 분이 소요됩니다.
 
-**해결:** 첫 apply 완료 후 3~5분 기다린 뒤 스모크를 재실행합니다. 지속적으로 실패한다면 [backend-isolation.md](../05-verify/backend-isolation.md) 절차로 격리 진단합니다.
+{% hint style="info" %}
+첫 apply 완료 후 3~5분 기다린 뒤 스모크를 재실행합니다. 지속적으로 실패한다면 [backend-isolation.md](../05-verify/backend-isolation.md) 절차로 격리 진단합니다.
+{% endhint %}
 
 참고:
 - [Azure Private Endpoint DNS 구성](https://learn.microsoft.com/ko-kr/azure/private-link/private-endpoint-dns)

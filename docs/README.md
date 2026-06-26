@@ -1,3 +1,7 @@
+---
+description: 고객 플랫폼팀을 위한 Azure AI Gateway 배포·운영 가이드
+---
+
 # Azure AI Gateway — 배포·운영 가이드
 
 이 문서는 고객 플랫폼팀을 위한 **Azure AI Gateway** 배포·운영 가이드입니다. [Azure API Management](https://learn.microsoft.com/ko-kr/azure/api-management/api-management-key-concepts) 위에 [Azure OpenAI](https://learn.microsoft.com/ko-kr/azure/ai-services/openai/overview)와 [Azure AI Foundry](https://learn.microsoft.com/ko-kr/azure/ai-foundry/what-is-azure-ai-foundry) 모델을 단일 거버넌스 엔드포인트로 묶고, 소비자별 모델 권한·토큰 속도 제한·예산 기반 모델 전환·셀프서비스 관리 UI를 제공합니다.
@@ -25,15 +29,52 @@
 
 ## 문서 구조
 
-1. **01 개요** — 게이트웨이의 목적·동작 방식·핵심 개념 정의
-2. **02 사전 준비** — Azure 요건, Entra ID 객체, greenfield/brownfield 결정
-3. **03 배포 (Greenfield)** — 새 AIServices 계정을 포함한 전체 스택 배포
-4. **04 기존 Foundry 재사용 (Brownfield)** — 기존 AIServices 계정을 data로 읽어 게이트웨이 연결
-5. **05 검증** — 스모크 테스트로 end-to-end 동작 확인
-6. **06 운영** — 설정 변경, 모니터링, 비용 관리, 정리
-7. **07 클라이언트 연동** — VS Code, GHCP CLI, opencode 등 클라이언트별 연결 방법
-8. **08 아키텍처 상세** — 정책 흐름, 모듈 구조, 보안 설계
-9. **09 향후 확장** — Claude Code 입구, Responses API, Entra ID 클라이언트 인증
-10. **10 레퍼런스** — 변수·출력 전체 목록, 비용·정리 지침
+{% columns %}
+{% column width="50%" %}
+{% content-ref url="01-overview/what-is-this.md" %}
+[01 개요 — 게이트웨이의 목적·동작 방식·핵심 개념 정의](01-overview/what-is-this.md)
+{% endcontent-ref %}
 
-> **읽는 순서 권장:** 처음 배포라면 01 → 02 → 03(또는 04) → 05 순으로 읽으세요. 기존 환경에 연결하는 개발자는 07부터 시작해도 됩니다.
+{% content-ref url="02-prerequisites/azure-requirements.md" %}
+[02 사전 준비 — Azure 요건, Entra ID 객체, greenfield/brownfield 결정](02-prerequisites/azure-requirements.md)
+{% endcontent-ref %}
+
+{% content-ref url="03-deploy/overview.md" %}
+[03 배포 (Greenfield) — 새 AIServices 계정을 포함한 전체 스택 배포](03-deploy/overview.md)
+{% endcontent-ref %}
+
+{% content-ref url="04-reuse-foundry/overview.md" %}
+[04 기존 Foundry 재사용 (Brownfield) — 기존 AIServices 계정을 data로 읽어 게이트웨이 연결](04-reuse-foundry/overview.md)
+{% endcontent-ref %}
+
+{% content-ref url="05-verify/smoke-test.md" %}
+[05 검증 — 스모크 테스트로 end-to-end 동작 확인](05-verify/smoke-test.md)
+{% endcontent-ref %}
+{% endcolumn %}
+
+{% column width="50%" %}
+{% content-ref url="06-operate/config-changes.md" %}
+[06 운영 — 설정 변경, 모니터링, 비용 관리, 정리](06-operate/config-changes.md)
+{% endcontent-ref %}
+
+{% content-ref url="07-connect-clients/overview.md" %}
+[07 클라이언트 연동 — VS Code, GHCP CLI, opencode 등 클라이언트별 연결 방법](07-connect-clients/overview.md)
+{% endcontent-ref %}
+
+{% content-ref url="08-architecture/policy-flow.md" %}
+[08 아키텍처 상세 — 정책 흐름, 모듈 구조, 보안 설계](08-architecture/policy-flow.md)
+{% endcontent-ref %}
+
+{% content-ref url="09-future/overview.md" %}
+[09 향후 확장 — Claude Code 입구, Responses API, Entra ID 클라이언트 인증](09-future/overview.md)
+{% endcontent-ref %}
+
+{% content-ref url="10-reference/variables.md" %}
+[10 레퍼런스 — 변수·출력 전체 목록, 비용·정리 지침](10-reference/variables.md)
+{% endcontent-ref %}
+{% endcolumn %}
+{% endcolumns %}
+
+{% hint style="info" %}
+**읽는 순서 권장:** 처음 배포라면 01 → 02 → 03(또는 04) → 05 순으로 읽으세요. 기존 환경에 연결하는 개발자는 07부터 시작해도 됩니다.
+{% endhint %}

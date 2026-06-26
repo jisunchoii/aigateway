@@ -1,4 +1,6 @@
-> 읽는 사람: 플랫폼 엔지니어·IaC 담당자 · 선행: [배포 개요](../03-deploy/overview.md)
+---
+description: 플랫폼 엔지니어·IaC 담당자를 위한 페이지 · 선행: 배포 개요
+---
 
 # Terraform 모듈 구조
 
@@ -60,7 +62,9 @@ network
 
 Reuse 모드에서는 `modules/openai`가 `count=0`이므로 gpt 트래픽도 foundry 모듈이 참조하는 동일 AIServices 계정의 `/openai/v1` 경로로 라우팅된다. `gpt_backend_*` locals가 이 분기를 처리한다.
 
-> `foundry_deployments` map의 key는 AIServices 계정에 실제 등록된 배포 이름과 **정확히 일치**해야 한다. 이 값이 `allowed_models`, 라우팅, Admin UI 레이블 전체에 사용된다.
+{% hint style="warning" %}
+`foundry_deployments` map의 key는 AIServices 계정에 실제 등록된 배포 이름과 **정확히 일치**해야 한다. 이 값이 `allowed_models`, 라우팅, Admin UI 레이블 전체에 사용된다.
+{% endhint %}
 
 ---
 

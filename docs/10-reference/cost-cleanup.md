@@ -1,4 +1,6 @@
-> 읽는 사람: 배포 담당자 / 비용 담당자 · 선행: [첫 번째 `terraform apply`](../03-deploy/first-apply.md)
+---
+description: 배포 담당자 / 비용 담당자를 위한 페이지 · 선행: 첫 번째 terraform apply
+---
 
 # 비용 및 정리
 
@@ -13,7 +15,9 @@
 | `Developer_1` | **없음** | 지원 (Developer/Premium 필요) | dev / demo |
 | `Premium_1` | 있음 | 지원 | 프로덕션 권장 |
 
-> `Developer_1`은 SLA가 없습니다. 프로덕션 환경에서는 반드시 `apim_sku_name = "Premium_1"` 로 설정하세요.
+{% hint style="warning" %}
+`Developer_1`은 SLA가 없습니다. 프로덕션 환경에서는 반드시 `apim_sku_name = "Premium_1"` 로 설정하세요.
+{% endhint %}
 
 VNet 주입(Internal/External 모드)은 Developer 또는 Premium SKU에서만 지원됩니다. Consumption 또는 Basic SKU는 VNet 주입을 지원하지 않습니다.
 
@@ -38,7 +42,9 @@ budget_alert_email    = "<이메일>"
 budget_start_date     = "2026-06-01T00:00:00Z"
 ```
 
-> **중요:** Cost Management 예산은 **알림(alert)** 만 발송합니다. 예산 초과 시 **자동 차단(하드 스톱)은 발생하지 않습니다.** 예산은 비용 모니터링과 이상 감지 용도입니다.
+{% hint style="warning" %}
+Cost Management 예산은 **알림(alert)** 만 발송합니다. 예산 초과 시 **자동 차단(하드 스톱)은 발생하지 않습니다.** 예산은 비용 모니터링과 이상 감지 용도입니다.
+{% endhint %}
 
 예산 임계값(50%, 75%, 100%, 120%)에서 `budget_alert_email`로 이메일 알림이 발송됩니다.
 
@@ -62,7 +68,9 @@ az group delete -n <resource_group_name> --yes
 
 `<resource_group_name>`은 `terraform output -raw resource_group_name`으로 확인합니다.
 
-> `az group delete`는 RG 내 모든 리소스를 삭제합니다. Terraform state와 동기화가 깨질 수 있으므로, 이후 같은 스택을 재배포할 때는 `terraform init`부터 다시 시작하세요.
+{% hint style="warning" %}
+`az group delete`는 RG 내 모든 리소스를 삭제합니다. Terraform state와 동기화가 깨질 수 있으므로, 이후 같은 스택을 재배포할 때는 `terraform init`부터 다시 시작하세요.
+{% endhint %}
 
 자세한 내용은 [gotchas.md](gotchas.md) gotcha #3을 참고하세요.
 

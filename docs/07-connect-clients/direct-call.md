@@ -1,4 +1,6 @@
-> 읽는 사람: 개발자·운영자 · 선행: 07-connect-clients/overview.md
+---
+description: 개발자·운영자를 위한 페이지 · 선행: 07-connect-clients/overview.md
+---
 
 # 직접 호출 (curl / REST)
 
@@ -20,7 +22,9 @@ curl -s -X POST https://<apim-host>/foundry/chat/completions \
   }'
 ```
 
-> `<apim-host>` 는 `terraform output -raw apim_gateway_url` 로 확인합니다. `<APIM subscription key>` 는 Admin UI의 Consumers 탭에서 발급합니다.
+{% hint style="info" %}
+`<apim-host>` 는 `terraform output -raw apim_gateway_url` 로 확인합니다. `<APIM subscription key>` 는 Admin UI의 Consumers 탭에서 발급합니다.
+{% endhint %}
 
 ---
 
@@ -74,7 +78,9 @@ curl -s -i -X POST https://<apim-host>/foundry/chat/completions \
 | 401 Unauthorized | 인증 실패 |
 | 500 / 502 | 백엔드 오류 |
 
-403·429 오류의 상세 원인과 해결 방법은 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하십시오.
+{% hint style="info" %}
+403은 구독 키 문제이거나 해당 소비자에게 모델 사용 권한이 없는 경우이고, 429는 레이트 리밋 또는 일별 쿼터 초과입니다. 상세 원인과 해결 방법은 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하십시오.
+{% endhint %}
 
 ---
 

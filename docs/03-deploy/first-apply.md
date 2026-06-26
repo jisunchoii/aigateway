@@ -1,4 +1,6 @@
-> 읽는 사람: 운영자·DevOps 엔지니어 · 선행: [tfvars 구성](configure-tfvars.md)
+---
+description: 운영자·DevOps 엔지니어를 위한 페이지 · 선행: tfvars 구성
+---
 
 # 첫 번째 `terraform apply`
 
@@ -29,7 +31,9 @@ terraform apply
 
 **약 45분.** [APIM VNet 주입](https://learn.microsoft.com/ko-kr/azure/api-management/api-management-using-with-vnet)은 Developer 및 Premium SKU에서 상당한 시간이 걸립니다. 이는 정상 동작입니다. 터미널이 오랫동안 응답하지 않는 것처럼 보여도 프로세스를 중단하지 마십시오.
 
-> **VNet 주입 시간 (Gotcha 1):** APIM Developer/Premium SKU의 VNet 주입은 첫 apply에서 최대 45분 소요됩니다. 정상입니다. 중단하면 일부 리소스가 불완전한 상태로 남을 수 있습니다.
+{% hint style="warning" %}
+**VNet 주입 시간 (Gotcha 1):** APIM Developer/Premium SKU의 VNet 주입은 첫 apply에서 최대 45분 소요됩니다. 정상입니다. 중단하면 일부 리소스가 불완전한 상태로 남을 수 있습니다.
+{% endhint %}
 
 ## 완료 후 확인
 
@@ -46,7 +50,9 @@ terraform output resource_group_name
 
 ## 재-apply가 필요한 경우
 
-> **OpenAPI import 400 오류 (Gotcha 2):** 첫 apply에서 APIM OpenAPI import 단계가 400 오류를 낼 수 있습니다. 일시적인 레이스 컨디션으로 발생하며, `terraform apply`를 다시 실행하면 해결됩니다.[^1]
+{% hint style="warning" %}
+**OpenAPI import 400 오류 (Gotcha 2):** 첫 apply에서 APIM OpenAPI import 단계가 400 오류를 낼 수 있습니다. 일시적인 레이스 컨디션으로 발생하며, `terraform apply`를 다시 실행하면 해결됩니다.[^1]
+{% endhint %}
 
 [^1]: Foundry API는 wildcard 경로 방식이라 OpenAPI import가 없습니다. `/openai` API만 해당합니다.
 

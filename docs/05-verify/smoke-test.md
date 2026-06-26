@@ -1,8 +1,12 @@
-> 읽는 사람: 배포 담당자 / 게이트웨이 운영자 · 선행: [첫 번째 `terraform apply`](../03-deploy/first-apply.md)
+---
+description: 배포 담당자 / 게이트웨이 운영자를 위한 페이지 · 선행: 첫 번째 terraform apply
+---
 
 # 스모크 테스트 (public APIM)
 
+{% hint style="info" %}
 `apim_public = true`로 배포한 경우, 게이트웨이 VIP는 인터넷에 공개되어 있으므로 **로컬 노트북에서 바로** 스모크를 실행할 수 있습니다. jumpbox는 필요하지 않습니다.
+{% endhint %}
 
 ---
 
@@ -37,7 +41,9 @@
 | 3 | `DeepSeek-V4-Pro` | `/foundry` (body-route) | 파트너 모델 엔드-투-엔드 |
 | 4 | `gpt-5.4` (max_completion_tokens) | `/openai` | `max_completion_tokens` 파라미터 통과 확인 |
 
+{% hint style="success" %}
 모든 체크가 통과하면 스크립트는 **ALL PASSED** 를 출력합니다. 이 절차는 라이브 환경에서 검증 완료되었습니다.
+{% endhint %}
 
 ---
 

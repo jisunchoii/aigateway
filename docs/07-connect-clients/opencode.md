@@ -1,4 +1,6 @@
-> 읽는 사람: 개발자 (opencode 사용자) · 선행: 07-connect-clients/overview.md
+---
+description: 개발자 (opencode 사용자)를 위한 페이지 · 선행: 07-connect-clients/overview.md
+---
 
 # opencode 연동
 
@@ -31,7 +33,9 @@ export APIM_KEY="<APIM subscription key>"
 }}}
 ```
 
-> `<apim-host>` 를 실제 APIM 호스트명으로 교체하십시오. `apiKey` 는 `{env:APIM_KEY}` 형식으로 환경 변수를 참조하므로, 구독 키를 설정 파일에 직접 기입하지 않아도 됩니다.
+{% hint style="info" %}
+`<apim-host>` 를 실제 APIM 호스트명으로 교체하십시오. `apiKey` 는 `{env:APIM_KEY}` 형식으로 환경 변수를 참조하므로, 구독 키를 설정 파일에 직접 기입하지 않아도 됩니다.
+{% endhint %}
 
 ---
 

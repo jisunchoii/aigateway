@@ -1,4 +1,6 @@
-> 읽는 사람: 기존 AIServices 계정의 소유자 또는 플랫폼 엔지니어 · 선행: [재사용 개요](overview.md)
+---
+description: 기존 AIServices 계정의 소유자 또는 플랫폼 엔지니어를 위한 페이지 · 선행: 재사용 개요
+---
 
 # 계정 잠금 사전 준비
 
@@ -6,8 +8,10 @@
 키 기반 인증이 활성화되어 있거나 공용 네트워크 접근이 열려 있으면, 보안 태세가 약해지고 게이트웨이의 설계 전제가 무너진다.
 따라서 **Terraform apply 전에** 고객이 직접 기존 AIServices 계정을 passwordless 상태로 잠가야 한다.
 
-> **왜 Terraform이 직접 하지 않나?**
-> 재사용 모드에서 Terraform은 기존 계정을 `data` 소스로만 읽는다. 기존 계정의 속성을 Terraform이 관리하기 시작하면 상태 파일에 계정이 들어오고, 이후 `terraform destroy` 시 계정이 삭제될 위험이 있다. 고객이 직접 `az` 명령으로 잠그는 방식이 훨씬 안전하다.
+{% hint style="danger" %}
+**왜 Terraform이 직접 하지 않나?**
+재사용 모드에서 Terraform은 기존 계정을 `data` 소스로만 읽는다. 기존 계정의 속성을 Terraform이 관리하기 시작하면 상태 파일에 계정이 들어오고, 이후 `terraform destroy` 시 계정이 삭제될 위험이 있다. 고객이 직접 `az` 명령으로 잠그는 방식이 훨씬 안전하다.
+{% endhint %}
 
 ## 사전 확인: 계정 resource ID 조회
 
@@ -53,13 +57,17 @@ az resource show --ids <aiservices-account-id> \
 
 ### 기존 직접 접근이 끊길 수 있다
 
+{% hint style="warning" %}
 `publicNetworkAccess=Disabled`로 설정하면 공용 인터넷에서 해당 계정의 엔드포인트에 직접 붙는 모든 클라이언트가 즉시 차단된다.
 게이트웨이 배포가 완료되어 Private Endpoint가 생성되기 전까지는 계정이 사실상 고립된다.
 **잠금 → apply → 검증** 순서를 한 번에 진행하거나, 유지보수 창(maintenance window)을 잡고 진행할 것을 권장한다.
+{% endhint %}
 
 ### `disableLocalAuth` 되돌리기
 
+{% hint style="warning" %}
 필요한 경우 아래 명령으로 원복할 수 있다. 단, 게이트웨이가 운영 중인 상태에서는 키 기반 접근을 다시 여는 것이 보안 규정 위반이 될 수 있으므로 주의한다.
+{% endhint %}
 
 ```bash
 az resource update --ids <aiservices-account-id> \

@@ -1,4 +1,6 @@
-> 읽는 사람: 게이트웨이 운영자·재무 담당자 · 선행: 06-operate/monitoring.md
+---
+description: 게이트웨이 운영자·재무 담당자를 위한 페이지 · 선행: 06-operate/monitoring.md
+---
 
 # 비용 관리 — 예산 기반 모델 전환 운영
 
@@ -15,7 +17,9 @@
 | 80% 도달 | `downgrade_level = 1` — 모델 전환 1단계: 더 저렴한 모델로 전환 |
 | 100% 도달 | `downgrade_level = 2` — 모델 전환 2단계: 추가로 더 저렴한 모델로 전환 |
 
-> 전환 이후에도 클라이언트가 요청한 원래 모델은 `x-ai-gateway-requested-model` 헤더에 보존됩니다. 실제 사용 모델은 `x-ai-gateway-effective-model`, 전환 단계는 `x-ai-gateway-downgrade-level` 헤더로 확인합니다. 모니터링 상세는 [monitoring.md](monitoring.md)를 참조하십시오.
+{% hint style="info" %}
+전환 이후에도 클라이언트가 요청한 원래 모델은 `x-ai-gateway-requested-model` 헤더에 보존됩니다. 실제 사용 모델은 `x-ai-gateway-effective-model`, 전환 단계는 `x-ai-gateway-downgrade-level` 헤더로 확인합니다. 모니터링 상세는 [monitoring.md](monitoring.md)를 참조하십시오.
+{% endhint %}
 
 ### 모델 전환 사다리(downgrade_ladder)
 
@@ -49,7 +53,9 @@ az containerapp job start -g <rg> -n <config_sync_job_name>
 
 Terraform은 `monthly_budget_amount`(기본값: 200 USD) 변수를 기준으로 Azure Cost Management 예산을 자동 생성하고, `budget_alert_email`로 경고 이메일을 발송하도록 구성합니다.
 
-> **주의:** Azure Cost Management 예산 경고는 **알림 전용(alert only)**입니다. 예산 초과 시 Azure가 리소스를 자동으로 중단하거나 API 호출을 차단하지 않습니다. 실제 비용 제어는 위의 게이트웨이 레벨 예산 기반 모델 전환을 활용하십시오.
+{% hint style="warning" %}
+Azure Cost Management 예산 경고는 **알림 전용(alert only)**입니다. 예산 초과 시 Azure가 리소스를 자동으로 중단하거나 API 호출을 차단하지 않습니다. 실제 비용 제어는 위의 게이트웨이 레벨 예산 기반 모델 전환을 활용하십시오.
+{% endhint %}
 
 관련 tfvars 변수:
 

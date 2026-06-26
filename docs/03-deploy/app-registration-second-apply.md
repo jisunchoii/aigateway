@@ -1,4 +1,6 @@
-> 읽는 사람: 운영자·DevOps 엔지니어 · 선행: [이미지 빌드·푸시](build-push-images.md)
+---
+description: 운영자·DevOps 엔지니어를 위한 페이지 · 선행: 이미지 빌드·푸시
+---
 
 # 앱 등록 및 두 번째 apply
 

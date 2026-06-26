@@ -1,4 +1,6 @@
-> 읽는 사람: 기존 Azure AI Foundry 계정을 보유한 플랫폼 엔지니어 · 선행: 없음 (챕터 진입점)
+---
+description: 기존 Azure AI Foundry 계정을 보유한 플랫폼 엔지니어를 위한 페이지 · 선행: 없음 (챕터 진입점)
+---
 
 # 기존 Foundry 재사용 개요
 
@@ -55,6 +57,14 @@ Private Endpoint는 구독 내에서 계정 resource ID만 알면 생성할 수 
 
 ## 이 챕터의 구성
 
-1. [계정 잠금 사전 준비](prepare-account.md) — 고객이 `az` 명령으로 기존 계정을 passwordless 상태로 잠그는 절차
-2. [tfvars 설정](configure-tfvars.md) — `reuse_foundry=true` 및 관련 변수 설명
-3. [plan & apply](plan-and-apply.md) — `terraform plan`으로 재사용 단언 확인 후 apply
+{% content-ref url="prepare-account.md" %}
+[계정 잠금 사전 준비](prepare-account.md)
+{% endcontent-ref %}
+
+{% content-ref url="configure-tfvars.md" %}
+[tfvars 설정](configure-tfvars.md)
+{% endcontent-ref %}
+
+{% content-ref url="plan-and-apply.md" %}
+[plan & apply](plan-and-apply.md)
+{% endcontent-ref %}

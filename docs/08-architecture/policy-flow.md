@@ -1,4 +1,6 @@
-> 읽는 사람: 아키텍트·플랫폼 엔지니어 · 선행: [배포 개요](../03-deploy/overview.md)
+---
+description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행: 배포 개요
+---
 
 # APIM 정책 파이프라인 — 정책 흐름
 
@@ -68,7 +70,11 @@ config-sync worker가 일일 사용량 × 단가를 계산하여 `active_downgra
 
 ### 6단계 — 관리 ID 백엔드 인증 (마지막)
 
-`authentication-managed-identity` 정책이 APIM의 시스템 할당 관리 ID로 Entra ID 토큰을 취득하여 `Authorization: Bearer <token>` 헤더를 백엔드 요청에 첨부한다. 이 단계가 **파이프라인 마지막**에 위치하는 이유는 앞 단계에서 body rewrite가 완료된 뒤에 인증 토큰을 붙여야 하기 때문이다.
+`authentication-managed-identity` 정책이 APIM의 시스템 할당 관리 ID로 Entra ID 토큰을 취득하여 `Authorization: Bearer <token>` 헤더를 백엔드 요청에 첨부한다.
+
+{% hint style="info" %}
+이 단계가 **파이프라인 마지막**에 위치하는 이유는 앞 단계에서 body rewrite가 완료된 뒤에 인증 토큰을 붙여야 하기 때문이다. 순서를 앞당기면 body 재작성 후 토큰이 재첨부되지 않아 백엔드 인증이 실패할 수 있다.
+{% endhint %}
 
 백엔드는 키 인증이 비활성화(`local_auth=false`)되어 있으므로 관리 ID 토큰 없이는 도달할 수 없다.
 

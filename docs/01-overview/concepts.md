@@ -1,4 +1,6 @@
-> 읽는 사람: 아키텍트·플랫폼 엔지니어·개발자 · 선행: 동작 방식
+---
+description: 아키텍트·플랫폼 엔지니어·개발자를 위한 페이지 · 선행: 동작 방식
+---
 
 # 핵심 개념
 
@@ -40,7 +42,9 @@
 
 월 예산(`monthly_budget_amount`)이 소진되면 APIM 정책이 요청 body의 `"model"` 값을 **자동으로 더 저렴한 모델로 교체**하는 기능입니다. 클라이언트는 동일한 엔드포인트·모델 이름으로 요청하지만, 실제로는 다른 모델이 응답합니다.
 
-> **용어 주의:** 코드 식별자(`downgrade_ladder`, `active_downgrade`, `downgrade_level`)와 응답 헤더(`x-ai-gateway-downgrade-level`)는 영문 원형 그대로 사용합니다. 한국어 설명에서는 **"모델 전환"**이라고 표현합니다("강등"이 아님).
+{% hint style="info" %}
+**용어 주의:** 코드 식별자(`downgrade_ladder`, `active_downgrade`, `downgrade_level`)와 응답 헤더(`x-ai-gateway-downgrade-level`)는 영문 원형 그대로 사용합니다. 한국어 설명에서는 **"모델 전환"**이라고 표현합니다("강등"이 아님).
+{% endhint %}
 
 전환 단계는 `downgrade_ladder` 설정에 정의됩니다. 예:
 

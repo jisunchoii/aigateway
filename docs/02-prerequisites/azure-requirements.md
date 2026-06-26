@@ -1,4 +1,6 @@
-> 읽는 사람: 인프라·플랫폼 엔지니어 · 선행: 핵심 개념
+---
+description: 인프라·플랫폼 엔지니어를 위한 페이지 · 선행: 핵심 개념
+---
 
 # Azure 요구사항
 
@@ -20,7 +22,9 @@
 | grok-4.3 | Azure AI Foundry (파트너) | Azure 포털 → AI Foundry 허브 |
 | DeepSeek-V4-Pro | Azure AI Foundry (파트너) | 동일 |
 
-> **파트너 모델 참고:** grok-4.3, DeepSeek-V4-Pro 등 파트너 모델은 테넌트에서 **마켓플레이스 약관 동의**가 필요할 수 있습니다. Azure 포털의 배포 플로우에서 약관에 동의한 뒤 재시도하세요.
+{% hint style="info" %}
+**파트너 모델 참고:** grok-4.3, DeepSeek-V4-Pro 등 파트너 모델은 테넌트에서 **마켓플레이스 약관 동의**가 필요할 수 있습니다. Azure 포털의 배포 플로우에서 약관에 동의한 뒤 재시도하세요.
+{% endhint %}
 
 기본 쿼터가 낮은 경우 [Azure OpenAI 쿼터 증설 요청](https://learn.microsoft.com/ko-kr/azure/ai-services/openai/quotas-limits)을 통해 사전에 증설하세요.
 
@@ -57,7 +61,9 @@ az login
 az account set --subscription "<구독 ID>"
 ```
 
-> **인증 방식:** 모든 Azure CLI 및 Terraform 작업은 `az login`으로 얻은 Entra ID 기반 토큰을 사용합니다. API 키나 서비스 주체 시크릿을 환경 변수에 노출하지 않습니다.
+{% hint style="info" %}
+**인증 방식:** 모든 Azure CLI 및 Terraform 작업은 `az login`으로 얻은 Entra ID 기반 토큰을 사용합니다. API 키나 서비스 주체 시크릿을 환경 변수에 노출하지 않습니다.
+{% endhint %}
 
 ---
 

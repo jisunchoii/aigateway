@@ -1,8 +1,14 @@
-> 읽는 사람: 보안 담당자·플랫폼 엔지니어 · 선행: [확장 개요](overview.md)
+---
+description: 보안 담당자·플랫폼 엔지니어를 위한 페이지 · 선행: 확장 개요
+---
 
 # 확장 C — Entra ID 클라이언트 인증 (구독 키 미사용)
 
 이 확장은 **이미 코드에 구현되어 있다**. `client_auth_mode="entra-id"` 변수 토글로 활성화할 수 있으며, APIM 정책이 구독 키 대신 JWT(Entra ID 토큰)로 클라이언트를 인증한다. 운영 환경 검증이 완료되지 않아 확장 항목으로 분류한다.
+
+{% hint style="info" %}
+토글 구현은 완료되어 있으나 운영 환경 검증 전이다. 아래 체크리스트를 완료한 뒤 운영에 투입한다.
+{% endhint %}
 
 ---
 
@@ -41,7 +47,10 @@
 Azure Entra ID는 사용자가 속한 그룹을 JWT `groups` claim에 포함한다. 그러나 이 방식에는 한계가 있다.
 
 - `groups` claim에는 **GUID**가 들어온다 (사람이 읽기 어려움)
-- 사용자가 **150개 초과** 그룹에 속해 있으면 `groups` claim이 누락되고 Graph API 조회 링크로 대체된다 (over-claim 문제)
+
+{% hint style="warning" %}
+사용자가 **150개 초과** 그룹에 속해 있으면 `groups` claim이 누락되고 Graph API 조회 링크로 대체된다 (over-claim 문제). consumerId 추출이 실패하므로 대규모 조직에서 `groups` claim에 의존하면 안 된다.
+{% endhint %}
 
 ### 권고: custom app-role 또는 extension attribute
 

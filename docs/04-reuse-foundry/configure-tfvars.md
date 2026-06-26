@@ -1,4 +1,6 @@
-> 읽는 사람: 플랫폼 엔지니어 (Terraform 담당) · 선행: [계정 잠금 사전 준비](prepare-account.md)
+---
+description: 플랫폼 엔지니어 (Terraform 담당)를 위한 페이지 · 선행: 계정 잠금 사전 준비
+---
 
 # tfvars 설정 — 재사용 모드
 
@@ -28,15 +30,17 @@ foundry_deployments = {
 }
 ```
 
-> **중요: 키가 실제 배포 이름과 완전히 일치해야 한다.**
->
-> `foundry_deployments`의 키(map key)는 AIServices 계정에 실제로 존재하는 배포 이름이어야 한다.
-> Azure 포털 → AI Foundry → 해당 계정 → "모델 배포"에서 배포 이름을 확인할 수 있다.
->
-> 키가 틀리면 다음 세 곳이 **조용히(silently) 깨진다**:
-> - `allowed_models` 검사: 허용 목록에 없는 모델로 인식되어 403 반환
-> - 라우팅: 잘못된 모델 이름이 백엔드 요청 body에 들어가 404/422 반환
-> - Admin UI 라벨: 존재하지 않는 배포 이름이 표시되어 운영 혼란 야기
+{% hint style="danger" %}
+**중요: 키가 실제 배포 이름과 완전히 일치해야 한다.**
+
+`foundry_deployments`의 키(map key)는 AIServices 계정에 실제로 존재하는 배포 이름이어야 한다.
+Azure 포털 → AI Foundry → 해당 계정 → "모델 배포"에서 배포 이름을 확인할 수 있다.
+
+키가 틀리면 다음 세 곳이 **조용히(silently) 깨진다**:
+- `allowed_models` 검사: 허용 목록에 없는 모델로 인식되어 403 반환
+- 라우팅: 잘못된 모델 이름이 백엔드 요청 body에 들어가 404/422 반환
+- Admin UI 라벨: 존재하지 않는 배포 이름이 표시되어 운영 혼란 야기
+{% endhint %}
 
 재사용 모드에서 `foundry_deployments`는 모델을 **생성하지 않는다**(`for_each={}` 처리됨).
 기존 배포가 실제로 있는지 선언하는 역할만 하며, 그 값을 기반으로 allowed\_models, 라우팅, Admin UI 라벨이 구성된다.

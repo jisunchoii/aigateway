@@ -1,4 +1,6 @@
-> 읽는 사람: 게이트웨이 운영자·인프라 담당자 · 선행: 06-operate/cost-management.md
+---
+description: 게이트웨이 운영자·인프라 담당자를 위한 페이지 · 선행: 06-operate/cost-management.md
+---
 
 # 스케일링 및 SKU 변경
 
@@ -31,7 +33,9 @@ terraform plan
 terraform apply
 ```
 
-> **주의:** SKU 변경은 APIM 서비스 재구성을 동반하며 수십 분이 소요될 수 있습니다. 프로덕션 환경에서는 유지보수 윈도우를 잡고 진행하십시오.
+{% hint style="warning" %}
+SKU 변경은 APIM 서비스 재구성을 동반하며 수십 분이 소요될 수 있습니다. 프로덕션 환경에서는 유지보수 윈도우를 잡고 진행하십시오.
+{% endhint %}
 
 ### SKU별 비교
 
@@ -60,7 +64,9 @@ foundry_deployments = {
 }
 ```
 
-> `capacity` 값은 Azure AI Foundry 포털에서 표시되는 단위(보통 1k TPM)를 기준으로 설정합니다. 쿼터가 부족한 경우 Azure 포털 또는 Azure AI Foundry 포털에서 쿼터 증가 요청을 제출하십시오.
+{% hint style="info" %}
+`capacity` 값은 Azure AI Foundry 포털에서 표시되는 단위(보통 1k TPM)를 기준으로 설정합니다. 쿼터가 부족한 경우 Azure 포털 또는 Azure AI Foundry 포털에서 쿼터 증가 요청을 제출하십시오.
+{% endhint %}
 
 capacity 변경 후:
 
@@ -82,7 +88,9 @@ brownfield 재사용 모드(`reuse_foundry = true`)에서는 모델 배포를 Te
 | `true` | External (Public) | 인터넷에서 직접 호출 가능 |
 | `false` | Internal (VNet 전용) | VNet 내부 또는 VPN/ExpressRoute 경유만 가능 |
 
-> **재구성 주의:** `apim_public` 을 변경하면 APIM의 VNet 통합 모드가 재구성됩니다. 이는 단순 설정 변경이 아니라 **APIM 서비스 재구성**으로, 첫 apply 시와 동일하게 **~45분**이 소요될 수 있습니다. 프로덕션 환경에서 Internal → External로 전환할 때는 보안 검토를 선행하십시오.
+{% hint style="warning" %}
+`apim_public` 을 변경하면 APIM의 VNet 통합 모드가 재구성됩니다. 이는 단순 설정 변경이 아니라 **APIM 서비스 재구성**으로, 첫 apply 시와 동일하게 **~45분**이 소요될 수 있습니다. 프로덕션 환경에서 Internal → External로 전환할 때는 보안 검토를 선행하십시오.
+{% endhint %}
 
 ```hcl
 # 인터넷 공개 활성화

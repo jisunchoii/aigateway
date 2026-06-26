@@ -1,8 +1,14 @@
-> 읽는 사람: 플랫폼 엔지니어 · 선행: [확장 개요](overview.md)
+---
+description: 플랫폼 엔지니어를 위한 페이지 · 선행: 확장 개요
+---
 
 # 확장 B — Responses API
 
 Responses API는 Azure OpenAI(gpt 계열)가 제공하는 stateful 대화 API다. 클라이언트가 `previous_response_id`를 통해 이전 응답을 참조하면 서버 측에서 대화 상태를 관리한다. 현재 llm-gateway에 연결된 클라이언트(VS Code BYOK, GitHub Copilot CLI, opencode)는 이 형식을 보내지 않으므로 현재는 미구현 상태다.
+
+{% hint style="info" %}
+이 확장은 현재 미구현 상태다. 연결된 클라이언트 중 Responses API 형식을 사용하는 클라이언트가 생긴 뒤에 구현을 진행한다.
+{% endhint %}
 
 ---
 

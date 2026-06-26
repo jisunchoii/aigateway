@@ -1,4 +1,6 @@
-> 읽는 사람: 배포 담당자 / 인프라 엔지니어 · 선행: [첫 번째 `terraform apply`](../03-deploy/first-apply.md)
+---
+description: 배포 담당자 / 인프라 엔지니어를 위한 페이지 · 선행: 첫 번째 terraform apply
+---
 
 # 출력 레퍼런스
 
@@ -69,7 +71,9 @@ terraform output -raw admin_ui_fqdn
 | `config_sync_job_name` | `worker_image = ""` (이미지 빌드 전) |
 | `admin_ui_fqdn` | `admin_ui_image = ""` (이미지 빌드 전) |
 
+{% hint style="info" %}
 null 출력을 스크립트에서 참조할 경우 빈 문자열로 처리되므로, 해당 단계 완료 후 재확인하세요.
+{% endhint %}
 
 ---
 

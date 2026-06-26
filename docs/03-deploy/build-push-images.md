@@ -1,4 +1,6 @@
-> 읽는 사람: 운영자·DevOps 엔지니어 · 선행: [첫 번째 apply](first-apply.md)
+---
+description: 운영자·DevOps 엔지니어를 위한 페이지 · 선행: 첫 번째 apply
+---
 
 # 이미지 빌드·푸시
 
@@ -13,7 +15,9 @@ az acr build --registry $reg --image config-sync-worker:latest ../app/config-syn
 az acr build --registry $reg --image admin-ui:latest ../app/admin-ui
 ```
 
-> `infra/` 디렉터리에서 실행해야 `terraform output` 명령이 올바른 state를 읽습니다.
+{% hint style="info" %}
+`infra/` 디렉터리에서 실행해야 `terraform output` 명령이 올바른 state를 읽습니다.
+{% endhint %}
 
 ## 빌드 과정 설명
 

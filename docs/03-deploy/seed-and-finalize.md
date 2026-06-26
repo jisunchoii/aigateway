@@ -1,4 +1,6 @@
-> 읽는 사람: 운영자·DevOps 엔지니어 · 선행: [앱 등록 및 두 번째 apply](app-registration-second-apply.md)
+---
+description: 운영자·DevOps 엔지니어를 위한 페이지 · 선행: 앱 등록 및 두 번째 apply
+---
 
 # Seed 및 최종 설정
 
@@ -6,7 +8,11 @@
 
 ## Cosmos DB Seed 배경
 
-[Azure Cosmos DB](https://learn.microsoft.com/ko-kr/azure/cosmos-db/introduction) 계정은 **Private Endpoint**로만 접근 가능하고 로컬 인증(키 기반)이 비활성화되어 있습니다. 따라서 seed 작업은 반드시 **VNet 내부**에서 실행해야 합니다. 인터넷 또는 로컬 머신에서 직접 seed를 실행할 수 없습니다.
+[Azure Cosmos DB](https://learn.microsoft.com/ko-kr/azure/cosmos-db/introduction) 계정은 **Private Endpoint**로만 접근 가능하고 로컬 인증(키 기반)이 비활성화되어 있습니다.
+
+{% hint style="warning" %}
+Seed 작업은 반드시 **VNet 내부**에서 실행해야 합니다. 인터넷 또는 로컬 머신에서 직접 seed를 실행할 수 없습니다.
+{% endhint %}
 
 ## 방법 1: Jumpbox 자동 실행 (권장)
 

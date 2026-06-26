@@ -29,3 +29,6 @@ blog-draft-ko.md
 
 # Parallel eastus2 test-stack working dir (operator copy, own state) — not shipped
 infra-aigw-eus2/
+
+# honkit local preview build output
+docs/_book/

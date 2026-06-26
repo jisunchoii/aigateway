@@ -1,4 +1,6 @@
-> 읽는 사람: 게이트웨이 운영자 · 선행: 06-operate/config-changes.md
+---
+description: 게이트웨이 운영자를 위한 페이지 · 선행: 06-operate/config-changes.md
+---
 
 # 모니터링
 
@@ -16,7 +18,9 @@ Monitoring 페이지에는 세 가지 테이블이 제공됩니다.
 | **차단 이벤트(Blocked Events)** | 403·429 응답 목록 (차단 사유: 모델 비허용·레이트 리밋 초과) |
 | **모델 전환 이벤트(Model Downgrade Events)** | 예산 기반 모델 전환이 발생한 요청 목록 |
 
-> UI 상의 한국어 용어는 **"모델 전환"** 입니다. 코드 식별자(`downgrade_ladder`, `active_downgrade`, `downgrade_level`)는 원문 그대로 사용됩니다.
+{% hint style="info" %}
+UI 상의 한국어 용어는 **"모델 전환"** 입니다. 코드 식별자(`downgrade_ladder`, `active_downgrade`, `downgrade_level`)는 원문 그대로 사용됩니다.
+{% endhint %}
 
 ---
 
@@ -58,7 +62,9 @@ customMetrics
 | order by timestamp desc
 ```
 
-> Application Insights 리소스는 Terraform이 자동으로 생성하며, Workspace 기반(Log Analytics) 모드로 구성됩니다.
+{% hint style="info" %}
+Application Insights 리소스는 Terraform이 자동으로 생성하며, Workspace 기반(Log Analytics) 모드로 구성됩니다.
+{% endhint %}
 
 ---
 

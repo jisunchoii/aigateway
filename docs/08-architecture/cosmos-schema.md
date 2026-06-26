@@ -1,10 +1,14 @@
-> 읽는 사람: 플랫폼 엔지니어·운영 담당자 · 선행: [모듈 구조](module-structure.md)
+---
+description: 플랫폼 엔지니어·운영 담당자를 위한 페이지 · 선행: 모듈 구조
+---
 
 # Cosmos DB 설정 스키마
 
 llm-gateway는 Azure Cosmos DB를 **설정 저장소**로 사용한다. APIM 정책에 필요한 모든 거버넌스 설정(허용 모델, 토큰 한도, 예산, 가격)이 여기 저장되며, config-sync worker가 주기적으로 읽어 APIM Named Values로 동기화한다.
 
+{% hint style="info" %}
 Cosmos DB 계정은 Private Endpoint로 격리되고 키 인증이 비활성화된다. 모든 접근은 관리 ID + RBAC 데이터 롤로만 가능하다.
+{% endhint %}
 
 ---
 
