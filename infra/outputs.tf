@@ -19,8 +19,8 @@ output "vscode_base_url" {
 }
 
 output "openai_endpoint" {
-  description = "Azure OpenAI account endpoint. Use with smoke-direct-blocked.ps1 from outside the VNet."
-  value       = module.openai.endpoint
+  description = "Azure OpenAI account endpoint. Use with smoke-direct-blocked.ps1 from outside the VNet. Null in reuse mode (no dedicated Azure OpenAI account)."
+  value       = try(module.openai[0].endpoint, null)
 }
 
 # --- Phase 3a: dynamic config (Cosmos + sync worker) ---

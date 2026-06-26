@@ -49,6 +49,7 @@ module "observability" {
 }
 
 module "openai" {
+  count               = var.reuse_foundry ? 0 : 1
   source              = "./modules/openai"
   name_suffix         = local.name_suffix
   suffix              = local.sfx
@@ -58,6 +59,7 @@ module "openai" {
   pe_subnet_id        = module.network.pe_subnet_id
   dns_zone_id         = module.network.dns_zone_ids["openai"]
   deployments         = var.openai_deployments
+  enabled             = true
 }
 
 module "foundry" {
@@ -73,7 +75,10 @@ module "foundry" {
     module.network.dns_zone_ids["aiservices"],
     module.network.dns_zone_ids["openai"],
   ]
-  deployments = var.foundry_deployments
+  deployments           = var.foundry_deployments
+  reuse_existing        = var.reuse_foundry
+  existing_account_name = var.existing_foundry_name
+  existing_account_rg   = var.existing_foundry_rg
 }
 
 module "jumpbox" {
@@ -105,8 +110,8 @@ module "apim" {
   apim_subnet_id               = module.network.apim_subnet_id
   public_ip_id                 = module.network.apim_public_ip_id
   public                       = var.apim_public
-  openai_account_id            = module.openai.id
-  openai_endpoint              = module.openai.endpoint
+  openai_account_id            = local.gpt_backend_account_id
+  openai_endpoint              = local.gpt_backend_endpoint
   foundry_account_id           = module.foundry.id
   foundry_endpoint             = module.foundry.endpoint_openai_v1
   policy_template_path         = "${path.root}/../policies/openai-pipeline.xml.tftpl"
@@ -114,7 +119,7 @@ module "apim" {
   # Cross-backend downgrade wiring (Phase 6): which aliases live where + the proven route base for each.
   openai_aliases                = keys(var.openai_deployments)
   foundry_aliases               = keys(var.foundry_deployments)
-  openai_path_base              = "${trimsuffix(module.openai.endpoint, "/")}/openai"
+  openai_path_base              = local.gpt_backend_path_base
   foundry_v1_base               = module.foundry.endpoint_openai_v1
   openai_api_version            = var.openai_api_version
   openai_openapi_spec_url       = var.openai_openapi_spec_url
