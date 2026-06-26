@@ -17,6 +17,7 @@
 ## 배포
 
 * [배포 개요](03-deploy/overview.md)
+* [단계적 배포](03-deploy/staged-rollout.md)
 * [상태 백엔드 부트스트랩](03-deploy/bootstrap-state.md)
 * [tfvars 구성](03-deploy/configure-tfvars.md)
 * [첫 번째 apply](03-deploy/first-apply.md)

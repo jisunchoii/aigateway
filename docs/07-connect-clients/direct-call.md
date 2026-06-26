@@ -81,7 +81,7 @@ curl -s -i -X POST https://<apim-host>/foundry/chat/completions \
 | 500 / 502 | 백엔드 오류 |
 
 {% hint style="info" %}
-403은 구독 키 문제이거나 해당 소비자에게 모델 사용 권한이 없는 경우이고, 429는 레이트 리밋 또는 일별 쿼터 초과입니다. 상세 원인과 해결 방법은 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하십시오.
+403은 구독 키 문제이거나 해당 소비자에게 모델 사용 권한이 없는 경우이고, 429는 레이트 리밋 또는 일별 쿼터 초과입니다. 상세 원인과 해결 방법은 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하세요.
 {% endhint %}
 
 ## 5. 스모크 테스트 스크립트
@@ -94,7 +94,7 @@ curl -s -i -X POST https://<apim-host>/foundry/chat/completions \
 ./scripts/smoke-v1-gateway.sh <apim-host> <subscription-key>
 ```
 
-이 스크립트는 gpt-5.4(`/openai` 경로), grok-4.3, DeepSeek-V4-Pro(`/foundry` 경로)에 각각 HTTP 200 응답을 확인합니다. 상세는 [05-verify/smoke-test.md](../05-verify/smoke-test.md)를 참조하십시오.
+이 스크립트는 gpt-5.4(`/openai` 경로), grok-4.3, DeepSeek-V4-Pro(`/foundry` 경로)에 각각 HTTP 200 응답을 확인합니다. 상세는 [05-verify/smoke-test.md](../05-verify/smoke-test.md)를 참조하세요.
 
 ## 6. 참고 링크
 

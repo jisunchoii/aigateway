@@ -100,8 +100,8 @@ config-sync worker가 일일 예산 계산 시 사용하는 모델별 토큰 단
 | `allowed_models` | 이 소비자에게만 허용되는 모델 (전역 기본값 override) |
 | `tier` | rate tier (`small` / `medium` / `large`) |
 | `daily_budget_usd` | 일일 USD 예산 한도 |
-| `downgrade_ladder` | 레벨별 모델 전환 매핑 (level 0 = 원래 모델, 1+ = 예산 초과 시 전환) |
-| `active_downgrade.level` | **현재 적용 중인 전환 레벨**. config-sync worker가 매 동기화 사이클에 갱신합니다 |
+| **`downgrade_ladder`** | 레벨별 모델 전환 매핑 (level 0 = 원래 모델, 1+ = 예산 초과 시 전환) |
+| **`active_downgrade`**.level | **현재 적용 중인 전환 레벨**. config-sync worker가 매 동기화 사이클에 갱신합니다 |
 | `active_downgrade.updated_at` | 레벨이 마지막으로 변경된 시각 (ISO 8601) |
 
 `downgrade_ladder`의 `level` 값이 높을수록 저비용 모델로 전환됩니다. APIM 정책은 `active_downgrade.level`에 해당하는 `model` 값을 body에 주입합니다.
@@ -146,7 +146,7 @@ APIM Named Values (정책 런타임에 참조)
 ./scripts/seed-pricing-jumpbox.sh https://<cosmos-account>.documents.azure.com:443/
 ```
 
-자세한 실행 방법은 [Seed 및 최종 설정](../03-deploy/seed-and-finalize.md)을 참고하십시오.
+자세한 실행 방법은 [Seed 및 최종 설정](../03-deploy/seed-and-finalize.md)을 참고하세요.
 
 ---
 

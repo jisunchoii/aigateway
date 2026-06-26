@@ -65,12 +65,12 @@ Cosmos DB 데이터 평면 롤 (`Cosmos DB Built-in Data Contributor`)은 컨트
 
 ***
 
-Key Vault는 `modules/keyvault`가 생성하며, Private Endpoint와 RBAC 접근으로 보호됩니다.
+**Key Vault**는 `modules/keyvault`가 생성하며, Private Endpoint와 RBAC 접근으로 보호됩니다.
 
 | 저장 항목 | 저장소 |
 |---|---|
 | 인증서, 비밀 값 등 진짜 시크릿 | Azure Key Vault |
-| allowed_models, token limits 등 비시크릿 설정 | Cosmos DB + APIM Named Values |
+| `allowed_models`, token limits 등 비시크릿 설정 | Cosmos DB + APIM Named Values |
 | API 키·연결 문자열 | **저장하지 않음** |
 
 APIM Named Values는 Key Vault 참조 형식으로 시크릿을 간접 참조할 수 있습니다. config-sync worker가 Cosmos에서 읽은 값을 APIM Named Values로 동기화합니다.

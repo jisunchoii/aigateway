@@ -10,23 +10,27 @@ description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행:
 
 클라이언트의 AI 요청은 아래 순서로 처리됩니다.
 
-```
-클라이언트
-  │
-  │  HTTPS (Ocp-Apim-Subscription-Key 또는 Bearer)
-  ▼
-공개 APIM (apim_public=true)
-  │
-  ├─ 1. consumerId 식별
-  ├─ 2. allowed-models 검사 → 불허 시 403
-  ├─ 3. rate limit 검사 → 초과 시 429
-  ├─ 4. budget 모델 전환 → 필요 시 body의 "model" 교체
-  ├─ 5. 토큰 메트릭 기록 (App Insights)
-  │
-  │  Managed Identity + RBAC (Private Endpoint 경유)
-  ▼
-AIServices 계정 /openai/v1/chat/completions
-```
+<!-- diagram: request-flow -->
+<div style="display:flex; align-items:stretch; gap:10px; font-family:'Segoe UI','Noto Sans KR',sans-serif; margin:16px 0;">
+  <div style="flex:1; background:#EEF6FC; border-left:4px solid #0078D4; border-radius:4px; padding:14px;">
+    <div style="font-size:11px; letter-spacing:1px; color:#0078D4; font-weight:700;">INGRESS · 입구</div>
+    <div style="font-size:16px; font-weight:700; color:#0a2540; margin:6px 0;">개발 툴 (클라이언트)</div>
+    <div style="font-size:12.5px; color:#1a1a2e; line-height:1.7;">▸ public APIM 접속<br>▸ 구독키 / Entra JWT<br>▸ 모델 키 미보유</div>
+  </div>
+  <div style="display:flex; align-items:center; color:#0078D4; font-weight:700; font-size:13px;">HTTPS ▶</div>
+  <div style="flex:1.3; background:#0a2540; border-radius:4px; padding:14px; color:#fff;">
+    <div style="font-size:11px; letter-spacing:1px; color:#5AC8FA; font-weight:700;">GATEWAY · 정책</div>
+    <div style="font-size:16px; font-weight:700; margin:6px 0;">APIM 게이트웨이</div>
+    <div style="font-size:12.5px; color:#dce6f0; line-height:1.8;">① 소비자 식별<br>② allowed-models → <span style="color:#FFB454;">403</span><br>③ rate limit → <span style="color:#FFB454;">429</span><br>④ 예산 모델 전환<br>⑤ 토큰 메트릭</div>
+  </div>
+  <div style="display:flex; align-items:center; color:#107C41; font-weight:700; font-size:11px; text-align:center;">Managed&nbsp;Identity<br>▶</div>
+  <div style="flex:1; background:#EEF7F0; border-left:4px solid #107C41; border-radius:4px; padding:14px;">
+    <div style="font-size:11px; letter-spacing:1px; color:#107C41; font-weight:700;">EGRESS · 백엔드</div>
+    <div style="font-size:16px; font-weight:700; color:#0a2540; margin:6px 0;">Foundry / AOAI (Private)</div>
+    <div style="font-size:12.5px; color:#1a1a2e; line-height:1.7;">✓ Private Endpoint 전용<br>✓ 키 인증 off<br>✓ MI로만 접속</div>
+  </div>
+</div>
+<!-- /diagram -->
 
 ## 2. 클라이언트 입구 (Ingress) 표
 
@@ -88,19 +92,23 @@ URL의 배포 이름(`gpt-5.4`)이 body의 `"model"` 필드로 주입되고, `?a
 
 ### 1단계 — consumerId 식별
 
-구독 키 모드에서는 `Ocp-Apim-Subscription-Key` 헤더로 소비자를 찾습니다. Entra ID 모드에서는 `validate-jwt` 정책으로 토큰을 검증하고 지정된 클레임 값을 consumerId로 사용합니다.
+- **구독 키 모드:** `Ocp-Apim-Subscription-Key` 헤더로 소비자 식별
+- **Entra ID 모드:** `validate-jwt` 정책으로 토큰 검증 후 지정 클레임 값을 consumerId로 사용
 
 ### 2단계 — allowed-models 검사
 
-Cosmos DB에 저장된 소비자 설정에서 `allowed_models` 목록을 읽어 요청한 모델이 포함되지 않으면 `403 Forbidden`을 반환합니다.
+- Cosmos DB의 소비자 설정에서 `allowed_models` 목록 조회
+- 요청 모델이 목록에 없으면 **`403 Forbidden`** 반환
 
 ### 3단계 — rate limit 검사
 
-소비자의 `rate_tier`에 매핑된 `tokens_per_minute` 상한을 초과하면 `429 Too Many Requests`를 반환합니다.
+- 소비자의 `rate_tier`에 매핑된 `tokens_per_minute` 상한 적용
+- 초과 시 **`429 Too Many Requests`** 반환
 
 ### 4단계 — budget 모델 전환
 
-소비자의 월 예산(`monthly_budget_amount`)이 소진되면 APIM 정책이 body의 `"model"` 값을 `downgrade_ladder`에 정의된 다음 단계 모델로 교체합니다. 응답 헤더에 전환 정보가 포함됩니다.
+- 월 예산(`monthly_budget_amount`) 소진 시 APIM 정책이 body의 `"model"` 값을 `downgrade_ladder` 다음 단계로 교체
+- 응답 헤더에 **모델 전환** 정보 포함
 
 | 응답 헤더 | 의미 |
 |---|---|

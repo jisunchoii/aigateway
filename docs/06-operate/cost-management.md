@@ -20,18 +20,22 @@ description: 게이트웨이 운영자·재무 담당자를 위한 페이지 · 
 | 100% 도달 | `downgrade_level = 2` — 모델 전환 2단계: 추가로 더 저렴한 모델로 전환 |
 
 {% hint style="info" %}
-전환 이후에도 클라이언트가 요청한 원래 모델은 `x-ai-gateway-requested-model` 헤더에 보존됩니다. 실제 사용 모델은 `x-ai-gateway-effective-model`, 전환 단계는 `x-ai-gateway-downgrade-level` 헤더로 확인합니다. 모니터링 상세는 [monitoring.md](monitoring.md)를 참조하십시오.
+**📸 [스크린샷 자리]** — Admin UI — 소비자별 **일별 예산**(USD) 편집 화면
+{% endhint %}
+
+{% hint style="info" %}
+전환 이후에도 클라이언트가 요청한 원래 모델은 `x-ai-gateway-requested-model` 헤더에 보존됩니다. 실제 사용 모델은 `x-ai-gateway-effective-model`, 전환 단계는 `x-ai-gateway-downgrade-level` 헤더로 확인합니다. 모니터링 상세는 [monitoring.md](monitoring.md)를 참조하세요.
 {% endhint %}
 
 ### 모델 전환 사다리(downgrade_ladder)
 
-모델 전환 사다리는 Cosmos DB config 문서 내 `downgrade_ladder` 배열로 정의됩니다. 사다리 순서대로 더 저렴한 모델이 배치됩니다. 예:
+**모델 전환 사다리**는 Cosmos DB config 문서 내 **`downgrade_ladder`** 배열로 정의됩니다. 사다리 순서대로 더 저렴한 모델이 배치됩니다. 예:
 
 ```
 gpt-5.4 → gpt-5.4-mini → DeepSeek-V4-Pro
 ```
 
-`active_downgrade` 플래그가 `true`인 소비자에게만 모델 전환이 적용됩니다. Admin UI Policies 탭에서 소비자별로 활성화·비활성화할 수 있습니다.
+**`active_downgrade`** 플래그가 `true`인 소비자에게만 모델 전환이 적용됩니다. Admin UI Policies 탭에서 소비자별로 활성화·비활성화할 수 있습니다.
 
 ---
 
@@ -60,7 +64,7 @@ az containerapp job start -g <rg> -n <config_sync_job_name>
 Terraform은 `monthly_budget_amount`(기본값: 200 USD) 변수를 기준으로 Azure Cost Management 예산을 자동 생성하고, `budget_alert_email`로 경고 이메일을 발송하도록 구성합니다.
 
 {% hint style="warning" %}
-Azure Cost Management 예산 경고는 **알림 전용(alert only)**입니다. 예산 초과 시 Azure가 리소스를 자동으로 중단하거나 API 호출을 차단하지 않습니다. 실제 비용 제어는 위의 게이트웨이 레벨 예산 기반 모델 전환을 활용하십시오.
+Azure Cost Management 예산 경고는 **알림 전용(alert only)**입니다. 예산 초과 시 Azure가 리소스를 자동으로 중단하거나 API 호출을 차단하지 않습니다. 실제 비용 제어는 위의 게이트웨이 레벨 예산 기반 모델 전환을 활용하세요.
 {% endhint %}
 
 관련 tfvars 변수:
@@ -80,7 +84,7 @@ budget_start_date     = "2025-01-01"
 - **gpt-5.4-mini 우선 배치:** 저비용 작업에는 Admin UI에서 소비자 기본 모델을 `gpt-5.4-mini`로 설정합니다.
 - **토큰 쿼터 조정:** `token_quota` / `token_quota_period`(기본: Daily) 값을 낮춰 소비자별 일별 토큰 상한을 제한합니다.
 - **미사용 소비자 비활성화:** Admin UI에서 비사용 소비자를 Disable 처리하면 해당 구독 키로의 호출이 차단됩니다.
-- **Developer SKU는 개발·데모 전용:** SLA가 없으므로 프로덕션에서는 Premium_1으로 전환하십시오. SKU 변경 방법은 [scale-sku.md](scale-sku.md)를 참조하십시오.
+- **Developer SKU는 개발·데모 전용:** SLA가 없으므로 프로덕션에서는 Premium_1으로 전환하세요. SKU 변경 방법은 [scale-sku.md](scale-sku.md)를 참조하세요.
 
 ---
 

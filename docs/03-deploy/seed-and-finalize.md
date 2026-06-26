@@ -55,8 +55,8 @@ az containerapp job start -g <rg> -n <config_sync_job_name>
 
 ## 완료 확인
 
-config-sync 잡이 성공적으로 실행되면 APIM Named Value에 소비자 구성이 반영됩니다. [스모크 테스트](../05-verify/smoke-test.md) 챕터에서 end-to-end 동작을 검증하십시오.
+config-sync 잡이 성공적으로 실행되면 APIM Named Value에 소비자 구성이 반영됩니다. [스모크 테스트](../05-verify/smoke-test.md) 챕터에서 end-to-end 동작을 검증하세요.
 
 ## 다음 단계
 
-모든 배포가 완료되었습니다. 이제 [검증 — 스모크 테스트](../05-verify/smoke-test.md)로 이동하여 게이트웨이 동작을 확인하십시오.
+모든 배포가 완료되었습니다. 이제 [검증 — 스모크 테스트](../05-verify/smoke-test.md)로 이동하여 게이트웨이 동작을 확인하세요.

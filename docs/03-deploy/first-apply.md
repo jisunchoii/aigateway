@@ -35,7 +35,7 @@ terraform apply
 
 ***
 
-**약 45분.** [APIM VNet 주입](https://learn.microsoft.com/ko-kr/azure/api-management/api-management-using-with-vnet)은 Developer 및 Premium SKU에서 상당한 시간이 걸립니다. 이는 정상 동작입니다. 터미널이 오랫동안 응답하지 않는 것처럼 보여도 프로세스를 중단하지 마십시오.
+**약 45분.** [APIM VNet 주입](https://learn.microsoft.com/ko-kr/azure/api-management/api-management-using-with-vnet)은 Developer 및 Premium SKU에서 상당한 시간이 걸립니다. 이는 정상 동작입니다. 터미널이 오랫동안 응답하지 않는 것처럼 보여도 프로세스를 중단하지 마세요.
 
 {% hint style="warning" %}
 **VNet 주입 시간 (Gotcha 1):** APIM Developer/Premium SKU의 VNet 주입은 첫 apply에서 최대 45분 소요됩니다. 정상입니다. 중단하면 일부 리소스가 불완전한 상태로 남을 수 있습니다.
@@ -44,6 +44,10 @@ terraform apply
 ## 4. 완료 후 확인
 
 ***
+
+{% hint style="info" %}
+**📸 [스크린샷 자리]** — Terminal — terraform apply 완료 출력 (Apply complete, 리소스 수)
+{% endhint %}
 
 apply가 성공하면 다음 출력 값을 확인합니다.
 
@@ -70,4 +74,4 @@ terraform output resource_group_name
 
 ***
 
-코어 인프라 배포가 완료되면 [이미지 빌드·푸시](build-push-images.md)로 이동하십시오.
+코어 인프라 배포가 완료되면 [이미지 빌드·푸시](build-push-images.md)로 이동하세요.

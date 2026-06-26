@@ -48,7 +48,7 @@ network
   └─▶ jumpbox          (enable_jumpbox=true 시)
 ```
 
-`apim` 모듈은 `foundry`와 `openai` 모듈의 출력값(엔드포인트 URL, 배포 이름)을 `gpt_backend_*` locals로 받아 백엔드 URL을 구성합니다. 이 locals가 단일 AIServices 계정으로의 라우팅을 중재합니다.
+`apim` 모듈은 `foundry`와 `openai` 모듈의 출력값(엔드포인트 URL, 배포 이름)을 **`gpt_backend_*`** locals로 받아 백엔드 URL을 구성합니다. 이 locals가 단일 AIServices 계정으로의 라우팅을 중재합니다.
 
 ---
 
@@ -56,7 +56,7 @@ network
 
 ***
 
-`reuse_foundry = true`로 설정하면 `foundry` 모듈이 리소스 **생성** 대신 **data 소스**로 전환됩니다.
+**`reuse_foundry`** = `true`로 설정하면 `foundry` 모듈이 리소스 **생성** 대신 **data 소스**로 전환됩니다.
 
 | 항목 | Greenfield (`reuse_foundry=false`) | Brownfield (`reuse_foundry=true`) |
 |---|---|---|
@@ -87,7 +87,7 @@ Reuse 모드에서는 `modules/openai`가 `count=0`이므로 gpt 트래픽도 fo
 | `client_auth_mode` | `apim` (validate-jwt vs. 구독키 분기) |
 | `enable_jumpbox` | `jumpbox` (count) |
 
-전체 변수 목록은 [변수 전체 목록](../10-reference/variables.md)을 참고하십시오.
+전체 변수 목록은 [변수 전체 목록](../10-reference/variables.md)을 참고하세요.
 
 ---
 

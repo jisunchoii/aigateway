@@ -12,6 +12,10 @@ Admin UI의 **Monitoring** 페이지와 Azure Application Insights를 통해 게
 
 ***
 
+{% hint style="info" %}
+**📸 [스크린샷 자리]** — Admin UI — Monitoring 페이지(최근 요청·차단 이벤트·모델 전환 이벤트 3개 테이블)
+{% endhint %}
+
 Monitoring 페이지에는 세 가지 테이블이 제공됩니다.
 
 | 테이블 | 내용 |
@@ -32,13 +36,16 @@ UI 상의 한국어 용어는 **"모델 전환"** 입니다. 코드 식별자(`d
 
 모델 전환이 발생한 요청은 응답 헤더에 다음 세 가지 값이 포함됩니다.
 
+- 전환 여부는 `x-ai-gateway-downgrade-level` 값으로 판단합니다 (0=전환 없음).
+- Monitoring 페이지의 **모델 전환 이벤트** 테이블에서 세 헤더 값을 함께 확인할 수 있습니다.
+
 | 헤더 | 설명 |
 |---|---|
 | `x-ai-gateway-requested-model` | 클라이언트가 요청한 원래 모델 |
 | `x-ai-gateway-effective-model` | 실제로 호출된 모델 (전환 후 모델) |
 | `x-ai-gateway-downgrade-level` | 전환 단계 (0=전환 없음, 1=80% 임계, 2=100% 임계) |
 
-모델 전환 이벤트 테이블에서 이 세 헤더 값을 함께 확인할 수 있습니다. 예산 설정 및 전환 사다리 상세는 [cost-management.md](cost-management.md)를 참조하십시오.
+예산 설정 및 전환 사다리 상세는 [cost-management.md](cost-management.md)를 참조하세요.
 
 ---
 

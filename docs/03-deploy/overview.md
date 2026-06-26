@@ -15,7 +15,7 @@ description: 운영자·DevOps 엔지니어를 위한 페이지 · 선행: Green
 | **Greenfield** | Azure OpenAI 계정과 모델 배포를 Terraform이 새로 생성 | 신규 구독 또는 기존 AIServices 계정 재사용 불필요 |
 | **Brownfield** | 기존 AIServices(Foundry) 계정을 `data`로 읽어 재사용, PE·RBAC만 신규 생성 | 이미 운영 중인 Azure OpenAI/Foundry 계정이 있는 경우 |
 
-Brownfield 경로를 선택했다면 이 챕터의 절차를 따른 뒤 [기존 Foundry 재사용](../04-reuse-foundry/overview.md) 챕터의 추가 준비 단계를 반드시 먼저 완료하십시오.
+Brownfield 경로를 선택했다면 이 챕터의 절차를 따른 뒤 [기존 Foundry 재사용](../04-reuse-foundry/overview.md) 챕터의 추가 준비 단계를 반드시 먼저 완료하세요.
 
 ## 2. 전체 배포 단계
 
@@ -63,9 +63,11 @@ Brownfield 경로를 선택했다면 이 챕터의 절차를 따른 뒤 [기존 
 - [사전 준비 챕터](../02-prerequisites/azure-requirements.md)의 모든 항목 완료
 
 {% hint style="warning" %}
-**Brownfield 경로:** `reuse_foundry = true`를 설정하기 전에 [기존 Foundry 재사용 — 계정 잠금 준비](../04-reuse-foundry/prepare-account.md)를 먼저 완료하십시오.
+**Brownfield 경로:** `reuse_foundry = true`를 설정하기 전에 [기존 Foundry 재사용 — 계정 잠금 준비](../04-reuse-foundry/prepare-account.md)를 먼저 완료하세요.
 {% endhint %}
 
 {% content-ref url="../04-reuse-foundry/overview.md" %}
 [기존 Foundry 재사용](../04-reuse-foundry/overview.md)
 {% endcontent-ref %}
+
+각 단계를 한꺼번에 배포하지 않아도 됩니다. `worker_image`/`admin_ui_image` 변수를 비워 두면 해당 컴포넌트가 생성되지 않으므로 게이트웨이 코어만 먼저 운영할 수 있습니다. 자세한 방법은 [단계적 배포](staged-rollout.md)를 참고하세요.

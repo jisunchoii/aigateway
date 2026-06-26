@@ -20,7 +20,7 @@ description: 개발자·AI 도구 사용자를 위한 페이지 · 선행: 05-ve
 | 이 게이트웨이 입구 | `/vscode/openai`·`/openai` | `/openai` | `/foundry` | ❌ 현재 미지원 (확장 A) |
 
 {% hint style="info" %}
-**Claude Code는 현재 이 게이트웨이에 직접 연결할 수 없습니다.** Claude Code는 Anthropic Messages API(`/v1/messages`)를 사용하지만, 이 게이트웨이는 현재 OpenAI 형식 입구만 지원합니다. 지원 계획은 [09-future/extension-a-claude-code.md](../09-future/extension-a-claude-code.md)를 참조하십시오.
+**Claude Code는 현재 이 게이트웨이에 직접 연결할 수 없습니다.** Claude Code는 Anthropic Messages API(`/v1/messages`)를 사용하지만, 이 게이트웨이는 현재 OpenAI 형식 입구만 지원합니다. 지원 계획은 [09-future/extension-a-claude-code.md](../09-future/extension-a-claude-code.md)를 참조하세요.
 {% endhint %}
 
 ## 2. 입구와 클라이언트의 관계
@@ -43,7 +43,7 @@ description: 개발자·AI 도구 사용자를 위한 페이지 · 선행: 05-ve
 
 현재 기본 인증 방식은 **APIM 구독 키(`Ocp-Apim-Subscription-Key` 헤더)**입니다. 구독 키는 Admin UI의 Consumers 탭에서 발급합니다.
 
-Entra ID 기반 클라이언트 인증(`client_auth_mode="entra-id"`)은 구현되어 있지만 운영 검증 전 단계이며, 확장 C로 분류됩니다. 상세는 [09-future/extension-c-entra-client-auth.md](../09-future/extension-c-entra-client-auth.md)를 참조하십시오.
+Entra ID 기반 클라이언트 인증(`client_auth_mode="entra-id"`)은 구현되어 있지만 운영 검증 전 단계이며, 확장 C로 분류됩니다. 상세는 [09-future/extension-c-entra-client-auth.md](../09-future/extension-c-entra-client-auth.md)를 참조하세요.
 
 ## 4. 클라이언트별 설정 가이드
 

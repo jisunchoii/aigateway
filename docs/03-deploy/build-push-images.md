@@ -43,4 +43,4 @@ ACR 빌드는 Entra ID 인증 기반으로 동작합니다. `az login`이 완료
 
 ## 다음 단계
 
-이미지 빌드가 완료되면 [앱 등록 및 두 번째 apply](app-registration-second-apply.md)로 이동하십시오.
+이미지 빌드가 완료되면 [앱 등록 및 두 번째 apply](app-registration-second-apply.md)로 이동하세요.

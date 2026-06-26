@@ -22,7 +22,11 @@ Admin UI와 BFF(Backend for Frontend)가 Entra ID로 인증하려면 앱 등록 
 | BFF API 앱 등록 | `access_as_user` scope, `requestedAccessTokenVersion=2`. `bff_api_audience` 값 |
 | SPA public-client 앱 등록 | PKCE, 시크릿 없음. `spa_client_id` 값 |
 
-스크립트 실행 후 출력된 값을 기록해 두십시오.
+{% hint style="info" %}
+**📸 [스크린샷 자리]** — Azure Portal — Entra ID 앱 등록 3종(Admin 그룹·BFF API·SPA) 완성 화면
+{% endhint %}
+
+스크립트 실행 후 출력된 값을 기록해 두세요.
 
 ## tfvars 업데이트
 
@@ -75,4 +79,4 @@ terraform output config_sync_job_name
 
 ## 다음 단계
 
-배포가 완료되면 [Seed 및 최종 설정](seed-and-finalize.md)으로 이동하십시오.
+배포가 완료되면 [Seed 및 최종 설정](seed-and-finalize.md)으로 이동하세요.

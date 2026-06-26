@@ -36,7 +36,7 @@ export APIM_KEY="<APIM subscription key>"
 ```
 
 {% hint style="info" %}
-`<apim-host>` 를 실제 APIM 호스트명으로 교체하십시오. `apiKey` 는 `{env:APIM_KEY}` 형식으로 환경 변수를 참조하므로, 구독 키를 설정 파일에 직접 기입하지 않아도 됩니다.
+`<apim-host>` 를 실제 APIM 호스트명으로 교체하세요. `apiKey` 는 `{env:APIM_KEY}` 형식으로 환경 변수를 참조하므로, 구독 키를 설정 파일에 직접 기입하지 않아도 됩니다.
 {% endhint %}
 
 ## 3. 동작 방식
@@ -63,7 +63,7 @@ export APIM_KEY="<APIM subscription key>"
 }
 ```
 
-Admin UI에서 해당 소비자의 허용 모델 목록에 추가할 모델이 포함되어 있는지 확인하십시오.
+Admin UI에서 해당 소비자의 허용 모델 목록에 추가할 모델이 포함되어 있는지 확인하세요.
 
 ## 5. 연결 확인
 
@@ -75,7 +75,7 @@ opencode를 실행하고 provider 목록에서 `apim` 이 표시되는지 확인
 
 #### Step 2. `baseURL` 에 `/foundry` 가 포함되어 있는지 확인합니다.
 
-#### Step 3. 오류 코드 의미는 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하십시오.
+#### Step 3. 오류 코드 의미는 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하세요.
 
 ## 6. 참고 링크
 

@@ -33,7 +33,7 @@ export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4
 ```
 
 {% hint style="warning" %}
-`COPILOT_PROVIDER_BASE_URL` 에 `/openai` 를 포함하지 마십시오. CLI가 azure provider 모드에서 경로를 자동으로 구성합니다. 예를 들어 `https://<apim-host>/openai` 로 설정하면 경로가 중복되어 요청이 실패합니다.
+`COPILOT_PROVIDER_BASE_URL` 에 `/openai` 를 포함하지 마세요. CLI가 azure provider 모드에서 경로를 자동으로 구성합니다. 예를 들어 `https://<apim-host>/openai` 로 설정하면 경로가 중복되어 요청이 실패합니다.
 {% endhint %}
 
 ## 3. 동작 방식
@@ -55,7 +55,7 @@ export COPILOT_PROVIDER_MODEL_ID=gpt-5.4-mini
 export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4-mini
 ```
 
-Admin UI에서 해당 소비자의 허용 모델 목록에 변경할 모델이 포함되어 있는지 확인하십시오.
+Admin UI에서 해당 소비자의 허용 모델 목록에 변경할 모델이 포함되어 있는지 확인하세요.
 
 ## 5. 연결 확인
 
@@ -73,7 +73,7 @@ gh copilot explain "git rebase"
 
 #### Step 2. 구독 키가 유효한지 Admin UI에서 재확인합니다.
 
-#### Step 3. 오류 코드 의미는 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하십시오.
+#### Step 3. 오류 코드 의미는 [10-reference/gotchas.md](../10-reference/gotchas.md)를 참조하세요.
 
 ## 6. 참고 링크
 

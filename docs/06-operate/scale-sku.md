@@ -16,6 +16,10 @@ description: 게이트웨이 운영자·인프라 담당자를 위한 페이지 
 
 ### SKU 변경 절차
 
+{% hint style="info" %}
+**📸 [스크린샷 자리]** — Azure Portal — APIM SKU(Developer→Premium) 변경 화면
+{% endhint %}
+
 #### Step 1. tfvars 값 변경
 
 `infra/terraform.tfvars` 에서 SKU 값을 변경합니다.
@@ -38,7 +42,7 @@ terraform apply
 ```
 
 {% hint style="warning" %}
-SKU 변경은 APIM 서비스 재구성을 동반하며 수십 분이 소요될 수 있습니다. 프로덕션 환경에서는 유지보수 윈도우를 잡고 진행하십시오.
+SKU 변경은 APIM 서비스 재구성을 동반하며 수십 분이 소요될 수 있습니다. 프로덕션 환경에서는 유지보수 윈도우를 잡고 진행하세요.
 {% endhint %}
 
 ### SKU별 비교
@@ -71,7 +75,7 @@ foundry_deployments = {
 ```
 
 {% hint style="info" %}
-`capacity` 값은 Azure AI Foundry 포털에서 표시되는 단위(보통 1k TPM)를 기준으로 설정합니다. 쿼터가 부족한 경우 Azure 포털 또는 Azure AI Foundry 포털에서 쿼터 증가 요청을 제출하십시오.
+`capacity` 값은 Azure AI Foundry 포털에서 표시되는 단위(보통 1k TPM)를 기준으로 설정합니다. 쿼터가 부족한 경우 Azure 포털 또는 Azure AI Foundry 포털에서 쿼터 증가 요청을 제출하세요.
 {% endhint %}
 
 capacity 변경 후:
@@ -97,7 +101,7 @@ brownfield 재사용 모드(`reuse_foundry = true`)에서는 모델 배포를 Te
 | `false` | Internal (VNet 전용) | VNet 내부 또는 VPN/ExpressRoute 경유만 가능 |
 
 {% hint style="warning" %}
-`apim_public` 을 변경하면 APIM의 VNet 통합 모드가 재구성됩니다. 이는 단순 설정 변경이 아니라 **APIM 서비스 재구성**으로, 첫 apply 시와 동일하게 **~45분**이 소요될 수 있습니다. 프로덕션 환경에서 Internal → External로 전환할 때는 보안 검토를 선행하십시오.
+`apim_public` 을 변경하면 APIM의 VNet 통합 모드가 재구성됩니다. 이는 단순 설정 변경이 아니라 **APIM 서비스 재구성**으로, 첫 apply 시와 동일하게 **~45분**이 소요될 수 있습니다. 프로덕션 환경에서 Internal → External로 전환할 때는 보안 검토를 먼저 완료하세요.
 {% endhint %}
 
 ```hcl

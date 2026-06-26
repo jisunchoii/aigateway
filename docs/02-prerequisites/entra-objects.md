@@ -12,6 +12,10 @@ Terraform은 대부분의 Azure 리소스를 자동 생성하지만, **Entra ID 
 
 `azurerm` provider는 Entra ID(구 Azure AD) 앱 등록과 그룹 생성을 직접 지원하지 않습니다. `azuread` provider를 별도로 구성해야 하며, 권한 분리 원칙상 IaC 실행자에게 디렉터리 쓰기 권한을 주지 않는 조직도 많습니다. 따라서 Entra ID 객체는 스크립트로 먼저 생성하고, 생성된 ID를 tfvars에 입력하는 방식을 취합니다.
 
+{% hint style="info" %}
+**📸 [스크린샷 자리]** — Azure Portal — Entra ID 보안 그룹 생성 화면
+{% endhint %}
+
 ---
 
 ## 3종 객체 상세
