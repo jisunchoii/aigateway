@@ -78,33 +78,9 @@ variable "foundry_endpoint" {
   description = "AIServices OpenAI/v1 inference base (e.g. https://ais-<suffix>.openai.azure.com/openai/v1); used verbatim as the foundry API service_url."
 }
 
-# --- Cross-backend downgrade wiring (Phase 6) ---
-# Budget downgrade can rewrite a request DOWN a consumer's mixed-family ladder. When the target model
-# lives in the OTHER backend account, the policy switches backends (set-backend-service) and rewrites
-# the request into that target's PROVEN native route: gpt -> oai path route, OSS -> ais v1 body route.
-variable "openai_aliases" {
-  type        = list(string)
-  description = "Deployment aliases hosted on the Azure OpenAI account (gpt family). Used by both policies to decide whether a downgrade target is a gpt model (oai path route)."
-}
-
-variable "foundry_aliases" {
-  type        = list(string)
-  description = "Deployment aliases hosted on the AIServices account (OSS/partner family). Used by both policies to decide whether a downgrade target is an OSS model (ais v1 body route)."
-}
-
-variable "openai_path_base" {
-  type        = string
-  description = "Azure OpenAI account path-route base for cross-backend downgrade to a gpt model, e.g. https://oai-<suffix>.openai.azure.com/openai (the policy appends /deployments/{model}/chat/completions?api-version=...)."
-}
-
 variable "foundry_v1_base" {
   type        = string
-  description = "AIServices account OpenAI/v1 base for cross-backend downgrade to an OSS model, e.g. https://ais-<suffix>.openai.azure.com/openai/v1 (the policy appends /chat/completions and sets the body model)."
-}
-
-variable "openai_api_version" {
-  type        = string
-  description = "api-version query value for the Azure OpenAI path route (used when a downgrade targets a gpt model)."
+  description = "AIServices account OpenAI/v1 base used by the openai policy to route requests, e.g. https://ais-<suffix>.openai.azure.com/openai/v1."
 }
 
 variable "policy_template_path" {
@@ -261,11 +237,7 @@ resource "azurerm_api_management_api_policy" "openai" {
     entra_api_audience = var.entra_api_audience
     entra_team_claim   = var.entra_team_claim
     rate_tiers         = var.rate_tiers
-    openai_aliases     = var.openai_aliases
-    foundry_aliases    = var.foundry_aliases
-    openai_path_base   = var.openai_path_base
     foundry_v1_base    = var.foundry_v1_base
-    openai_api_version = var.openai_api_version
   })
 
   depends_on = [
@@ -322,11 +294,7 @@ resource "azurerm_api_management_api_policy" "vscode_openai" {
     entra_api_audience = var.entra_api_audience
     entra_team_claim   = var.entra_team_claim
     rate_tiers         = var.rate_tiers
-    openai_aliases     = var.openai_aliases
-    foundry_aliases    = var.foundry_aliases
-    openai_path_base   = var.openai_path_base
     foundry_v1_base    = var.foundry_v1_base
-    openai_api_version = var.openai_api_version
   })
 
   depends_on = [
@@ -446,11 +414,7 @@ resource "azurerm_api_management_api_policy" "foundry" {
     entra_api_audience = var.entra_api_audience
     entra_team_claim   = var.entra_team_claim
     rate_tiers         = var.rate_tiers
-    openai_aliases     = var.openai_aliases
-    foundry_aliases    = var.foundry_aliases
-    openai_path_base   = var.openai_path_base
     foundry_v1_base    = var.foundry_v1_base
-    openai_api_version = var.openai_api_version
   })
 
   depends_on = [

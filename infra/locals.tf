@@ -38,7 +38,4 @@ locals {
   # directly, so the apim module signature is unchanged across both modes.
   gpt_backend_account_id = var.reuse_foundry ? module.foundry.id : module.openai[0].id
   gpt_backend_endpoint   = var.reuse_foundry ? module.foundry.endpoint_openai_host : module.openai[0].endpoint
-  # Path base the policy appends "/deployments/{m}/chat/completions" or "/v1/chat/completions" to.
-  # Reuse: the AIServices openai.azure.com host (…/openai). Greenfield: the OpenAI account (…/openai).
-  gpt_backend_path_base = var.reuse_foundry ? "${module.foundry.endpoint_openai_host}/openai" : "${trimsuffix(module.openai[0].endpoint, "/")}/openai"
 }

@@ -140,7 +140,7 @@
       </when>
     </choose>
     <choose>
-      <when condition="@(((string)context.Variables["effectiveDeployment"]).Length > 0 && !((string)context.Variables["effectiveAllowedModels"]).Split(',').Select(m => m.Trim()).Contains((string)context.Variables["effectiveDeployment"]))">
+      <when condition="@(((string)context.Variables["requestedDeployment"]).Length > 0 && !((string)context.Variables["effectiveAllowedModels"]).Split(',').Select(m => m.Trim()).Contains((string)context.Variables["requestedDeployment"]))">
         <return-response>
           <set-status code="403" reason="Forbidden" />
           <set-header name="Content-Type" exists-action="override">

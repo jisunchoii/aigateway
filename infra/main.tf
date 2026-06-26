@@ -99,29 +99,24 @@ module "jumpbox" {
 }
 
 module "apim" {
-  source                       = "./modules/apim"
-  name_suffix                  = local.name_suffix
-  resource_group_name          = azurerm_resource_group.rg.name
-  location                     = var.location
-  tags                         = local.tags
-  sku_name                     = var.apim_sku_name
-  publisher_name               = var.apim_publisher_name
-  publisher_email              = var.apim_publisher_email
-  apim_subnet_id               = module.network.apim_subnet_id
-  public_ip_id                 = module.network.apim_public_ip_id
-  public                       = var.apim_public
-  openai_account_id            = local.gpt_backend_account_id
-  openai_endpoint              = local.gpt_backend_endpoint
-  foundry_account_id           = module.foundry.id
-  foundry_endpoint             = module.foundry.endpoint_openai_v1
-  policy_template_path         = "${path.root}/../policies/openai-pipeline.xml.tftpl"
-  foundry_policy_template_path = "${path.root}/../policies/foundry-pipeline.xml.tftpl"
-  # Cross-backend downgrade wiring (Phase 6): which aliases live where + the proven route base for each.
-  openai_aliases                = keys(var.openai_deployments)
-  foundry_aliases               = keys(var.foundry_deployments)
-  openai_path_base              = local.gpt_backend_path_base
+  source                        = "./modules/apim"
+  name_suffix                   = local.name_suffix
+  resource_group_name           = azurerm_resource_group.rg.name
+  location                      = var.location
+  tags                          = local.tags
+  sku_name                      = var.apim_sku_name
+  publisher_name                = var.apim_publisher_name
+  publisher_email               = var.apim_publisher_email
+  apim_subnet_id                = module.network.apim_subnet_id
+  public_ip_id                  = module.network.apim_public_ip_id
+  public                        = var.apim_public
+  openai_account_id             = local.gpt_backend_account_id
+  openai_endpoint               = local.gpt_backend_endpoint
+  foundry_account_id            = module.foundry.id
+  foundry_endpoint              = module.foundry.endpoint_openai_v1
+  policy_template_path          = "${path.root}/../policies/openai-pipeline.xml.tftpl"
+  foundry_policy_template_path  = "${path.root}/../policies/foundry-pipeline.xml.tftpl"
   foundry_v1_base               = module.foundry.endpoint_openai_v1
-  openai_api_version            = var.openai_api_version
   openai_openapi_spec_url       = var.openai_openapi_spec_url
   appinsights_id                = module.observability.appi_id
   appinsights_connection_string = module.observability.appi_connection_string
