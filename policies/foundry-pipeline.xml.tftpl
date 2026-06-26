@@ -113,41 +113,15 @@
             return ladder[target];
         } catch { return req; }
     }" />
-    <!-- [Cost] Apply the downgrade. The incoming route is the GA OpenAI/v1 body route to the AIServices
-         (OSS) backend. Three cases for effectiveModel:
-           (a) unchanged              -> nothing to do (normal foundry request).
-           (b) another OSS alias      -> same backend; just rewrite the body "model" field.
-           (c) a gpt alias            -> switch backend to the Azure OpenAI account and rewrite into its
-                                         PROVEN path route /deployments/{m}/chat/completions?api-version=...
-                                         (gpt-5 reasoning models need max_completion_tokens, not max_tokens). -->
-    <set-variable name="dgIsGpt" value="@(new[]{ ${join(", ", [for a in openai_aliases : "\"${a}\""])} }.Contains((string)context.Variables["effectiveModel"]))" />
+    <!-- [Cost] Apply the downgrade. gpt and OSS share one AIServices account on /openai/v1, so any
+         downgrade target is reached on the SAME backend by rewriting the body "model" field. -->
     <choose>
       <when condition="@(((string)context.Variables["effectiveModel"]).Length > 0 && (string)context.Variables["effectiveModel"] != (string)context.Variables["requestedDeployment"])">
-        <choose>
-          <!-- (c) cross-backend: OSS request downgraded to a gpt model -> Azure OpenAI path route. -->
-          <when condition="@((bool)context.Variables["dgIsGpt"])">
-            <set-backend-service base-url="${openai_path_base}" />
-            <rewrite-uri template="@("/deployments/" + (string)context.Variables["effectiveModel"] + "/chat/completions?api-version=${openai_api_version}")" />
-            <set-body>@{
-                var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
-                body["model"] = (string)context.Variables["effectiveModel"];
-                // gpt-5 reasoning models reject max_tokens; translate to max_completion_tokens.
-                if (body["max_tokens"] != null && body["max_completion_tokens"] == null) {
-                    body["max_completion_tokens"] = body["max_tokens"];
-                    body.Remove("max_tokens");
-                }
-                return body.ToString(Newtonsoft.Json.Formatting.None);
-            }</set-body>
-          </when>
-          <!-- (b) same-backend OSS downgrade: rewrite the body model only. -->
-          <otherwise>
-            <set-body>@{
-                var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
-                body["model"] = (string)context.Variables["effectiveModel"];
-                return body.ToString(Newtonsoft.Json.Formatting.None);
-            }</set-body>
-          </otherwise>
-        </choose>
+        <set-body>@{
+            var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
+            body["model"] = (string)context.Variables["effectiveModel"];
+            return body.ToString(Newtonsoft.Json.Formatting.None);
+        }</set-body>
       </when>
     </choose>
     <choose>
@@ -187,9 +161,8 @@
       <dimension name="API ID" />
     </llm-emit-token-metric>
 
-    <!-- [Privilege] Backend boundary: APIM authenticates to the AIServices (or, after a cross-backend
-         downgrade, the Azure OpenAI) account with its MI. Both accounts share the cognitiveservices
-         audience, so one token works for either backend. MUST stay last. -->
+    <!-- [Privilege] Backend boundary: APIM authenticates to the AIServices account with its MI.
+         The account uses the cognitiveservices audience. MUST stay last. -->
     <authentication-managed-identity resource="https://cognitiveservices.azure.com"
                                      output-token-variable-name="msi-access-token" />
     <set-header name="Authorization" exists-action="override">
