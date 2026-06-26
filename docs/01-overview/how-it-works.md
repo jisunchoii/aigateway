@@ -4,7 +4,9 @@ description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행:
 
 # 동작 방식
 
-## 요청 흐름
+## 1. 요청 흐름
+
+***
 
 클라이언트의 AI 요청은 아래 순서로 처리됩니다.
 
@@ -26,9 +28,9 @@ description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행:
 AIServices 계정 /openai/v1/chat/completions
 ```
 
----
+## 2. 클라이언트 입구 (Ingress) 표
 
-## 클라이언트 입구 (Ingress) 표
+***
 
 클라이언트 종류마다 APIM에 진입하는 경로와 형식이 다릅니다. APIM 정책이 이를 통일된 v1 백엔드 형식으로 변환합니다.
 
@@ -42,9 +44,36 @@ AIServices 계정 /openai/v1/chat/completions
 **v1 백엔드 통일:** path-route(URL에 모델명 포함)로 들어온 요청도 APIM 정책이 body에 `"model"` 필드를 주입해 동일한 `/openai/v1/chat/completions` 엔드포인트로 라우팅합니다. 클라이언트는 이 변환을 인식할 필요가 없습니다.
 {% endhint %}
 
----
+path-route로 들어온 요청이 v1 body-route로 변환되는 과정을 예시로 보면 다음과 같습니다.
 
-## consumerId 집계 축
+#### As-Is — 클라이언트가 보내는 path-route 요청
+
+```http
+POST /openai/deployments/gpt-5.4/chat/completions?api-version=2025-01-01-preview
+Ocp-Apim-Subscription-Key: <subscription-key>
+
+{
+  "messages": [{"role": "user", "content": "Hello"}]
+}
+```
+
+#### To-be — APIM 정책이 백엔드로 전달하는 v1 body-route 요청
+
+```http
+POST /openai/v1/chat/completions
+Authorization: Bearer <managed-identity-token>
+
+{
+  "model": "gpt-5.4",
+  "messages": [{"role": "user", "content": "Hello"}]
+}
+```
+
+URL의 배포 이름(`gpt-5.4`)이 body의 `"model"` 필드로 주입되고, `?api-version=` 파라미터는 제거됩니다.
+
+## 3. consumerId 집계 축
+
+***
 
 게이트웨이의 모든 측정(토큰 사용량·속도 제한·예산)은 **consumerId 하나**를 기준으로 집계됩니다. 클라이언트가 APIM 구독 키를 사용하든, Entra ID Bearer 토큰을 사용하든 동일한 consumerId로 집계됩니다.
 
@@ -53,9 +82,9 @@ AIServices 계정 /openai/v1/chat/completions
 
 이 덕분에 "팀 A가 이번 달 gpt-5.4에 쓴 토큰"처럼 팀 단위 집계가 가능합니다.
 
----
+## 4. 정책 단계별 상세
 
-## 정책 단계별 상세
+***
 
 ### 1단계 — consumerId 식별
 
@@ -85,7 +114,9 @@ Cosmos DB에 저장된 소비자 설정에서 `allowed_models` 목록을 읽어 
 
 ---
 
-## 백엔드 통신 보안
+## 5. 백엔드 통신 보안
+
+***
 
 APIM과 AIServices 사이의 모든 통신은 다음 두 가지로 보호됩니다.
 

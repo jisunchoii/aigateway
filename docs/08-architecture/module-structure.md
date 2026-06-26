@@ -4,11 +4,13 @@ description: 플랫폼 엔지니어·IaC 담당자를 위한 페이지 · 선행
 
 # Terraform 모듈 구조
 
-llm-gateway의 인프라는 `infra/modules/` 아래 기능 단위로 분리된 Terraform 모듈로 구성된다. 이 페이지는 각 모듈의 역할, 모듈 간 의존 관계, 그리고 brownfield(reuse) 모드에서의 동작 차이를 설명한다.
+llm-gateway의 인프라는 `infra/modules/` 아래 기능 단위로 분리된 Terraform 모듈로 구성됩니다. 이 페이지는 각 모듈의 역할, 모듈 간 의존 관계, 그리고 brownfield(reuse) 모드에서의 동작 차이를 설명합니다.
 
 ---
 
-## 모듈 목록
+## 1. 모듈 목록
+
+***
 
 | 모듈 디렉터리 | 주요 역할 |
 |---|---|
@@ -24,11 +26,13 @@ llm-gateway의 인프라는 `infra/modules/` 아래 기능 단위로 분리된 T
 | `modules/control_plane` | Container Apps (config-sync worker + Admin UI BFF/SPA) |
 | `modules/jumpbox` | 선택적 Windows VM (VNet 내 수동 진단용) |
 
-각 모듈은 **별도 Resource Group**을 생성하거나 게이트웨이 전용 RG 내에 리소스를 배치한다. 리소스 그룹 이름은 `prefix`·`env`·`location` 조합으로 결정된다.
+각 모듈은 **별도 Resource Group**을 생성하거나 게이트웨이 전용 RG 내에 리소스를 배치합니다. 리소스 그룹 이름은 `prefix`·`env`·`location` 조합으로 결정됩니다.
 
 ---
 
-## 모듈 간 의존 관계
+## 2. 모듈 간 의존 관계
+
+***
 
 ```
 network
@@ -44,13 +48,15 @@ network
   └─▶ jumpbox          (enable_jumpbox=true 시)
 ```
 
-`apim` 모듈은 `foundry`와 `openai` 모듈의 출력값(엔드포인트 URL, 배포 이름)을 `gpt_backend_*` locals로 받아 백엔드 URL을 구성한다. 이 locals가 단일 AIServices 계정으로의 라우팅을 중재한다.
+`apim` 모듈은 `foundry`와 `openai` 모듈의 출력값(엔드포인트 URL, 배포 이름)을 `gpt_backend_*` locals로 받아 백엔드 URL을 구성합니다. 이 locals가 단일 AIServices 계정으로의 라우팅을 중재합니다.
 
 ---
 
-## Greenfield vs Reuse(Brownfield) 모드
+## 3. Greenfield vs Reuse(Brownfield) 모드
 
-`reuse_foundry = true`로 설정하면 `foundry` 모듈이 리소스 **생성** 대신 **data 소스**로 전환된다.
+***
+
+`reuse_foundry = true`로 설정하면 `foundry` 모듈이 리소스 **생성** 대신 **data 소스**로 전환됩니다.
 
 | 항목 | Greenfield (`reuse_foundry=false`) | Brownfield (`reuse_foundry=true`) |
 |---|---|---|
@@ -60,15 +66,17 @@ network
 | gpt 라우팅 | openai 모듈 엔드포인트 | foundry 모듈 엔드포인트(동일 AIServices 계정) |
 | PE + RBAC | 모두 생성 | **게이트웨이 → 기존 계정** 방향으로 신규 생성 |
 
-Reuse 모드에서는 `modules/openai`가 `count=0`이므로 gpt 트래픽도 foundry 모듈이 참조하는 동일 AIServices 계정의 `/openai/v1` 경로로 라우팅된다. `gpt_backend_*` locals가 이 분기를 처리한다.
+Reuse 모드에서는 `modules/openai`가 `count=0`이므로 gpt 트래픽도 foundry 모듈이 참조하는 동일 AIServices 계정의 `/openai/v1` 경로로 라우팅됩니다. `gpt_backend_*` locals가 이 분기를 처리합니다.
 
 {% hint style="warning" %}
-`foundry_deployments` map의 key는 AIServices 계정에 실제 등록된 배포 이름과 **정확히 일치**해야 한다. 이 값이 `allowed_models`, 라우팅, Admin UI 레이블 전체에 사용된다.
+`foundry_deployments` map의 key는 AIServices 계정에 실제 등록된 배포 이름과 **정확히 일치**해야 합니다. 이 값이 `allowed_models`, 라우팅, Admin UI 레이블 전체에 사용됩니다.
 {% endhint %}
 
 ---
 
-## 핵심 변수와 모듈 연결
+## 4. 핵심 변수와 모듈 연결
+
+***
 
 | 변수 | 영향받는 모듈 |
 |---|---|
@@ -79,11 +87,13 @@ Reuse 모드에서는 `modules/openai`가 `count=0`이므로 gpt 트래픽도 fo
 | `client_auth_mode` | `apim` (validate-jwt vs. 구독키 분기) |
 | `enable_jumpbox` | `jumpbox` (count) |
 
-전체 변수 목록은 [변수 전체 목록](../10-reference/variables.md)을 참고한다.
+전체 변수 목록은 [변수 전체 목록](../10-reference/variables.md)을 참고하십시오.
 
 ---
 
-## 관련 페이지
+## 5. 관련 페이지
+
+***
 
 - [정책 흐름](policy-flow.md) — APIM 모듈이 실행하는 정책 파이프라인
 - [보안 설계](security-design.md) — identity 모듈의 RBAC 할당 상세
