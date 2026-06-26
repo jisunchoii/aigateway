@@ -27,7 +27,7 @@ export default function TopBar({ section }: { section: string }) {
         <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>{accounts[0]?.name}</Text>
         <Button appearance="subtle" size="small" icon={<SignOutRegular />}
                 onClick={() => instance.logoutRedirect()}>
-          Sign out
+          로그아웃
         </Button>
       </div>
     </header>

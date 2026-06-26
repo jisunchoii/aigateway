@@ -48,7 +48,7 @@ export default function Monitoring({ config }: { config: RuntimeConfig }) {
     setLoading(true); setErr(null);
     apiFetch(instance, scopes, `/api/metrics/monitoring?range=${range}`)
       .then(async (r) => {
-        if (!r.ok) { setErr(`Load failed: ${r.status}`); return; }
+        if (!r.ok) { setErr(`불러오기 실패: ${r.status}`); return; }
         setData(await r.json());
       })
       .catch((e) => setErr(e instanceof Error ? e.message : String(e)))
@@ -59,27 +59,27 @@ export default function Monitoring({ config }: { config: RuntimeConfig }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 1000 }}>
-      <Title3>Logs — recent requests &amp; blocked events</Title3>
-      <Text>Shows the gateway's recent requests and 403/429 blocked events from Log Analytics. Usage aggregation may take a few minutes to appear.</Text>
+      <Title3>로그 — 최근 요청 &amp; 차단 이벤트</Title3>
+      <Text>게이트웨이의 최근 요청과 403/429 차단 이벤트를 Log Analytics에서 보여줍니다. 사용량 집계 반영에는 몇 분이 걸릴 수 있습니다.</Text>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <Dropdown value={range} selectedOptions={[range]}
                   onOptionSelect={(_, d) => d.optionValue && setRange(d.optionValue)} style={{ minWidth: 100 }}>
           {RANGES.map((r) => <Option key={r} value={r}>{r}</Option>)}
         </Dropdown>
-        <Button onClick={load} disabled={loading}>Refresh</Button>
+        <Button onClick={load} disabled={loading}>새로고침</Button>
       </div>
       {err && <MessageBar intent="error"><MessageBarBody>{err}</MessageBarBody></MessageBar>}
-      {loading ? <Spinner label="Loading…" /> : data && (
+      {loading ? <Spinner label="불러오는 중…" /> : data && (
         <>
-          <Text weight="semibold">Blocked events (403 / 429)</Text>
-          <Table aria-label="Blocked events" size="small">
+          <Text weight="semibold">차단 이벤트 (403 / 429)</Text>
+          <Table aria-label="차단 이벤트" size="small">
             <TableHeader><TableRow>
-              <TableHeaderCell>Time</TableHeaderCell><TableHeaderCell>Operation</TableHeaderCell>
-              <TableHeaderCell>Code</TableHeaderCell>
+              <TableHeaderCell>시각</TableHeaderCell><TableHeaderCell>작업</TableHeaderCell>
+              <TableHeaderCell>코드</TableHeaderCell>
             </TableRow></TableHeader>
             <TableBody>
               {data.blocked.length === 0
-                ? <TableRow><TableCell colSpan={3}><Text style={{ color: tokens.colorNeutralForeground3 }}>No blocked events in this period.</Text></TableCell></TableRow>
+                ? <TableRow><TableCell colSpan={3}><Text style={{ color: tokens.colorNeutralForeground3 }}>기간 내 차단 이벤트가 없습니다.</Text></TableCell></TableRow>
                 : data.blocked.map((r, i) => (
                   <TableRow key={i}>
                     <TableCell>{fmtTime(r.TimeGenerated)}</TableCell>
@@ -89,16 +89,16 @@ export default function Monitoring({ config }: { config: RuntimeConfig }) {
                 ))}
             </TableBody>
           </Table>
-          <Text weight="semibold">Downgrade events</Text>
-          <Table aria-label="Downgrade events" size="small">
+          <Text weight="semibold">강등 이벤트</Text>
+          <Table aria-label="강등 이벤트" size="small">
             <TableHeader><TableRow>
-              <TableHeaderCell>Time</TableHeaderCell><TableHeaderCell>Consumer</TableHeaderCell>
-              <TableHeaderCell>Requested</TableHeaderCell><TableHeaderCell>Effective</TableHeaderCell>
-              <TableHeaderCell>Level</TableHeaderCell>
+              <TableHeaderCell>시각</TableHeaderCell><TableHeaderCell>컨슈머</TableHeaderCell>
+              <TableHeaderCell>요청 모델</TableHeaderCell><TableHeaderCell>적용 모델</TableHeaderCell>
+              <TableHeaderCell>단계</TableHeaderCell>
             </TableRow></TableHeader>
             <TableBody>
               {(data.downgrades ?? []).length === 0
-                ? <TableRow><TableCell colSpan={5}><Text style={{ color: tokens.colorNeutralForeground3 }}>No downgrades in this period.</Text></TableCell></TableRow>
+                ? <TableRow><TableCell colSpan={5}><Text style={{ color: tokens.colorNeutralForeground3 }}>기간 내 강등 이벤트가 없습니다.</Text></TableCell></TableRow>
                 : (data.downgrades ?? []).map((r, i) => (
                   <TableRow key={i}>
                     <TableCell>{fmtTime(r.TimeGenerated)}</TableCell>
@@ -110,15 +110,15 @@ export default function Monitoring({ config }: { config: RuntimeConfig }) {
                 ))}
             </TableBody>
           </Table>
-          <Text weight="semibold">Recent requests</Text>
-          <Table aria-label="Recent requests" size="small">
+          <Text weight="semibold">최근 요청</Text>
+          <Table aria-label="최근 요청" size="small">
             <TableHeader><TableRow>
-              <TableHeaderCell>Time</TableHeaderCell><TableHeaderCell>Operation</TableHeaderCell>
-              <TableHeaderCell>Code</TableHeaderCell><TableHeaderCell>Duration (ms)</TableHeaderCell>
+              <TableHeaderCell>시각</TableHeaderCell><TableHeaderCell>작업</TableHeaderCell>
+              <TableHeaderCell>코드</TableHeaderCell><TableHeaderCell>소요(ms)</TableHeaderCell>
             </TableRow></TableHeader>
             <TableBody>
               {data.recent.length === 0
-                ? <TableRow><TableCell colSpan={4}><Text style={{ color: tokens.colorNeutralForeground3 }}>No requests in this period.</Text></TableCell></TableRow>
+                ? <TableRow><TableCell colSpan={4}><Text style={{ color: tokens.colorNeutralForeground3 }}>기간 내 요청이 없습니다.</Text></TableCell></TableRow>
                 : data.recent.map((r, i) => (
                   <TableRow key={i}>
                     <TableCell>{fmtTime(r.TimeGenerated)}</TableCell>

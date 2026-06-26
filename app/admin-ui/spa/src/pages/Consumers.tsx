@@ -100,7 +100,7 @@ export default function Consumers({ config }: { config: RuntimeConfig }) {
         return;
       }
       setConsumer(""); setGroupId(""); setDisplayName("");
-      setMsg({ intent: "success", text: `Registered consumer '${consumer.trim()}'.` });
+      setMsg({ intent: "success", text: `컨슈머 '${consumer.trim()}'을(를) 등록했습니다.` });
       load();
     } catch (e) {
       setMsg({ intent: "error", text: e instanceof Error ? e.message : String(e) });
@@ -111,7 +111,7 @@ export default function Consumers({ config }: { config: RuntimeConfig }) {
 
   async function issueKey(forConsumer: string) {
     if (busy) return;
-    if (!forConsumer.trim()) { setMsg({ intent: "error", text: "A consumer is required to issue a key" }); return; }
+    if (!forConsumer.trim()) { setMsg({ intent: "error", text: "키를 발급하려면 컨슈머가 필요합니다" }); return; }
     setBusy(true); setMsg(null); setIssued(null);
     try {
       const r = await apiFetch(instance, scopes, "/api/keys", {
@@ -186,52 +186,52 @@ export default function Consumers({ config }: { config: RuntimeConfig }) {
   }
 
   function sourceBadge(t: ConsumerRow) {
-    if (t.consumer === UNASSIGNED) return <Badge appearance="tint" color="danger">No consumer</Badge>;
-    if (t.source === "keys") return <Badge appearance="tint" color="warning">Entra group not linked</Badge>;
-    if (t.source === "registry") return <Badge appearance="tint" color="informative">No key</Badge>;
-    return <Badge appearance="tint" color="success">Linked</Badge>;
+    if (t.consumer === UNASSIGNED) return <Badge appearance="tint" color="danger">컨슈머 미지정</Badge>;
+    if (t.source === "keys") return <Badge appearance="tint" color="warning">Entra 그룹 미연동</Badge>;
+    if (t.source === "registry") return <Badge appearance="tint" color="informative">키 없음</Badge>;
+    return <Badge appearance="tint" color="success">연동됨</Badge>;
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 1100 }}>
-      <Title3>Consumers &amp; keys</Title3>
-      <Text>Register and manage consumers, and issue or revoke each consumer's APIM subscription. Issuing creates a subscription ID (e.g. vk-…) and a subscription key; the key is shown only once at issue time. Expand a consumer row to see its subscription IDs. The Entra group ID is optional and used only in Entra ID auth mode (currently subscription-key mode).</Text>
+      <Title3>컨슈머 &amp; 키</Title3>
+      <Text>컨슈머를 등록·관리하고, 각 컨슈머의 APIM 구독을 발급·폐기합니다. 발급 시 구독 ID(예: vk-…)와 구독 키가 생기며, 키는 발급 순간 한 번만 표시됩니다. 컨슈머 행을 펼치면 그 컨슈머의 구독 ID가 보입니다. Entra 그룹 ID는 선택 사항이며 Entra ID 인증 모드에서만 사용됩니다(현재는 구독 키 모드).</Text>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <Input placeholder="Consumer name (e.g. payments)" value={consumer} onChange={(_, d) => setConsumer(d.value)} />
-        <Input placeholder="Entra group GUID (optional)" value={groupId} onChange={(_, d) => setGroupId(d.value)} style={{ minWidth: 300 }} />
-        <Input placeholder="Display name (optional)" value={displayName} onChange={(_, d) => setDisplayName(d.value)} />
-        <Button appearance="primary" disabled={busy} onClick={registerConsumer}>Register consumer</Button>
+        <Input placeholder="컨슈머 이름 (예: payments)" value={consumer} onChange={(_, d) => setConsumer(d.value)} />
+        <Input placeholder="Entra 그룹 GUID (선택)" value={groupId} onChange={(_, d) => setGroupId(d.value)} style={{ minWidth: 300 }} />
+        <Input placeholder="표시 이름 (선택)" value={displayName} onChange={(_, d) => setDisplayName(d.value)} />
+        <Button appearance="primary" disabled={busy} onClick={registerConsumer}>컨슈머 등록</Button>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <Input placeholder="Consumer name to issue a key for" value={keyConsumer} onChange={(_, d) => setKeyConsumer(d.value)} />
-        <Button disabled={busy} onClick={() => issueKey(keyConsumer)}>Issue API key</Button>
+        <Input placeholder="키를 발급할 컨슈머 이름" value={keyConsumer} onChange={(_, d) => setKeyConsumer(d.value)} />
+        <Button disabled={busy} onClick={() => issueKey(keyConsumer)}>API 키 발급</Button>
       </div>
 
       {msg && <MessageBar intent={msg.intent}><MessageBarBody>{msg.text}</MessageBarBody></MessageBar>}
       {issued && (
         <MessageBar intent="success">
           <MessageBarBody>
-            Key for consumer <b>{issued.consumer}</b> issued. Copy it now — it will not be shown again:
+            <b>{issued.consumer}</b> 컨슈머의 키가 발급되었습니다. 지금 복사하세요 — 다시 표시되지 않습니다:
             <pre style={{ whiteSpace: "pre-wrap" }}>{issued.primaryKey}</pre>
           </MessageBarBody>
         </MessageBar>
       )}
 
-      {consumers === null ? <Spinner label="Loading…" /> : (
-        <Table aria-label="Consumers and keys">
+      {consumers === null ? <Spinner label="불러오는 중…" /> : (
+        <Table aria-label="컨슈머 및 키">
           <TableHeader><TableRow>
             <TableHeaderCell style={{ width: 40 }} />
-            <TableHeaderCell>Consumer / key</TableHeaderCell>
-            <TableHeaderCell>Entra group ID</TableHeaderCell>
-            <TableHeaderCell>Key</TableHeaderCell>
-            <TableHeaderCell>Config</TableHeaderCell>
-            <TableHeaderCell>Status</TableHeaderCell>
-            <TableHeaderCell>Actions</TableHeaderCell>
+            <TableHeaderCell>컨슈머 / 키</TableHeaderCell>
+            <TableHeaderCell>Entra 그룹 ID</TableHeaderCell>
+            <TableHeaderCell>키</TableHeaderCell>
+            <TableHeaderCell>설정</TableHeaderCell>
+            <TableHeaderCell>상태</TableHeaderCell>
+            <TableHeaderCell>작업</TableHeaderCell>
           </TableRow></TableHeader>
           <TableBody>
             {displayConsumers.length === 0
-              ? <TableRow><TableCell>No consumers yet — register one above or issue a key.</TableCell></TableRow>
+              ? <TableRow><TableCell>아직 컨슈머가 없습니다 — 위에서 컨슈머를 등록하거나 키를 발급하세요.</TableCell></TableRow>
               : displayConsumers.flatMap((t) => {
                 const consumerKeys = keysByConsumer.get(t.consumer) ?? [];
                 const isOpen = expanded.has(t.consumer);
@@ -243,7 +243,7 @@ export default function Consumers({ config }: { config: RuntimeConfig }) {
                     </TableCell>
                     <TableCell>
                       {t.consumer === UNASSIGNED
-                        ? <Text>{t.consumer} <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>· keys without a consumer label (expand to revoke)</Text></Text>
+                        ? <Text>{t.consumer} <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>· 컨슈머 라벨 없는 키 (펼쳐서 폐기)</Text></Text>
                         : <>{t.consumer}{t.displayName ? ` (${t.displayName})` : ""}</>}
                     </TableCell>
                     <TableCell>{t.entraGroupId ?? "—"}</TableCell>
@@ -253,11 +253,11 @@ export default function Consumers({ config }: { config: RuntimeConfig }) {
                     <TableCell>
                       {t.consumer !== UNASSIGNED && (
                         <>
-                          <Button size="small" disabled={busy} onClick={() => editGroup(t)}>Edit group</Button>{" "}
-                          <Button size="small" disabled={busy} onClick={() => issueKey(t.consumer)}>+ Key</Button>{" "}
+                          <Button size="small" disabled={busy} onClick={() => editGroup(t)}>그룹 수정</Button>{" "}
+                          <Button size="small" disabled={busy} onClick={() => issueKey(t.consumer)}>+ 키</Button>{" "}
                           {t.source !== "keys"
-                            ? <Button size="small" disabled={busy} onClick={() => deleteConsumer(t)}>Delete</Button>
-                            : <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>exists as keys only · remove by revoking keys</Text>}
+                            ? <Button size="small" disabled={busy} onClick={() => deleteConsumer(t)}>삭제</Button>
+                            : <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>키로만 존재 · 키 폐기로 제거</Text>}
                         </>
                       )}
                     </TableCell>
@@ -274,7 +274,7 @@ export default function Consumers({ config }: { config: RuntimeConfig }) {
                         <TableCell />
                         <TableCell>{k.state}</TableCell>
                         <TableCell>
-                          <Button size="small" disabled={busy} onClick={() => revokeKey(k.id)}>Revoke key</Button>
+                          <Button size="small" disabled={busy} onClick={() => revokeKey(k.id)}>키 폐기</Button>
                         </TableCell>
                       </TableRow>,
                     );

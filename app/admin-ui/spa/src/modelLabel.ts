@@ -1,22 +1,21 @@
 import { RuntimeConfig } from "./auth";
 
-/** Return the list of model ids sorted by price (expensive → cheap). Descending completion
- *  unit price is the primary key (output tokens dominate cost); prompt unit price is the
- *  tiebreak. Models with no price go last. Operates on all config.aliasModels keys, reading
- *  unit prices from modelPrices. (Shared by the Models and Budget pages.) */
+/** 모델 id 목록을 가격순(비쌈 → 쌈)으로 정렬해 반환. completion 단가 내림차순이 1차 기준(출력
+ *  토큰이 비용을 지배), prompt 단가가 tiebreak. 단가가 없는 모델은 맨 뒤로. config.aliasModels의
+ *  키 전체가 대상이며, modelPrices에서 단가를 읽는다. (Models·Budget 페이지가 공유) */
 export function modelsByPrice(config: RuntimeConfig): string[] {
   const ids = Object.keys(config.aliasModels ?? {});
   const prices = config.modelPrices ?? {};
   const rank = (id: string): [number, number] => {
     const p = prices[id];
-    return p ? [p.completion, p.prompt] : [-1, -1]; // no price → treat as lowest, sort last
+    return p ? [p.completion, p.prompt] : [-1, -1]; // 단가 없으면 가장 낮게 → 뒤로
   };
   return ids.slice().sort((a, b) => {
     const [ac, ap] = rank(a);
     const [bc, bp] = rank(b);
-    if (bc !== ac) return bc - ac;       // higher completion price first
-    if (bp !== ap) return bp - ap;       // higher prompt price first
-    return a.localeCompare(b);           // tie → by name (stable)
+    if (bc !== ac) return bc - ac;       // completion 단가 비쌈 먼저
+    if (bp !== ap) return bp - ap;       // prompt 단가 비쌈 먼저
+    return a.localeCompare(b);           // 동률이면 이름순(안정적)
   });
 }
 

@@ -11,7 +11,7 @@ import ConsumerPicker from "../components/ConsumerPicker";
 interface Tier { name: string; tpm: number; quota: number; period: string }
 
 const PERIOD_KO: Record<string, string> = {
-  Hourly: "hour", Daily: "day", Weekly: "week", Monthly: "month",
+  Hourly: "시간", Daily: "하루", Weekly: "주", Monthly: "월",
 };
 const periodKo = (p: string) => PERIOD_KO[p] ?? p;
 
@@ -37,7 +37,7 @@ export default function RateLimits({ config }: { config: RuntimeConfig }) {
     setLoading(true); setMsg(null); setTier(""); setIsDefault(false);
     apiFetch(instance, scopes, `/api/consumers/${consumer}/config`)
       .then(async (r) => {
-        if (!r.ok) { setMsg({ intent: "error", text: `Load failed: ${r.status}` }); return; }
+        if (!r.ok) { setMsg({ intent: "error", text: `불러오기 실패: ${r.status}` }); return; }
         const b = await r.json();
         setTier(b.tier ?? "");
         setIsDefault(b.isDefault);
@@ -55,9 +55,9 @@ export default function RateLimits({ config }: { config: RuntimeConfig }) {
       const r = await apiFetch(instance, scopes, `/api/consumers/${consumer}/config`, {
         method: "PUT", body: JSON.stringify({ tier }),
       });
-      if (!r.ok) { setMsg({ intent: "error", text: `Save failed: ${r.status}` }); return; }
+      if (!r.ok) { setMsg({ intent: "error", text: `저장 실패: ${r.status}` }); return; }
       setIsDefault(false);
-      setMsg({ intent: "success", text: `Set consumer ${consumer} to tier '${tier}'.` });
+      setMsg({ intent: "success", text: `${consumer} 컨슈머를 '${tier}' 등급으로 설정했습니다.` });
     } catch (e) {
       setMsg({ intent: "error", text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -67,18 +67,18 @@ export default function RateLimits({ config }: { config: RuntimeConfig }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 640 }}>
-      <Title3>Rate limits</Title3>
+      <Title3>속도 제한</Title3>
       <MessageBar intent="info">
         <MessageBarBody>
-          Assign a <b>rate-limit tier</b> to a consumer. The gateway applies the tier's <b>tokens per minute</b>
-          and <b> period quota</b> per consumer and blocks requests that exceed them. Unlike the budget limit,
-          this guards against sudden bursts to protect other consumers.
+          컨슈머에 <b>속도 제한 등급</b>을 지정합니다. 게이트웨이가 등급의 <b>분당 토큰</b>과
+          <b> 기간 한도</b>를 컨슈머별로 적용하고, 초과하면 요청을 차단합니다. 예산 한도와 달리
+          순간적인 폭주를 막아 다른 컨슈머를 보호하는 용도입니다.
         </MessageBarBody>
       </MessageBar>
       <ConsumerPicker config={config} selected={consumer} onSelect={setConsumer} />
-      {consumer && (loading ? <Spinner label="Loading…" /> : (
+      {consumer && (loading ? <Spinner label="불러오는 중…" /> : (
         <>
-          {/* current status card */}
+          {/* 현재 상태 카드 */}
           <div style={{
             display: "flex", flexDirection: "column", gap: 12,
             border: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -87,19 +87,19 @@ export default function RateLimits({ config }: { config: RuntimeConfig }) {
             padding: 20,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Text weight="semibold">Current tier</Text>
+              <Text weight="semibold">현재 등급</Text>
               {isDefault || !tier
-                ? <Badge appearance="tint" color="informative">Not set — global default</Badge>
+                ? <Badge appearance="tint" color="informative">미설정 — 전역 기본값</Badge>
                 : <Badge appearance="tint" color="brand">{tier}</Badge>}
             </div>
             {selected ? (
               <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Tokens per minute</Text>
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>분당 토큰</Text>
                   <Text size={500} weight="semibold">{selected.tpm.toLocaleString()}</Text>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Period quota</Text>
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>기간 한도</Text>
                   <Text size={500} weight="semibold">
                     {selected.quota.toLocaleString()}
                     <Text size={300} style={{ color: tokens.colorNeutralForeground2, fontWeight: 400 }}>
@@ -110,26 +110,26 @@ export default function RateLimits({ config }: { config: RuntimeConfig }) {
               </div>
             ) : (
               <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
-                Select a tier to see the limits it applies.
+                등급을 선택하면 적용되는 한도가 표시됩니다.
               </Text>
             )}
           </div>
 
-          {/* settings */}
+          {/* 설정 */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
-            <Label htmlFor="tier-select" weight="semibold">Select tier</Label>
-            <Dropdown id="tier-select" placeholder="Select tier" value={tier}
+            <Label htmlFor="tier-select" weight="semibold">등급 선택</Label>
+            <Dropdown id="tier-select" placeholder="등급 선택" value={tier}
                       selectedOptions={tier ? [tier] : []}
                       onOptionSelect={(_, d) => d.optionValue && setTier(d.optionValue)}>
               {tiers.map((t) => (
                 <Option key={t.name} value={t.name}>
-                  {`${t.name} — ${t.tpm.toLocaleString()} tokens/min / ${t.quota.toLocaleString()} per ${periodKo(t.period)}`}
+                  {`${t.name} — 분당 ${t.tpm.toLocaleString()} 토큰 / ${t.quota.toLocaleString()} per ${periodKo(t.period)}`}
                 </Option>
               ))}
             </Dropdown>
           </div>
 
-          <Button appearance="primary" disabled={busy || !tier} onClick={save} style={{ alignSelf: "flex-start" }}>Save</Button>
+          <Button appearance="primary" disabled={busy || !tier} onClick={save} style={{ alignSelf: "flex-start" }}>저장</Button>
         </>
       ))}
       {msg && <MessageBar intent={msg.intent}><MessageBarBody>{msg.text}</MessageBarBody></MessageBar>}

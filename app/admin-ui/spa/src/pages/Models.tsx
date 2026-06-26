@@ -11,9 +11,8 @@ import ConsumerPicker from "../components/ConsumerPicker";
 export default function Models({ config }: { config: RuntimeConfig }) {
   const { instance } = useMsal();
   const scopes = React.useMemo(() => apiScopes(config), [config]);
-  // The model list is built dynamically from the aliasModels (Terraform→BFF) keys — OpenAI +
-  // Foundry OSS are auto-exposed. Keys = real model names (= APIM deployment names), used directly
-  // as identifiers. Sorted by price (expensive → cheap) for display.
+  // 모델 목록은 aliasModels(Terraform→BFF) 키에서 동적 생성 — OpenAI + Foundry OSS가 자동 노출.
+  // 키 = 실제 모델명(= APIM 배포 이름)이라 그대로 식별자로 쓴다. 가격순(비쌈→쌈)으로 정렬해 표시.
   const aliases = React.useMemo(() => modelsByPrice(config), [config]);
   const [consumer, setConsumer] = React.useState<string | null>(null);
   const [models, setModels] = React.useState<string[]>([]);
@@ -28,7 +27,7 @@ export default function Models({ config }: { config: RuntimeConfig }) {
     setModels([]); setIsDefault(false);
     apiFetch(instance, scopes, `/api/consumers/${consumer}/config`)
       .then(async (r) => {
-        if (!r.ok) { setMsg({ intent: "error", text: `Load failed: ${r.status}` }); return; }
+        if (!r.ok) { setMsg({ intent: "error", text: `불러오기 실패: ${r.status}` }); return; }
         const b = await r.json();
         setModels(b.allowed_models ?? []);
         setIsDefault(b.isDefault);
@@ -48,9 +47,9 @@ export default function Models({ config }: { config: RuntimeConfig }) {
       const r = await apiFetch(instance, scopes, `/api/consumers/${consumer}/config`, {
         method: "PUT", body: JSON.stringify({ allowed_models: models }),
       });
-      if (!r.ok) { setMsg({ intent: "error", text: `Save failed: ${r.status}` }); return; }
+      if (!r.ok) { setMsg({ intent: "error", text: `저장 실패: ${r.status}` }); return; }
       setIsDefault(false);
-      setMsg({ intent: "success", text: `Saved allowed models for consumer ${consumer}.` });
+      setMsg({ intent: "success", text: `${consumer} 컨슈머의 허용 모델을 저장했습니다.` });
     } catch (e) {
       setMsg({ intent: "error", text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -60,12 +59,12 @@ export default function Models({ config }: { config: RuntimeConfig }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 600 }}>
-      <Title3>Models — allowed models per consumer</Title3>
-      <Text>Select the models this consumer may call. Requests for any other model are rejected by the gateway with 403.</Text>
+      <Title3>모델 — 컨슈머별 허용 모델</Title3>
+      <Text>컨슈머가 호출할 수 있는 모델을 선택하세요. 그 외 모델로 요청하면 게이트웨이에서 403으로 거부됩니다.</Text>
       <ConsumerPicker config={config} selected={consumer} onSelect={setConsumer} />
-      {consumer && (loading ? <Spinner label="Loading…" /> : (
+      {consumer && (loading ? <Spinner label="불러오는 중…" /> : (
         <>
-          {isDefault && <Badge appearance="tint" color="informative">Inheriting global default (no per-consumer config yet)</Badge>}
+          {isDefault && <Badge appearance="tint" color="informative">전역 기본값 상속 중 (아직 컨슈머별 설정 없음)</Badge>}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {aliases.map((a) => (
               <Checkbox key={a} label={modelLabel(a, config)}
@@ -73,7 +72,7 @@ export default function Models({ config }: { config: RuntimeConfig }) {
                         onChange={(_, d) => toggle(a, !!d.checked)} />
             ))}
           </div>
-          <Button appearance="primary" disabled={busy} onClick={save} style={{ alignSelf: "flex-start" }}>Save</Button>
+          <Button appearance="primary" disabled={busy} onClick={save} style={{ alignSelf: "flex-start" }}>저장</Button>
         </>
       ))}
       {msg && <MessageBar intent={msg.intent}><MessageBarBody>{msg.text}</MessageBarBody></MessageBar>}
