@@ -62,6 +62,50 @@ Brownfield 경로를 선택했다면 이 챕터의 절차를 따른 뒤 [기존 
 
 각 단계를 한꺼번에 배포하지 않아도 됩니다. `worker_image`/`admin_ui_image` 변수를 비워 두면 해당 컴포넌트가 생성되지 않으므로 게이트웨이 코어만 먼저 운영할 수 있습니다. 자세한 방법은 아래 [단계적 배포](#2-단계적-배포-staged-rollout) 절을 참고하세요.
 
+### 4. 내 상황에 맞는 배포 시나리오
+
+***
+
+{% hint style="success" %}
+**이미 Azure를 운영 중인 고객이라면** all-in-one 배포보다 **기존 리소스에 연결하는 방식**(시나리오 A~D)을 권장합니다. 기존 Entra 그룹·Foundry 계정을 그대로 재사용하고, 게이트웨이는 그 위에 얹히는 거버넌스 레이어로만 추가됩니다.
+{% endhint %}
+
+아래 표에서 본인 상황에 맞는 시나리오를 고른 뒤, 해당 페이지의 절차를 따르세요. 모든 시나리오는 이 챕터의 공통 절차(부트스트랩 → tfvars → apply → seed)를 기반으로 합니다.
+
+| 상황 | 시나리오 | 핵심 |
+|---|---|---|
+| 이미 Entra 보안 그룹을 운영 중 | **A — 기존 Entra 그룹 연동** | 그룹을 새로 만들지 않고 `admin_group_object_id`에 기존 ID 연결 |
+| 이미 Azure OpenAI/Foundry 계정이 있음 | **B — 기존 Foundry 재사용** | `reuse_foundry=true`, 계정·모델은 `data`로 읽고 PE·RBAC만 신규 |
+| 게이트웨이만 먼저 띄워 모델 연결 검증 | **C — APIM 코어 먼저 배포** | 이미지 변수 비우고 코어만 배포 (Stage 1) |
+| 코어 운영 중, 셀프서비스 UI 추가 | **D — Admin UI 추가 배포** | `admin_ui_image` 설정 + Entra 3종 + 2차 apply |
+| 신규 환경에 전체 스택 한 번에 | **E — All-in-one 배포** | greenfield 전체 (최소 2 apply) |
+
+{% columns %}
+{% column width="50%" %}
+{% content-ref url="03-deploy/case-entra-group.md" %}
+[시나리오 A — 기존 Entra 그룹 연동](03-deploy/case-entra-group.md)
+{% endcontent-ref %}
+
+{% content-ref url="04-reuse-foundry.md" %}
+[시나리오 B — 기존 Foundry 재사용](04-reuse-foundry.md)
+{% endcontent-ref %}
+
+{% content-ref url="03-deploy/case-apim-core-first.md" %}
+[시나리오 C — APIM 게이트웨이 코어 먼저 배포](03-deploy/case-apim-core-first.md)
+{% endcontent-ref %}
+{% endcolumn %}
+
+{% column width="50%" %}
+{% content-ref url="03-deploy/case-admin-ui.md" %}
+[시나리오 D — Admin UI 추가 배포](03-deploy/case-admin-ui.md)
+{% endcontent-ref %}
+
+{% content-ref url="03-deploy/case-all-in-one.md" %}
+[시나리오 E — All-in-one Terraform 배포](03-deploy/case-all-in-one.md)
+{% endcontent-ref %}
+{% endcolumn %}
+{% endcolumns %}
+
 ## 2. 단계적 배포 (Staged Rollout)
 
 ***
