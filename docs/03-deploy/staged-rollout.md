@@ -10,27 +10,7 @@ description: 운영자·DevOps 엔지니어를 위한 페이지 · worker_image/
 
 ## 1. 전체 3단계 구조
 
-<!-- diagram: staged-rollout -->
-<div style="display:flex; align-items:stretch; gap:10px; font-family:'Segoe UI','Noto Sans KR',sans-serif; margin:16px 0;">
-  <div style="flex:1; background:#EEF6FC; border-left:4px solid #0078D4; border-radius:4px; padding:14px;">
-    <div style="font-size:11px; letter-spacing:1px; color:#0078D4; font-weight:700;">STAGE 1 · 코어</div>
-    <div style="font-size:15px; font-weight:700; color:#0a2540; margin:6px 0;">게이트웨이 코어</div>
-    <div style="font-size:12px; color:#1a1a2e; line-height:1.7;">▸ APIM + 3개 API<br>▸ 정적 거버넌스<br>▸ 구독 키 발급<br>▸ 모델 호출 가능</div>
-  </div>
-  <div style="display:flex; align-items:center; color:#0078D4; font-weight:700; font-size:12px; padding:0 4px;">+</div>
-  <div style="flex:1; background:#F4F6FA; border-left:4px solid #556677; border-radius:4px; padding:14px;">
-    <div style="font-size:11px; letter-spacing:1px; color:#556677; font-weight:700;">STAGE 2 · UI</div>
-    <div style="font-size:15px; font-weight:700; color:#0a2540; margin:6px 0;">Admin UI 추가</div>
-    <div style="font-size:12px; color:#1a1a2e; line-height:1.7;">▸ Entra 앱 등록 3종<br>▸ 셀프서비스 관리<br>▸ 소비자·키·정책 UI<br>▸ (worker 없음)</div>
-  </div>
-  <div style="display:flex; align-items:center; color:#0078D4; font-weight:700; font-size:12px; padding:0 4px;">+</div>
-  <div style="flex:1; background:#EEF7F0; border-left:4px solid #107C41; border-radius:4px; padding:14px;">
-    <div style="font-size:11px; letter-spacing:1px; color:#107C41; font-weight:700;">STAGE 3 · WORKER</div>
-    <div style="font-size:15px; font-weight:700; color:#0a2540; margin:6px 0;">config-sync worker 추가</div>
-    <div style="font-size:12px; color:#1a1a2e; line-height:1.7;">▸ Cosmos→APIM 동기화<br>▸ 소비자별 동적 설정<br>▸ 예산 기반 모델 전환<br>▸ 전체 기능 활성</div>
-  </div>
-</div>
-<!-- /diagram -->
+<figure><img src="../images/diagram-staged-rollout.png" alt="단계적 배포 — Stage 1 게이트웨이 코어 → Stage 2 Admin UI → Stage 3 config-sync worker"><figcaption>🖼️ 단계적 배포 — Stage 1 게이트웨이 코어 → Stage 2 Admin UI → Stage 3 config-sync worker <em>(다이어그램 이미지 추가 예정)</em></figcaption></figure>
 
 ***
 

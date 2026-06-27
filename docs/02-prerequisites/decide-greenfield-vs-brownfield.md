@@ -17,37 +17,7 @@ description: 인프라·아키텍트를 위한 페이지 · 선행: Entra ID 객
 
 ## 의사결정 플로우
 
-<!-- diagram: greenfield-vs-brownfield -->
-<div style="display:flex; align-items:stretch; gap:12px; font-family:'Segoe UI','Noto Sans KR',sans-serif; margin:16px 0;">
-  <div style="flex:1; background:#EEF6FC; border-left:4px solid #0078D4; border-radius:4px; padding:16px;">
-    <div style="font-size:11px; letter-spacing:1px; color:#0078D4; font-weight:700; margin-bottom:8px;">GREENFIELD · 신규 생성</div>
-    <div style="font-size:14px; font-weight:700; color:#0a2540; margin-bottom:10px;">다음 중 하나라도 해당하면</div>
-    <div style="font-size:12.5px; color:#1a1a2e; line-height:1.9;">
-      ▸ 구독 내 기존 AIServices 계정 없음<br>
-      ▸ 기존 계정이 다른 구독에 있음<br>
-      ▸ 기존 계정에 모델 배포가 없음<br>
-      ▸ 기존 계정에 Contributor 권한 없음
-    </div>
-    <div style="margin-top:12px; padding:8px; background:#fff; border-radius:4px; font-size:12px; color:#556677;">
-      → <strong>챕터 03 배포</strong> (<code>reuse_foundry=false</code>)
-    </div>
-  </div>
-  <div style="display:flex; align-items:center; color:#556677; font-weight:700; font-size:13px;">VS</div>
-  <div style="flex:1; background:#EEF7F0; border-left:4px solid #107C41; border-radius:4px; padding:16px;">
-    <div style="font-size:11px; letter-spacing:1px; color:#107C41; font-weight:700; margin-bottom:8px;">BROWNFIELD · 기존 계정 재사용</div>
-    <div style="font-size:14px; font-weight:700; color:#0a2540; margin-bottom:10px;">다음을 모두 충족하면</div>
-    <div style="font-size:12.5px; color:#1a1a2e; line-height:1.9;">
-      ✓ 같은 구독에 기존 AIServices 계정 있음<br>
-      ✓ 계정에 모델이 이미 배포되어 있음<br>
-      ✓ 계정에 Contributor 권한 있음<br>
-      <strong style="color:#107C41;">✓ PE+RBAC만 신규, 계정·모델 data로 읽기</strong>
-    </div>
-    <div style="margin-top:12px; padding:8px; background:#fff; border-radius:4px; font-size:12px; color:#556677;">
-      → <strong>챕터 04 기존 Foundry 재사용</strong> (<code>reuse_foundry=true</code>)
-    </div>
-  </div>
-</div>
-<!-- /diagram -->
+<figure><img src="../images/diagram-greenfield-vs-brownfield.png" alt="Greenfield(신규 생성) vs Brownfield(기존 Foundry 재사용) 비교"><figcaption>🖼️ Greenfield(신규 생성) vs Brownfield(기존 Foundry 재사용) 비교 <em>(다이어그램 이미지 추가 예정)</em></figcaption></figure>
 
 ---
 

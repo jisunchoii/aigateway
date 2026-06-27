@@ -11,59 +11,7 @@ description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행:
 
 Azure API Management의 인바운드 정책은 클라이언트 요청을 백엔드로 전달하기 전에 일련의 단계를 순서대로 실행합니다. 이 페이지는 llm-gateway가 각 요청에 적용하는 정책 파이프라인을 단계별로 설명합니다.
 
-<!-- diagram: policy-pipeline -->
-<div style="display:flex; flex-direction:column; gap:6px; font-family:'Segoe UI','Noto Sans KR',sans-serif; margin:16px 0; max-width:480px;">
-  <div style="background:#EEF6FC; border-left:4px solid #0078D4; border-radius:4px; padding:10px 14px;">
-    <span style="font-size:11px; color:#0078D4; font-weight:700; letter-spacing:1px;">CLIENT</span>
-    <div style="font-size:13px; color:#0a2540; font-weight:600; margin-top:2px;">클라이언트 요청</div>
-  </div>
-  <div style="text-align:center; color:#0078D4; font-size:13px; font-weight:700;">▼</div>
-  <div style="background:#0a2540; border-radius:4px; padding:10px 14px; color:#fff;">
-    <span style="font-size:11px; color:#5AC8FA; font-weight:700; letter-spacing:1px;">① IDENTITY</span>
-    <div style="font-size:13px; font-weight:600; margin-top:2px;">consumerId 도출</div>
-    <div style="font-size:11.5px; color:#dce6f0; margin-top:4px;">구독키=표시명 / Entra ID=JWT claim</div>
-  </div>
-  <div style="text-align:center; color:#0078D4; font-size:13px; font-weight:700;">▼</div>
-  <div style="background:#0a2540; border-radius:4px; padding:10px 14px; color:#fff; display:flex; justify-content:space-between; align-items:center;">
-    <div>
-      <span style="font-size:11px; color:#5AC8FA; font-weight:700; letter-spacing:1px;">② AUTHZ</span>
-      <div style="font-size:13px; font-weight:600; margin-top:2px;">allowed_models 검사</div>
-    </div>
-    <div style="background:#FFB454; color:#0a2540; font-weight:700; font-size:12px; border-radius:4px; padding:4px 10px;">미허용 → 403</div>
-  </div>
-  <div style="text-align:center; color:#0078D4; font-size:13px; font-weight:700;">▼</div>
-  <div style="background:#0a2540; border-radius:4px; padding:10px 14px; color:#fff; display:flex; justify-content:space-between; align-items:center;">
-    <div>
-      <span style="font-size:11px; color:#5AC8FA; font-weight:700; letter-spacing:1px;">③ RATE LIMIT</span>
-      <div style="font-size:13px; font-weight:600; margin-top:2px;">토큰 속도 제한</div>
-    </div>
-    <div style="background:#FFB454; color:#0a2540; font-weight:700; font-size:12px; border-radius:4px; padding:4px 10px;">초과 → 429</div>
-  </div>
-  <div style="text-align:center; color:#0078D4; font-size:13px; font-weight:700;">▼</div>
-  <div style="background:#0a2540; border-radius:4px; padding:10px 14px; color:#fff;">
-    <span style="font-size:11px; color:#5AC8FA; font-weight:700; letter-spacing:1px;">④ DOWNGRADE</span>
-    <div style="font-size:13px; font-weight:600; margin-top:2px;">예산 모델 전환</div>
-    <div style="font-size:11.5px; color:#dce6f0; margin-top:4px;">downgrade_ladder → body "model" 재작성</div>
-  </div>
-  <div style="text-align:center; color:#0078D4; font-size:13px; font-weight:700;">▼</div>
-  <div style="background:#0a2540; border-radius:4px; padding:10px 14px; color:#fff;">
-    <span style="font-size:11px; color:#5AC8FA; font-weight:700; letter-spacing:1px;">⑤ METRICS</span>
-    <div style="font-size:13px; font-weight:600; margin-top:2px;">토큰 메트릭 기록</div>
-    <div style="font-size:11.5px; color:#dce6f0; margin-top:4px;">llm-emit-token-metric → App Insights</div>
-  </div>
-  <div style="text-align:center; color:#0078D4; font-size:13px; font-weight:700;">▼</div>
-  <div style="background:#EEF7F0; border-left:4px solid #107C41; border-radius:4px; padding:10px 14px;">
-    <span style="font-size:11px; color:#107C41; font-weight:700; letter-spacing:1px;">⑥ AUTH</span>
-    <div style="font-size:13px; color:#0a2540; font-weight:600; margin-top:2px;">관리 ID 백엔드 인증</div>
-    <div style="font-size:11.5px; color:#1a1a2e; margin-top:4px;">authentication-managed-identity</div>
-  </div>
-  <div style="text-align:center; color:#107C41; font-size:13px; font-weight:700;">▼</div>
-  <div style="background:#EEF7F0; border-left:4px solid #107C41; border-radius:4px; padding:10px 14px;">
-    <span style="font-size:11px; color:#107C41; font-weight:700; letter-spacing:1px;">BACKEND</span>
-    <div style="font-size:13px; color:#0a2540; font-weight:600; margin-top:2px;">백엔드 /openai/v1/chat/completions</div>
-  </div>
-</div>
-<!-- /diagram -->
+<figure><img src="../images/diagram-policy-pipeline.png" alt="APIM 정책 파이프라인 6단계 (①~⑥, allowed-models 403 / rate limit 429 분기 포함)"><figcaption>🖼️ APIM 정책 파이프라인 6단계 (①~⑥, allowed-models 403 / rate limit 429 분기 포함) <em>(다이어그램 이미지 추가 예정)</em></figcaption></figure>
 
 ---
 

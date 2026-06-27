@@ -10,27 +10,7 @@ description: 아키텍트·플랫폼 엔지니어를 위한 페이지 · 선행:
 
 클라이언트의 AI 요청은 아래 순서로 처리됩니다.
 
-<!-- diagram: request-flow -->
-<div style="display:flex; align-items:stretch; gap:10px; font-family:'Segoe UI','Noto Sans KR',sans-serif; margin:16px 0;">
-  <div style="flex:1; background:#EEF6FC; border-left:4px solid #0078D4; border-radius:4px; padding:14px;">
-    <div style="font-size:11px; letter-spacing:1px; color:#0078D4; font-weight:700;">INGRESS · 입구</div>
-    <div style="font-size:16px; font-weight:700; color:#0a2540; margin:6px 0;">개발 툴 (클라이언트)</div>
-    <div style="font-size:12.5px; color:#1a1a2e; line-height:1.7;">▸ public APIM 접속<br>▸ 구독키 / Entra JWT<br>▸ 모델 키 미보유</div>
-  </div>
-  <div style="display:flex; align-items:center; color:#0078D4; font-weight:700; font-size:13px;">HTTPS ▶</div>
-  <div style="flex:1.3; background:#0a2540; border-radius:4px; padding:14px; color:#fff;">
-    <div style="font-size:11px; letter-spacing:1px; color:#5AC8FA; font-weight:700;">GATEWAY · 정책</div>
-    <div style="font-size:16px; font-weight:700; margin:6px 0;">APIM 게이트웨이</div>
-    <div style="font-size:12.5px; color:#dce6f0; line-height:1.8;">① 소비자 식별<br>② allowed-models → <span style="color:#FFB454;">403</span><br>③ rate limit → <span style="color:#FFB454;">429</span><br>④ 예산 모델 전환<br>⑤ 토큰 메트릭</div>
-  </div>
-  <div style="display:flex; align-items:center; color:#107C41; font-weight:700; font-size:11px; text-align:center;">Managed&nbsp;Identity<br>▶</div>
-  <div style="flex:1; background:#EEF7F0; border-left:4px solid #107C41; border-radius:4px; padding:14px;">
-    <div style="font-size:11px; letter-spacing:1px; color:#107C41; font-weight:700;">EGRESS · 백엔드</div>
-    <div style="font-size:16px; font-weight:700; color:#0a2540; margin:6px 0;">Foundry / AOAI (Private)</div>
-    <div style="font-size:12.5px; color:#1a1a2e; line-height:1.7;">✓ Private Endpoint 전용<br>✓ 키 인증 off<br>✓ MI로만 접속</div>
-  </div>
-</div>
-<!-- /diagram -->
+<figure><img src="../images/diagram-request-flow.png" alt="요청 흐름 — 개발 툴(Ingress) → APIM 게이트웨이(정책 ①~⑤) → Private 백엔드(Egress)"><figcaption>🖼️ 요청 흐름 — 개발 툴(Ingress) → APIM 게이트웨이(정책 ①~⑤) → Private 백엔드(Egress) <em>(다이어그램 이미지 추가 예정)</em></figcaption></figure>
 
 ## 2. 클라이언트 입구 (Ingress) 표
 
