@@ -155,7 +155,7 @@ az acr build --registry $reg --image admin-ui:latest ../app/admin-ui
 
 Before you can access the UI, you will need to register an app registration in EntraID.
 ```bash
-./scripts/app-registration.sh
+../scripts/app-registration.sh
 ```
 
 Put the image references and the three Entra variables from the prerequisites into
@@ -168,6 +168,7 @@ admin_ui_public       = true   # external FQDN (still Entra-gated). false = VNet
 admin_group_object_id = "<entra security group object id>"
 bff_api_audience      = "api://<bff app id>"
 spa_client_id         = "<spa app id>"
+entra_tenant_id       = "<entra tenant id>" # SPA login + BFF token validation
 ```
 
 ```bash
