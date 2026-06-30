@@ -1,6 +1,6 @@
 # Azure AI Gateway
 
-Azure API Management(APIM)을 중심으로 Azure OpenAI와 Azure AI Foundry 모델을 하나의 거버넌스 엔드포인트 뒤에 두는 예제/데모용 AI Gateway입니다.
+Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모델을 하나의 거버넌스 엔드포인트 뒤에 두는 예제/데모용 AI Gateway입니다.
 
 클라이언트는 APIM만 호출하고, APIM은 정책으로 consumer 식별, 모델 허용 목록, 토큰 제한, 예산 기반 모델 전환, 메트릭 기록을 처리한 뒤 Private Endpoint와 Managed Identity로 백엔드 AIServices 계정을 호출합니다.
 

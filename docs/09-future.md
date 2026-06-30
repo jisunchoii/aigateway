@@ -67,7 +67,7 @@ Claude Code는 Anthropic Messages API 형식으로 요청합니다. 현재 gatew
 | 항목 | 방향 |
 |---|---|
 | 신규 APIM path | `/anthropic/v1/messages` |
-| 백엔드 | Azure AI Foundry Claude 배포의 Anthropic Messages 엔드포인트 |
+| 백엔드 | Microsoft Foundry Claude 배포의 Anthropic Messages 엔드포인트 |
 | 요청 형식 | `POST /v1/messages`, `anthropic-version` 헤더, `messages` body |
 | 인증 | Entra ID Bearer 토큰 권장. subscription key 모드는 별도 헤더 처리 설계 필요 |
 | 재사용 정책 | consumerId, allowed models, rate limit, budget, metric 파이프라인 |

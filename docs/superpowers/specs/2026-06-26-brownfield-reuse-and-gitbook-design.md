@@ -408,7 +408,7 @@ Phase 5 — 정리
 
 ## 부록: 확인된 공식 문서 사실 (근거)
 - **v1 GA API는 `api-version` 쿼리 불필요**, OpenAI client 호환, DeepSeek·Grok도 v1 chat completions 지원. base_url은 `…openai.azure.com/openai/v1/` 와 `…services.ai.azure.com/openai/v1/` 둘 다 허용. [v1 lifecycle](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/api-version-lifecycle)
-- **단일 AIServices(Foundry) 계정에 gpt(Azure 직판) + 파트너(grok/DeepSeek) 동시 배포 가능**, 통합 엔드포인트. [Foundry models overview](https://learn.microsoft.com/en-us/azure/ai-foundry/concepts/foundry-models-overview)
+- **단일 AIServices(Microsoft Foundry) 계정에 gpt(Azure 직판) + 파트너(grok/DeepSeek) 동시 배포 가능**, 통합 엔드포인트. [Foundry models overview](https://learn.microsoft.com/en-us/azure/ai-foundry/concepts/foundry-models-overview)
 - **chat completions는 레거시 아님** — Responses와 함께 둘 다 GA. Responses는 stateful(`input`, `previous_response_id`), OSS 미지원. [Responses API](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses)
 - **Claude Code는 Anthropic Messages(`/v1/messages`)만** 사용. Foundry의 Claude 배포는 `/anthropic` 경로, Entra ID 인증 가능. [Gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol), [CC on Foundry](https://code.claude.com/docs/en/microsoft-foundry)
 - **APIM known issue**: 2025-04-01-preview Azure OpenAI 스펙은 OpenAPI 3.1을 쓰며 APIM이 완전 지원하지 않음. [v1 lifecycle](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/api-version-lifecycle)
