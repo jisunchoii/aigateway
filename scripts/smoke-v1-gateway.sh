@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end smoke test of the gateway via the PUBLIC APIM host (apim_public=true).
-# Exercises spec §3.3 checks 1-3 (gpt path->body, OSS v1 body, same-backend downgrade is
-# observed via response headers when configured). Run from a laptop — no VNet needed.
+# Exercises the public APIM client paths: /openai, /vscode/models, and /foundry.
+# Run from a laptop — no VNet needed.
 #
 # Usage:
 #   ./smoke-v1-gateway.sh <apim-host> <subscription-key>
@@ -28,24 +28,40 @@ chat() { # $1=label  $2=url  $3=keyheader  $4=body
   fi
 }
 
-MSG='{"messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
+GPT_MSG='{"messages":[{"role":"user","content":"ping"}],"max_completion_tokens":16}'
+OSS_MSG='{"messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
 
 # Check 1: gpt via /openai path-route (client sends path+api-version; gateway converts to v1 body-route).
 chat "gpt-5.4 via /openai (path->v1 body)" \
   "https://$HOST/openai/deployments/gpt-5.4/chat/completions?api-version=$API_VERSION" \
-  "api-key: $KEY" "$MSG"
+  "api-key: $KEY" "$GPT_MSG"
 
-# Check 2a: OSS (grok) via /foundry body-route.
+# Check 2: VS Code BYOK path-route using Ocp-Apim-Subscription-Key.
+chat "gpt-5.4 via /vscode/models (path->v1 body)" \
+  "https://$HOST/vscode/models/deployments/gpt-5.4/chat/completions?api-version=$API_VERSION" \
+  "Ocp-Apim-Subscription-Key: $KEY" "$GPT_MSG"
+
+chat "grok-4.3 via /vscode/models (path->v1 body)" \
+  "https://$HOST/vscode/models/deployments/grok-4.3/chat/completions?api-version=$API_VERSION" \
+  "Ocp-Apim-Subscription-Key: $KEY" "$OSS_MSG"
+
+# Check 3a: OSS (grok) via /foundry body-route.
 chat "grok-4.3 via /foundry (body)" \
   "https://$HOST/foundry/chat/completions" \
   "Ocp-Apim-Subscription-Key: $KEY" \
   '{"model":"grok-4.3","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
 
-# Check 2b: OSS (DeepSeek) via /foundry body-route.
+# Check 3b: OSS (DeepSeek) via /foundry body-route.
 chat "DeepSeek-V4-Pro via /foundry (body)" \
   "https://$HOST/foundry/chat/completions" \
   "Ocp-Apim-Subscription-Key: $KEY" \
   '{"model":"DeepSeek-V4-Pro","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
+
+# Check 3c: OSS (Kimi) via /foundry body-route.
+chat "Kimi-K2.6-1 via /foundry (body)" \
+  "https://$HOST/foundry/chat/completions" \
+  "Ocp-Apim-Subscription-Key: $KEY" \
+  '{"model":"Kimi-K2.6-1","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
 
 # Check 4: gpt-5 reasoning param — gpt path-route request using max_completion_tokens must still 200.
 chat "gpt-5.4 max_completion_tokens" \

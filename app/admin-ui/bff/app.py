@@ -285,10 +285,11 @@ def app_factory(deps: AppDeps) -> FastAPI:
             deps.consumerconfig.put(consumer, merged, valid_aliases=aliases)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        # A budget change should re-evaluate the downgrade level NOW rather than waiting for the
-        # ~5-min cron. Best-effort: start the config-sync job; never fail the save if it doesn't.
+        # Any consumer config change should refresh APIM's consumer-config bundle NOW rather than
+        # waiting for the ~5-min cron. Budget changes also re-evaluate the downgrade level.
+        # Best-effort: start the config-sync job; never fail the save if it doesn't.
         triggered = False
-        if "daily_budget_usd" in incoming and deps.job_starter is not None:
+        if deps.job_starter is not None:
             triggered = bool(deps.job_starter.start())
         return {"consumer": consumer, "saved": True, "reevaluationTriggered": triggered}
 

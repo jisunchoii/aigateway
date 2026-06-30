@@ -1,122 +1,298 @@
 ---
-description: "시나리오 C — APIM 게이트웨이 코어만 먼저 배포해 모델 연결을 검증하는 가이드"
+description: "APIM 게이트웨이 배포 — 모델 백엔드 결정 후 APIM 정책과 private 연결을 먼저 검증하는 경로"
 ---
 
-# 시나리오 C: APIM 게이트웨이 코어 먼저 배포
+# APIM 게이트웨이 배포
 
+이 페이지는 모델 백엔드 방식을 먼저 결정한 뒤, **Admin UI와 config-sync worker 없이 APIM 게이트웨이만 먼저 배포**하는 단계적 배포 경로를 설명합니다. 이 단계만으로도 APIM 정책, 모델 라우팅, Private Endpoint/RBAC 연결, 기본 호출 검증까지 가능합니다.
 
-이 페이지는 Admin UI나 config-sync worker 없이 **APIM 게이트웨이 코어만 먼저 배포**하는 방법(Stage 1)을 안내합니다. 모델 라우팅, 정책, 거버넌스가 완전히 동작하는 상태에서 클라이언트 연결을 검증한 뒤, 이후 단계에서 UI와 worker를 추가할 수 있습니다.
+## 1. 선택 기준
 
-## 1. 이 시나리오가 적합한 경우
+{% hint style="success" %}
+**이 경로가 맞는 경우**
 
-***
+- 모델 백엔드 경로를 이미 결정했다.
+- Admin UI 없이 APIM gateway 호출부터 검증하고 싶다.
+- 구독 키를 Azure Portal 또는 CLI에서 수동 발급해도 된다.
+- consumer별 동적 정책과 budget switch는 다음 단계에서 붙여도 된다.
+{% endhint %}
 
-아래 조건에 해당하면 이 시나리오를 선택하세요.
+모델 백엔드가 아직 결정되지 않았다면 먼저 [모델 백엔드 신규 생성](case-foundry-greenfield.md) 또는 [모델 백엔드 기존 계정 재사용](../04-reuse-foundry.md)을 선택하세요.
 
-- 먼저 APIM + 모델 백엔드 연결만 확인하고 싶다.
-- Admin UI나 자동화 없이 구독 키를 수동으로 발급해 팀 내부에서 먼저 테스트하고 싶다.
-- 단계적 배포(Staged Rollout)의 Stage 1을 따른다.
+## 2. 배포되는 리소스
 
-이 시나리오에서 배포되는 컴포넌트는 다음과 같습니다.
+| 리소스 | 포함 여부 | 설명 |
+|---|---:|---|
+| APIM + API 경로 | 예 | `/openai`, `/vscode/models`, `/foundry` |
+| APIM 정책 | 예 | consumer 식별, allowed model, rate limit, 모델 전환, token metric |
+| 모델 백엔드 연결 | 예 | 신규 생성 또는 기존 계정 재사용 중 선택한 경로 |
+| Private Endpoint / RBAC | 예 | APIM VNet에서 backend 계정으로 private 연결 |
+| Cosmos DB / ACR / VNet | 예 | 이후 Admin UI·worker 추가를 위한 기반 리소스 |
+| Admin UI | 아니오 | 다음 단계에서 추가 |
+| config-sync worker | 아니오 | 다음 단계에서 추가 |
 
-| 컴포넌트 | Stage 1 포함 여부 |
+{% hint style="info" %}
+이 단계의 거버넌스는 `infra/terraform.tfvars`에 들어간 기본 설정을 사용합니다. consumer별 override와 예산 기반 동적 모델 전환은 config-sync worker를 추가한 뒤 완전해집니다.
+{% endhint %}
+
+## 3. 배포 전 확인
+
+| 항목 | 확인할 내용 |
 |---|---|
-| [Azure API Management](https://learn.microsoft.com/ko-kr/azure/api-management/api-management-key-concepts) + 3개 API (`/openai`, `/vscode/openai`, `/foundry`) | ✓ |
-| APIM 정책 (consumer 식별 → allowed-models → rate limit → 모델 전환 → 토큰 메트릭) | ✓ |
-| 백엔드 AIServices 계정 (greenfield 신규 생성 또는 brownfield 재사용) | ✓ |
-| ACR, Cosmos DB, VNet, Private Endpoint | ✓ |
-| Admin UI (React SPA + BFF) | — (Stage 2) |
-| config-sync worker | — (Stage 3) |
+| 모델 백엔드 | 신규 생성 또는 기존 계정 재사용 중 하나를 선택 |
+| 모델 이름 | `allowed_models`와 deployment 이름이 일치 |
+| APIM 공개 여부 | 외부 개발 도구 연결이 필요하면 `apim_public=true` |
+| 기존 계정 재사용 | API key 인증과 공용 접근 차단 완료 |
+| 이미지 변수 | `worker_image=""`, `admin_ui_image=""` |
 
-## 2. Stage 1 배포 절차
+{% hint style="warning" %}
+`apim_public`과 모델 backend 설정은 첫 apply 전에 확정하세요. 나중에 바꾸면 APIM 정책, Private Endpoint, RBAC, VNet 구성을 다시 적용해야 합니다.
+{% endhint %}
 
-***
+## 4. tfvars 핵심값
 
-### 1단계: tfvars에서 이미지 변수 비워 두기
+이 단계에서 `infra/terraform.tfvars` 파일을 처음 만들고 채웁니다. 모델 백엔드 값([모델 백엔드 신규 생성](case-foundry-greenfield.md#4-tfvars-입력값-결정) 또는 [기존 계정 재사용](../04-reuse-foundry.md#4-tfvars-입력값-결정)에서 결정)도 여기서 입력합니다. 파일이 없으면 `terraform.tfvars.example`을 복사해 만들고, 아래 값이 없으면 직접 추가합니다.
 
-`infra/terraform.tfvars`에서 이미지 변수를 빈 문자열로 두세요. 이 값이 비어 있으면 Terraform이 해당 컨테이너 리소스를 생성하지 않습니다.
-
-```hcl
-# infra/terraform.tfvars
-worker_image   = ""
-admin_ui_image = ""
+```bash
+cp infra/terraform.tfvars.example infra/terraform.tfvars
 ```
 
-나머지 필수 변수(prefix, location, owner, cost_center, apim_publisher_name, apim_publisher_email, apim_public, budget_alert_email, budget_start_date)는 채워 두어야 합니다.
+먼저 모든 배포 경로에 필요한 공통 값을 채웁니다. 기본값이 없는 값은 비워 두면 `terraform plan`/`apply` 중 입력을 요구하므로 파일에 명시합니다.
 
-### 2단계: 첫 번째 terraform apply 실행
+``` 
+prefix               = "aigw"
+env                  = "dev"
+location             = "eastus2"
+owner                = "<owner-or-team-email>"
+cost_center          = "<cost-center>"
+apim_publisher_name  = "<publisher-name>"
+apim_publisher_email = "<publisher-email>"
+apim_sku_name        = "Developer_1"
+
+# 외부 개발 도구에서 APIM gateway를 직접 호출해야 하면 true
+apim_public = true
+
+monthly_budget_amount = 200
+budget_alert_email    = "<alert-email>"
+budget_start_date     = "2026-07-01T00:00:00Z"
+```
+
+그 다음 모델 백엔드 경로를 하나만 선택합니다. 신규 생성 경로는 기본값을 그대로 써도 되지만, quota/capacity를 명확히 고정하려면 파일에 적습니다.
+
+``` 
+reuse_foundry = false
+
+openai_deployments = {
+  "gpt-5.4" = {
+    model_name    = "gpt-5.4"
+    model_version = "2026-03-05"
+    sku_name      = "GlobalStandard"
+    capacity      = 500
+  }
+  "gpt-5.4-mini" = {
+    model_name    = "gpt-5.4-mini"
+    model_version = "2026-03-17"
+    sku_name      = "GlobalStandard"
+    capacity      = 500
+  }
+}
+
+foundry_deployments = {
+  "grok-4.3" = {
+    model_name    = "grok-4.3"
+    model_format  = "xAI"
+    model_version = "1"
+    sku_name      = "GlobalStandard"
+    capacity      = 400
+  }
+  "DeepSeek-V4-Pro" = {
+    model_name    = "DeepSeek-V4-Pro"
+    model_format  = "DeepSeek"
+    model_version = "2026-04-23"
+    sku_name      = "GlobalStandard"
+    capacity      = 500
+  }
+}
+
+allowed_models = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
+```
+
+기존 AIServices 계정을 재사용하는 경우에는 `reuse_foundry=true`로 바꾸고, 실제 계정 이름과 실제 deployment 이름을 넣습니다. 이 경로에서는 `openai_deployments`가 적용되지 않고, gpt 계열도 `foundry_deployments`에 선언합니다.
+
+``` 
+reuse_foundry         = true
+existing_foundry_name = "<existing-aiservices-account-name>"
+existing_foundry_rg   = "<existing-aiservices-resource-group>"
+
+foundry_deployments = {
+  "gpt-5.4" = {
+    model_name    = "gpt-5.4"
+    model_format  = "OpenAI"
+    model_version = "2026-03-05"
+    sku_name      = "GlobalStandard"
+    capacity      = 490
+  }
+  "grok-4.3" = {
+    model_name    = "grok-4.3"
+    model_format  = "xAI"
+    model_version = "1"
+    sku_name      = "GlobalStandard"
+    capacity      = 400
+  }
+  "DeepSeek-V4-Pro" = {
+    model_name    = "DeepSeek-V4-Pro"
+    model_format  = "DeepSeek"
+    model_version = "2026-04-23"
+    sku_name      = "GlobalStandard"
+    capacity      = 500
+  }
+}
+
+allowed_models = ["gpt-5.4", "grok-4.3", "DeepSeek-V4-Pro"]
+```
+
+마지막으로 이 페이지에서는 APIM gateway만 먼저 배포하므로 Admin UI와 worker 이미지는 비워 둡니다. 기존 `terraform.tfvars`에 이미지 값이 남아 있으면 이 단계에서 Admin UI/worker도 같이 배포됩니다.
+
+``` 
+
+worker_image   = ""
+admin_ui_image = ""
+
+# in-VNet 테스트용 VM이 필요할 때만 true
+enable_jumpbox = false
+```
+
+| 변수 | 의미 |
+|---|---|
+| `owner`, `cost_center`, `apim_publisher_*`, `budget_alert_email` | 기본값이 없어 파일에 넣어야 하는 공통 값 |
+| `reuse_foundry` | 모델 백엔드 신규 생성/기존 계정 재사용 선택 |
+| `openai_deployments` | 신규 생성 경로에서 gpt 계열 deployment 정의 |
+| `foundry_deployments` | Foundry/기존 계정 deployment 정의 |
+| `allowed_models` | APIM 정책에서 허용할 모델 목록 |
+| `worker_image` | 비워 두면 config-sync worker 미배포 |
+| `admin_ui_image` | 비워 두면 Admin UI 미배포 |
+
+## 5. Terraform backend와 apply
+
+처음 배포하는 구독이나 새 테스트 스택이면 `terraform init` 전에 state backend를 먼저 만듭니다. 이 단계는 Terraform이 관리하는 gateway 리소스가 아니라, Terraform state를 저장할 운영자용 저장소를 준비하는 작업입니다.
+
+아래 값은 파일이 아니라 **터미널에 그대로 입력**합니다. 4개 값을 본인 환경에 맞게 바꾼 뒤 스크립트를 실행하면, 스크립트가 storage account를 만들고 `infra/providers.tf`의 backend 블록을 자동으로 채워 줍니다. 이 블록은 **레포 루트**(`./scripts/...` 경로 기준)에서 실행합니다. (여기 `location`은 backend 저장소 리전이며, gateway 리전은 `terraform.tfvars`의 `location`에서 따로 정합니다.)
+
+```bash
+# 레포 루트에서 실행
+location="eastus2"                              # backend 저장소 리전
+backend_rg="rg-aigw-tfstate-dev-eastus2"        # state용 리소스 그룹
+storage_prefix="staigwtfstate"                  # storage 계정 접두사(<=18자, 소문자+숫자)
+state_key="ai-gateway-eus2.tfstate"             # state blob 이름
+
+./scripts/bootstrap-backend.sh \
+  --location "$location" \
+  --backend-rg "$backend_rg" \
+  --storage-prefix "$storage_prefix" \
+  --state-key "$state_key"
+```
+
+이미 같은 스택의 backend가 `infra/providers.tf`에 설정되어 있으면 bootstrap은 다시 실행하지 않습니다.
 
 ```bash
 cd infra
 terraform init
+terraform plan
 terraform apply
 ```
 
-APIM VNet 주입이 포함된 첫 apply는 약 45분 소요됩니다. 터미널이 응답 없이 보여도 정상이니 중단하지 마세요.
+`reuse_foundry=true`이면 이 plan에서 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인합니다. 기존 계정 재사용 경로의 확인 항목은 [모델 백엔드 기존 계정 재사용](../04-reuse-foundry.md#5-plan-검증)을 따릅니다.
 
-apply가 완료되면 APIM 게이트웨이 URL을 확인합니다.
+APIM VNet 주입이 포함된 첫 apply는 약 45분 걸릴 수 있습니다. 완료 후 gateway URL을 확인합니다.
 
 ```bash
 terraform output apim_gateway_url
+terraform output resource_group_name
 ```
 
-### 3단계: 구독 키 발급
+## 6. 구독 키 발급
 
-Stage 1에서는 Admin UI가 없으므로 구독 키를 수동으로 발급합니다.
+Admin UI가 아직 없으므로 APIM subscription key는 Azure Portal 또는 Azure CLI로 수동 발급합니다. 운영 가이드에는 Portal 화면을 함께 보여주는 편이 이해하기 쉽습니다.
 
-**방법 A: Azure 포털**
+| 방식 | 언제 사용하나 |
+|---|---|
+| Azure Portal | 고객 설명, 스크린샷 기반 가이드, 1회성 수동 발급 |
+| Azure CLI | 자동화, 반복 발급, runbook 검증 |
 
-[Azure 포털](https://portal.azure.com) → API Management → 해당 인스턴스 → **구독** → **+ 구독 추가**
+### Azure Portal에서 발급
 
-**방법 B: Azure CLI**
+Azure Portal에서 APIM 인스턴스를 열고 **Subscriptions** 메뉴에서 새 subscription을 만듭니다.
+
+<figure><img src="../images/screenshot-apim-subscription-key-portal.png" alt="Azure Portal에서 APIM subscription key를 발급하는 화면 placeholder"><figcaption> Azure Portal → API Management → Subscriptions → Add subscription</figcaption></figure>
+
+| 입력값 | 예시 |
+|---|---|
+| Display name | `team-a-dev` |
+| Scope | All APIs 또는 테스트할 API 범위 |
+
+생성 후 subscription의 **Primary key** 또는 **Secondary key**를 복사합니다. 이 값이 클라이언트에서 사용할 APIM subscription key이며, 같은 key를 `/openai`, `/vscode/models`, `/foundry` 경로에 모두 사용할 수 있습니다. 경로별로 헤더 이름만 다릅니다.
+
+### Azure CLI로 발급
+
+Azure CLI 버전에 따라 `az apim subscription` 하위 명령이 없을 수 있으므로, 아래 예시는 APIM management REST API를 `az rest`로 호출합니다.
+
+먼저 값 4개를 채웁니다. APIM 이름과 RG는 배포 출력에서 얻고, **subscription id는 새로 만들 구독 객체의 이름(직접 정하는 슬러그)** 입니다. 키가 아니라 식별자이며, 실제 키는 생성 뒤 `listSecrets`로 조회합니다.
 
 ```bash
-az apim subscription create \
-  --resource-group <resource_group_name> \
-  --service-name <apim-instance-name> \
-  --sid <원하는-구독-ID> \
-  --display-name "<구독-표시-이름>"
+# infra/ 디렉터리에서 실행 — 배포 출력에서 자동 추출
+resource_group_name="$(terraform output -raw resource_group_name)"
+apim_name="$(terraform output -raw apim_gateway_url | sed -E 's#https://([^.]+)\..*#\1#')"
+azure_subscription_id="$(az account show --query id -o tsv)"
+
+# 직접 정하는 값: 새 consumer 구독 식별자(예: team-a-dev)
+apim_subscription_id="team-a-dev"
+
+az rest --method put \
+  --uri "https://management.azure.com/subscriptions/${azure_subscription_id}/resourceGroups/${resource_group_name}/providers/Microsoft.ApiManagement/service/${apim_name}/subscriptions/${apim_subscription_id}?api-version=2022-08-01" \
+  --body '{
+    "properties": {
+      "displayName": "team-a-dev",
+      "scope": "/apis",
+      "state": "active"
+    }
+  }'
 ```
 
-`<resource_group_name>`과 APIM 인스턴스 이름은 `terraform output resource_group_name`으로 확인합니다.
-
-### 4단계: 클라이언트에서 모델 호출 확인
-
-발급한 구독 키로 스모크 테스트를 실행합니다.
+생성 시 키는 입력하지 않습니다. Azure가 자동 발급하며 아래로 조회합니다.
 
 ```bash
-./scripts/smoke-v1-gateway.sh <apim-host> <subscription-key>
+az rest --method post \
+  --uri "https://management.azure.com/subscriptions/${azure_subscription_id}/resourceGroups/${resource_group_name}/providers/Microsoft.ApiManagement/service/${apim_name}/subscriptions/${apim_subscription_id}/listSecrets?api-version=2022-08-01"
 ```
 
-gpt-5.4 (`/openai`), grok-4.3 (`/foundry`), DeepSeek-V4-Pro (`/foundry`) 각각 HTTP 200이 반환되면 Stage 1이 완료된 것입니다.
+참고: [APIM Subscription Create or Update](https://learn.microsoft.com/en-us/rest/api/apimanagement/subscription/create-or-update), [APIM Subscription List Secrets](https://learn.microsoft.com/en-us/rest/api/apimanagement/subscription/list-secrets)
 
-{% hint style="info" %}
-Stage 1의 거버넌스는 **정적**입니다. `terraform.tfvars`의 `allowed_models` / `rate_tiers` / `tokens_per_minute`가 전역으로 적용되며, Cosmos DB에 소비자별 설정이 없으므로 모든 소비자가 동일한 기본값을 사용합니다.
+## 7. 호출 검증
+
+발급한 키로 스모크 테스트를 실행합니다. `<apim-host>`는 `https://`와 경로를 뺀 **호스트 이름만** 넣습니다(스크립트가 내부에서 `https://<host>/openai/...`로 조립).
+
+```bash
+# infra/ 디렉터리에서: 게이트웨이 호스트만 추출
+apim_host="$(terraform output -raw apim_gateway_url | sed -E 's#https?://##; s#/.*##')"   # 예: apim-aigw-dev-eus2.azure-api.net
+./scripts/smoke-v1-gateway.sh "$apim_host" "<subscription-key>"
+```
+
+| 확인 항목 | 기대 결과 |
+|---|---|
+| `/openai` | gpt 계열 모델 호출 성공 |
+| `/vscode/models` | VS Code BYOK 경로 호출 성공 |
+| `/foundry` | Foundry/partner 모델 호출 성공 |
+| 403/429 | 모델 미허용 또는 rate limit 초과 시 정책 응답 |
+
+{% hint style="warning" %}
+스크립트는 `gpt-5.4`, `gpt-5.4-mini`, `grok-4.3`, `DeepSeek-V4-Pro` 배포 이름을 직접 호출합니다. 이 이름이 `allowed_models`와 실제 deployment에 없으면 해당 항목은 403/404로 실패합니다. 배포한 모델 이름이 다르면 `scripts/smoke-v1-gateway.sh`의 모델 값을 본인 환경에 맞게 수정하세요. `apim_public=false`이면 노트북 대신 점프박스/VNet 안에서 실행합니다.
 {% endhint %}
 
-## 3. 지원되지 않는 배포 방식
+## 8. 다음 단계
 
-***
-
-{% hint style="danger" %}
-**아래 두 가지는 현재 지원되지 않습니다. 시도하지 마세요.**
-
-**(a) 기존 APIM 인스턴스 재사용 불가**
-이 스택은 `azurerm_api_management` 리소스를 무조건 새로 생성합니다. 기존 APIM 인스턴스를 `data` 소스로 읽거나 `reuse_apim` 토글로 선택하는 옵션이 없습니다. [기존 Foundry 재사용](../04-reuse-foundry.md)처럼 기존 APIM을 재사용하려면 인프라 코드 변경이 필요하며, 현재 버전에서는 미지원입니다.
-
-**(b) Azure 포털(콘솔) 수동 배포 불가**
-APIM 정책은 약 200줄 분량의 Terraform 템플릿(`.tftpl`) XML로 생성되며, named value 14개(`allowed-models`, `tokens-per-minute`, `tier-*-tpm` 등)와 `azapi` REST PATCH(커스텀 메트릭 활성화)에 의존합니다. 포털 UI에서 이 구성을 손으로 재현하는 것은 현실적이지 않습니다. **Terraform이 사실상 필수입니다.**
-{% endhint %}
-
-## 4. 다음 단계
-
-***
-
-Stage 1이 완료되면 아래 순서로 나머지 컴포넌트를 추가할 수 있습니다.
-
-| 단계 | 내용 | 참고 페이지 |
-|---|---|---|
-| Stage 2 | Admin UI 추가 — 셀프서비스 소비자·키·정책 관리 | [시나리오 B: Admin UI 배포](case-admin-ui.md) |
-| Stage 3 | config-sync worker 추가 — Cosmos→APIM 동기화, 소비자별 override, 모델 전환 활성 | [배포](../03-deploy.md) 챕터 Staged Rollout |
-
-기존 AIServices(Foundry) 계정을 백엔드로 재사용하려면 Stage 1 이전에 계정 잠금 준비가 선행되어야 합니다. 자세한 내용은 [기존 Foundry 재사용](../04-reuse-foundry.md)을 참고하세요.
+| 목적 | 이동 |
+|---|---|
+| Admin UI 배포 | [Admin UI 배포](case-admin-ui.md) |
+| worker와 Admin UI까지 전체 배포 | [All-in-one 배포](case-all-in-one.md) |
+| 직접 HTTP 호출 | [직접 API 호출](../07-connect-clients/direct-api.md) |
+| 클라이언트 연결 | [클라이언트 온보딩](../07-connect-clients.md) |

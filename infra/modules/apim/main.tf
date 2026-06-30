@@ -114,6 +114,16 @@ variable "tokens_per_minute" {
   description = "Per-consumer token-per-minute limit."
 }
 
+variable "model_tokens_per_minute" {
+  type        = map(number)
+  description = "Default per-model token-per-minute limits, derived from model deployment capacity."
+
+  validation {
+    condition     = alltrue([for v in values(var.model_tokens_per_minute) : v > 0])
+    error_message = "model_tokens_per_minute values must be positive numbers."
+  }
+}
+
 variable "token_quota" {
   type        = number
   description = "Per-consumer token quota per period."
@@ -232,12 +242,13 @@ resource "azurerm_api_management_api_policy" "openai" {
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode   = var.client_auth_mode
-    entra_tenant_id    = var.entra_tenant_id
-    entra_api_audience = var.entra_api_audience
-    entra_team_claim   = var.entra_team_claim
-    rate_tiers         = var.rate_tiers
-    foundry_v1_base    = var.foundry_v1_base
+    client_auth_mode        = var.client_auth_mode
+    entra_tenant_id         = var.entra_tenant_id
+    entra_api_audience      = var.entra_api_audience
+    entra_team_claim        = var.entra_team_claim
+    rate_tiers              = var.rate_tiers
+    model_tokens_per_minute = var.model_tokens_per_minute
+    foundry_v1_base         = var.foundry_v1_base
   })
 
   depends_on = [
@@ -267,8 +278,8 @@ resource "azurerm_api_management_api" "vscode_openai" {
   resource_group_name   = var.resource_group_name
   api_management_name   = azurerm_api_management.apim.name
   revision              = "1"
-  display_name          = "VS Code Azure OpenAI"
-  path                  = "vscode/openai"
+  display_name          = "VS Code Models"
+  path                  = "vscode/models"
   protocols             = ["https"]
   subscription_required = true
   service_url           = "${trimsuffix(var.openai_endpoint, "/")}/openai"
@@ -289,12 +300,13 @@ resource "azurerm_api_management_api_policy" "vscode_openai" {
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode   = "subscription-key"
-    entra_tenant_id    = var.entra_tenant_id
-    entra_api_audience = var.entra_api_audience
-    entra_team_claim   = var.entra_team_claim
-    rate_tiers         = var.rate_tiers
-    foundry_v1_base    = var.foundry_v1_base
+    client_auth_mode        = "subscription-key"
+    entra_tenant_id         = var.entra_tenant_id
+    entra_api_audience      = var.entra_api_audience
+    entra_team_claim        = var.entra_team_claim
+    rate_tiers              = var.rate_tiers
+    model_tokens_per_minute = var.model_tokens_per_minute
+    foundry_v1_base         = var.foundry_v1_base
   })
 
   depends_on = [
@@ -409,12 +421,13 @@ resource "azurerm_api_management_api_policy" "foundry" {
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   xml_content = templatefile(var.foundry_policy_template_path, {
-    client_auth_mode   = var.client_auth_mode
-    entra_tenant_id    = var.entra_tenant_id
-    entra_api_audience = var.entra_api_audience
-    entra_team_claim   = var.entra_team_claim
-    rate_tiers         = var.rate_tiers
-    foundry_v1_base    = var.foundry_v1_base
+    client_auth_mode        = var.client_auth_mode
+    entra_tenant_id         = var.entra_tenant_id
+    entra_api_audience      = var.entra_api_audience
+    entra_team_claim        = var.entra_team_claim
+    rate_tiers              = var.rate_tiers
+    model_tokens_per_minute = var.model_tokens_per_minute
+    foundry_v1_base         = var.foundry_v1_base
   })
 
   depends_on = [
@@ -484,7 +497,7 @@ output "gateway_url" {
 
 output "vscode_base_url" {
   description = "Base URL prefix for VS Code BYOK model URLs."
-  value       = "${azurerm_api_management.apim.gateway_url}/vscode"
+  value       = "${azurerm_api_management.apim.gateway_url}/vscode/models"
 }
 
 output "private_ip" {

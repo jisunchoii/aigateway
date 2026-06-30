@@ -6,6 +6,49 @@ cost_center          = "CC-1234"
 apim_publisher_name  = "Platform Team"
 apim_publisher_email = "platform-team@example.com"
 apim_sku_name        = "Developer_1"
+# apim_public        = true   # uncomment to expose APIM publicly (external dev tools)
+
+# ── Model backend ──────────────────────────────────────────────────────────
+# Pick ONE path: greenfield (create) below, or brownfield reuse (commented).
+reuse_foundry = false
+
+# Greenfield: Terraform creates these deployments. Deployment name = real model name.
+openai_deployments = {
+  "gpt-5.4" = {
+    model_name    = "gpt-5.4"
+    model_version = "2026-03-05"
+    sku_name      = "GlobalStandard"
+    capacity      = 10
+  }
+}
+
+foundry_deployments = {
+  "grok-4.3" = {
+    model_name    = "grok-4.3"
+    model_format  = "xAI"
+    model_version = "1"
+    sku_name      = "GlobalStandard"
+    capacity      = 10
+  }
+  "DeepSeek-V4-Pro" = {
+    model_name    = "DeepSeek-V4-Pro"
+    model_format  = "DeepSeek"
+    model_version = "2026-04-23"
+    sku_name      = "GlobalStandard"
+    capacity      = 10
+  }
+}
+
+# Brownfield reuse: set reuse_foundry=true, drop openai_deployments, and declare the
+# EXISTING account's deployment names (map key MUST match the real deployment name).
+# existing_foundry_name = "<existing-aiservices-account>"
+# existing_foundry_rg   = "<existing-resource-group>"
+# foundry_deployments = {
+#   "gpt-5.4" = { model_name = "gpt-5.4", model_format = "OpenAI", model_version = "2026-03-05", sku_name = "GlobalStandard", capacity = 10 }
+# }
+
+# Models clients may request (must match deployment names). Also drives the Admin UI model list.
+allowed_models = ["gpt-5.4", "grok-4.3", "DeepSeek-V4-Pro"]
 
 # Cost guardrail (observability module)
 monthly_budget_amount = 200
@@ -15,6 +58,6 @@ budget_start_date     = "2026-06-01T00:00:00Z"
 # eastus2 may restrict B-series VM sizes; use a D-series v7 for the optional jumpbox.
 jumpbox_vm_size = "Standard_D2s_v7"
 
-# App config
-# enable_jumpbox         = true <- uncomment if you want to provision a jumpbox
-# jumpbox_admin_password = "<PASSWORD>" <- <- uncomment and fill in if you want to provision a jumpbox
+# App config — uncomment both to provision the optional jumpbox (Bastion + VM)
+# enable_jumpbox         = true
+# jumpbox_admin_password = "<PASSWORD>"

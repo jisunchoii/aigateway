@@ -38,7 +38,7 @@ output "registry_login_server" {
 }
 
 output "config_store_endpoint" {
-  description = "Cosmos DB document endpoint. Pass to scripts/seed-config.ps1 -CosmosEndpoint."
+  description = "Cosmos DB document endpoint. Pass to scripts/seed-cosmos-jumpbox.sh."
   value       = module.config_store.endpoint
 }
 

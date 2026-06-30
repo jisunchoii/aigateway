@@ -1,145 +1,187 @@
 ---
-description: "시나리오 D — 운영 중인 게이트웨이 코어에 Admin UI를 추가 배포합니다."
+description: "Admin UI 배포 — Entra 그룹 방식 결정, 이미지 빌드, tfvars, redirect URI 설정"
 ---
 
-# 시나리오 D — Admin UI 추가 배포
+# Admin UI 배포
 
+이 페이지는 APIM 게이트웨이가 이미 배포되어 있고 ACR이 준비된 상태에서 **Admin UI(React SPA + FastAPI BFF)** 를 배포하는 경로를 설명합니다. Admin UI를 배포하기 전에 먼저 **새 Entra admin 그룹을 만들지, 기존 그룹을 재사용할지** 결정해야 합니다.
 
-게이트웨이 코어(`worker_image`·`admin_ui_image` 모두 비어 있는 상태)가 이미 운영 중이고, 소비자 등록·구독 키 발급·정책 관리를 위한 셀프서비스 Admin UI를 추가하고 싶을 때 이 시나리오를 따르세요.
+## 1. 선택 기준
 
-[Azure Container Apps](https://learn.microsoft.com/ko-kr/azure/container-apps/overview)에 배포되는 Admin UI는 `admin_ui_image` 변수가 설정되어야만 생성됩니다. 아래 절차는 **2차 apply**만으로 Admin UI를 추가하는 최소 경로입니다.
+{% hint style="success" %}
+**이 경로가 맞는 경우**
 
-***
+- APIM 게이트웨이와 ACR이 이미 준비되어 있다.
+- consumer 등록, 구독 키 발급, 정책 관리를 UI로 처리하고 싶다.
+- Admin UI 쓰기 권한을 Entra admin 그룹으로 제한할 수 있다.
+- `admin_ui_public` 값을 첫 배포 전에 결정할 수 있다.
+{% endhint %}
 
-## 1. Admin UI 이미지 빌드·푸시
+{% hint style="warning" %}
+`admin_ui_public`은 Azure Container Apps 환경 생성 시점에 결정됩니다. 나중에 바꾸면 ACA 환경과 Admin UI 앱이 재생성될 수 있으므로 첫 Admin UI 배포 전에 확정하세요.
+{% endhint %}
 
-***
+## 2. 배포 전 결정
 
-ACR이 1차 apply에서 이미 생성되어 있어야 합니다. `infra/` 디렉터리에서 아래 명령을 실행하세요.
+| 결정 | 선택지 | 기준 |
+|---|---|---|
+| Admin 그룹 | 새 그룹 생성 / 기존 그룹 재사용 | 데모는 새 그룹, 운영 조직은 기존 보안 그룹 재사용 |
+| Entra 앱 등록 | 새로 생성 / 기존 앱 재사용 | 새 배포는 스크립트 생성, 조직 표준 앱이 있으면 재사용 |
+| Admin UI 공개 여부 | `admin_ui_public=true/false` | 외부 브라우저 접속이 필요하면 public |
+| config-sync worker | 함께 배포 / 나중에 배포 | consumer별 동적 정책과 budget switch가 필요하면 함께 배포 |
 
-```bash
-acr=$(terraform output -raw registry_login_server)
-reg=$(terraform output -raw registry_name)
-az acr build --registry $reg --image admin-ui:latest ../app/admin-ui
-```
+Admin UI에는 네 가지 Entra 값이 필요합니다. 사용자가 Admin UI 화면에 직접 입력하는 값이 아니라, 배포자가 Admin UI를 켜기 전에 `terraform.tfvars`에 넣는 값입니다. 배포 후 BFF가 `/api/config`로 SPA에 내려주고, 브라우저 앱은 그 값을 사용해 MSAL 로그인을 자동 구성합니다.
 
-config-sync-worker도 아직 배포되지 않았다면 함께 빌드하세요.
+| 값 | tfvars 변수 | 역할 |
+|---|---|---|
+| Tenant ID | `entra_tenant_id` | SPA 로그인 authority와 BFF 토큰 검증에 사용할 Entra tenant |
+| Admin 보안 그룹 Object ID | `admin_group_object_id` | Admin UI 쓰기 권한 허용 그룹 |
+| BFF API audience | `bff_api_audience` | SPA가 BFF 호출용 토큰을 받을 대상 |
+| SPA client ID | `spa_client_id` | React SPA의 PKCE 로그인 앱 |
 
-```bash
-az acr build --registry $reg --image config-sync-worker:latest ../app/config-sync-worker
-```
+## 3. Entra ID 객체 준비
 
-[ACR 원격 빌드](https://learn.microsoft.com/ko-kr/azure/container-registry/container-registry-tutorial-quick-task)는 로컬 Docker 없이 Azure 클라우드에서 빌드·푸시됩니다. `az login` 완료 상태라면 키나 비밀번호가 필요 없습니다.
+<figure><img src="../images/screenshot-entra-admin-ui-groups.png" alt="Azure Portal Entra ID에서 Admin 그룹과 앱 등록을 확인하는 화면"><img src="../images/screenshot-entra-admin-ui-apps.png" alt="Azure Portal Entra ID에서 Admin 그룹과 앱 등록을 확인하는 화면"><figcaption>Entra ID → Groups / App registrations에서 Admin 그룹, BFF API 앱, SPA 앱 확인</figcaption></figure>
 
-***
+### 옵션 A — 새 Admin 그룹과 앱 등록 생성
 
-## 2. Entra ID 앱 등록 3종 준비
-
-***
-
-Admin UI는 [Entra ID](https://learn.microsoft.com/ko-kr/entra/fundamentals/whatis) OIDC 로그인과 Admin 그룹 게이트로 보호됩니다. 아래 스크립트가 필요한 앱 등록 객체 3종을 자동으로 생성합니다.
+신규 데모/검증 환경에서는 스크립트를 그대로 실행합니다. 스크립트는 `AI Gateway Admins` 그룹을 만들고, 현재 로그인 사용자를 그룹에 추가한 뒤 BFF API 앱과 SPA 앱을 생성합니다.
 
 ```bash
 ./scripts/app-registration.sh
 ```
 
-| 출력 값 | 설명 |
-|---|---|
-| `admin_group_object_id` | Admin UI 접근을 허용할 Entra ID 보안 그룹 Object ID |
-| `bff_api_audience` | BFF API 앱 등록의 `api://` 형식 audience URI |
-| `spa_client_id` | SPA(public-client) 앱 등록의 클라이언트 ID |
+출력된 네 값을 `infra/` 디렉터리의 `terraform.tfvars` 파일에 입력합니다.
 
-{% hint style="info" %}
-이미 운영 중인 Entra 그룹을 재사용하려면 스크립트 대신 [기존 Entra 그룹 재사용](case-entra-group.md) 시나리오를 참고하세요.
-{% endhint %}
-
-스크립트 실행 후 출력된 세 값을 기록해 두세요. 다음 단계 tfvars에 입력합니다.
-
-***
-
-## 3. tfvars에 Admin UI 변수 추가
-
-***
-
-`infra/terraform.tfvars`에 아래 변수를 추가하세요.
-
-```hcl
-admin_ui_image        = "<registry_login_server>/admin-ui:latest"
-admin_ui_public       = true
-admin_group_object_id = "<entra security group object id>"
+``` 
+entra_tenant_id       = "<tenant id>"
+admin_group_object_id = "<created admin group object id>"
 bff_api_audience      = "api://<bff app id>"
 spa_client_id         = "<spa app id>"
 ```
 
-`<registry_login_server>`는 `terraform output -raw registry_login_server`로 확인합니다.
+스크립트가 admin consent를 자동으로 부여하지 못했다면, tenant admin 권한으로 아래 URL을 열어 SPA가 BFF API의 `access_as_user` scope를 사용할 수 있도록 동의합니다. 동의가 없거나 BFF API service principal이 없으면 로그인 중 `AADSTS650052` 오류가 발생할 수 있습니다.
 
-worker도 이 시점에 추가한다면 함께 설정하세요.
+```text
+https://login.microsoftonline.com/<tenant id>/adminconsent?client_id=<spa app id>
+```
 
-```hcl
+### 옵션 B — 기존 Admin 그룹 재사용
+
+운영 조직에 이미 AI 관리자 보안 그룹이 있다면 새 그룹을 만들지 말고 기존 그룹의 Object ID를 사용합니다.
+
+```bash
+az ad group show --group "<existing-admin-group-name-or-id>" --query id -o tsv
+```
+
+`scripts/app-registration.sh`는 현재 admin 그룹도 항상 생성합니다. 기존 그룹을 재사용하려면 아래 중 하나를 선택하세요.
+
+| 방식 | 설명 |
+|---|---|
+| BFF/SPA 앱만 수동 생성 | 조직 표준 Entra 앱 등록 절차로 BFF API audience와 SPA client ID 준비 |
+| 스크립트 일부만 실행 | `app-registration.sh`에서 admin group 생성 부분을 제외하고 BFF/SPA 앱 등록 부분만 실행 |
+| 기존 BFF/SPA 앱 재사용 | 기존 앱의 audience와 client ID를 조회해 tfvars에 입력 |
+
+기존 앱을 재사용하는 경우 값은 아래처럼 조회합니다.
+
+```bash
+az account show --query tenantId -o tsv
+az ad app show --id "<bff-app-id>" --query "identifierUris[0]" -o tsv
+az ad app show --id "<spa-app-id>" --query appId -o tsv
+```
+
+기존 앱을 재사용할 때도 BFF API app과 SPA app의 service principal이 tenant에 존재해야 하며, SPA에 BFF API `access_as_user` delegated permission과 admin consent가 필요합니다.
+
+## 4. 이미지 빌드
+
+ACR은 APIM 게이트웨이 배포 단계에서 이미 만들어져 있어야 합니다. `infra/` 디렉터리에서 Admin UI 이미지를 빌드합니다.
+
+```bash
+acr=$(terraform output -raw registry_login_server)
+reg=$(terraform output -raw registry_name)
+
+az acr build --registry "$reg" --image admin-ui:latest ../app/admin-ui
+```
+
+config-sync worker도 같은 apply에서 배포하려면 함께 빌드합니다.
+
+```bash
+az acr build --registry "$reg" --image config-sync-worker:latest ../app/config-sync-worker
+```
+
+## 5. tfvars 핵심값
+
+아래 값은 `infra/` 디렉터리의 `terraform.tfvars` 파일에서 수정합니다.
+
+``` 
+admin_ui_image        = "<registry_login_server>/admin-ui:latest"
+admin_ui_public       = true
+entra_tenant_id       = "<tenant id>"
+admin_group_object_id = "<entra security group object id>"
+bff_api_audience      = "api://<bff app id>"
+spa_client_id         = "<spa app id>"
+
+# worker도 함께 배포할 때만 설정
 worker_image = "<registry_login_server>/config-sync-worker:latest"
 ```
 
-{% hint style="warning" %}
-**`admin_ui_public`은 변경 불가(immutable)입니다.** 이 값은 [Azure Container Apps 환경](https://learn.microsoft.com/ko-kr/azure/container-apps/environment) 생성 시점에 결정되며, 이후 변경하면 ACA 환경과 Admin UI 앱이 **재생성**됩니다. 운영 중 변경은 다운타임을 유발하므로, 첫 Admin UI 배포 전에 반드시 확정하세요.
-{% endhint %}
-
-| 변수 | 설명 |
+| 변수 | 의미 |
 |---|---|
-| `admin_ui_image` | admin-ui 컨테이너 이미지 전체 URI |
-| `admin_ui_public` | `true`이면 인터넷에서 직접 접근 가능 (인증은 여전히 필요) |
-| `admin_group_object_id` | Admin UI에 로그인할 수 있는 Entra 보안 그룹 |
-| `bff_api_audience` | BFF API가 토큰 검증에 사용하는 audience |
-| `spa_client_id` | SPA의 PKCE 인증 흐름에 사용하는 클라이언트 ID |
+| `admin_ui_image` | Admin UI 컨테이너 이미지 전체 URI |
+| `admin_ui_public` | Admin UI public FQDN 노출 여부 |
+| `entra_tenant_id` | Admin UI 로그인에 사용할 Entra tenant ID. `az account show --query tenantId -o tsv`로 확인 |
+| `admin_group_object_id` | Admin UI 쓰기 권한을 가진 Entra 보안 그룹 |
+| `bff_api_audience` | BFF API 토큰 audience |
+| `spa_client_id` | SPA public-client app ID |
+| `worker_image` | config-sync worker 이미지. 비워 두면 worker 미배포 |
 
-`client_auth_mode = "entra-id"`로 설정한 경우 `entra_tenant_id`도 함께 지정해야 합니다.
+`entra_tenant_id`는 Admin UI 배포 시 항상 필요합니다. `client_auth_mode="entra-id"`로 APIM 클라이언트 인증까지 Entra ID로 바꾸는 경우에도 같은 값을 사용합니다.
 
-```hcl
-entra_tenant_id = "<azure tenant id>"
-```
-
-***
-
-## 4. 두 번째 terraform apply
-
-***
-
-변수가 모두 채워지면 apply를 실행합니다.
+## 6. Terraform apply
 
 ```bash
+cd infra
 terraform apply
 ```
 
-이 apply는 APIM을 재구성하지 않으므로 1차 apply보다 훨씬 빠르게 완료됩니다. 완료 후 Admin UI FQDN을 확인하세요.
+완료 후 Admin UI FQDN을 확인합니다.
 
 ```bash
 terraform output admin_ui_fqdn
 ```
 
-***
+## 7. SPA redirect URI 등록
 
-## 5. SPA redirect URI 업데이트 및 검증
-
-***
-
-Admin UI FQDN이 확정되면 Entra ID 앱 등록의 SPA redirect URI에 추가해야 합니다. 아래 명령을 실행하세요.
+Admin UI FQDN이 확정되면 SPA 앱 등록의 redirect URI에 추가합니다.
 
 ```bash
-spa_app_id="$(az ad app list --display-name "AI Gateway SPA" --query "[].appId" -o tsv)"
-fqdn=$(terraform output -raw admin_ui_fqdn)
-oid=$(az ad app show --id "$spa_app_id" --query id -o tsv)
-az rest --method PATCH --uri "https://graph.microsoft.com/v1.0/applications/$oid" \
-  --headers 'Content-Type=application/json' \
-  --body "{\"spa\":{\"redirectUris\":[\"https://$fqdn\"]}}"
+spa_app_id="<spa_client_id>"
+admin_ui_fqdn="$(terraform output -raw admin_ui_fqdn)"
+spa_object_id="$(az ad app show --id "$spa_app_id" --query id -o tsv)"
+
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/${spa_object_id}" \
+  --headers "Content-Type=application/json" \
+  --body "{\"spa\":{\"redirectUris\":[\"https://${admin_ui_fqdn}\"]}}"
 ```
 
-상세 절차는 [배포 — Seed 및 최종 설정](../03-deploy.md#8-seed-및-최종-설정) 절을 참고하세요.
+## 8. 검증
 
-### 검증
-
-브라우저에서 `https://<admin_ui_fqdn>`에 접속하면 Entra ID 로그인 화면이 나타납니다. Admin 그룹 멤버 계정으로 로그인하면 Admin UI 대시보드가 열립니다.
+| 확인 항목 | 기대 결과 |
+|---|---|
+| Admin UI 접속 | `https://<admin_ui_fqdn>`에서 Entra 로그인 화면 표시 |
+| 그룹 멤버 로그인 | consumer 등록, 구독 키 발급, 정책 수정 가능 |
+| 그룹 비멤버 로그인 | 쓰기 작업 차단 또는 접근 거부 |
+| config-sync worker | worker를 배포한 경우 Cosmos 설정이 APIM named value로 동기화 |
 
 {% hint style="info" %}
-Admin UI는 `admin_ui_public = true`여도 Entra ID 인증 없이는 접근할 수 없습니다. 공개 URL은 편의 목적(로그인 페이지 접근)이며, 인증을 우회하지 않습니다.
+`admin_ui_public=true`여도 Admin UI는 Entra ID 인증과 admin 그룹 검사를 통과해야 사용할 수 있습니다. public FQDN은 로그인 페이지 접근을 위한 노출이며 인증 우회가 아닙니다.
 {% endhint %}
 
-로그인 후 정상 동작을 확인했으면 [운영](../06-operate.md) 챕터로 이동하여 소비자 등록과 정책 설정을 진행하세요.
+## 9. 다음 단계
+
+| 목적 | 이동 |
+|---|---|
+| consumer 등록과 key 발급 | [운영](../06-operate.md) |
+| APIM 직접 호출 | [직접 API 호출](../07-connect-clients/direct-api.md) |
+| 클라이언트 연결 | [클라이언트 온보딩](../07-connect-clients.md) |

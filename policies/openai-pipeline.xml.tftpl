@@ -160,6 +160,14 @@
                          remaining-tokens-variable-name="remainingTokens" />
       </when>
 %{ endfor ~}
+%{ for model, tpm in model_tokens_per_minute ~}
+      <when condition='@((string)context.Variables["effectiveTier"] == "default" && (string)context.Variables["effectiveDeployment"] == "${model}")'>
+        <llm-token-limit counter-key="@((string)context.Variables["consumerId"])"
+                         tokens-per-minute="${tpm}" token-quota="{{token-quota}}"
+                         token-quota-period="{{token-quota-period}}" estimate-prompt-tokens="false"
+                         remaining-tokens-variable-name="remainingTokens" />
+      </when>
+%{ endfor ~}
       <otherwise>
         <llm-token-limit counter-key="@((string)context.Variables["consumerId"])"
                          tokens-per-minute="{{tokens-per-minute}}" token-quota="{{token-quota}}"

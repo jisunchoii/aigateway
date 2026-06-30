@@ -1,364 +1,208 @@
 ---
-description: "향후 확장 — Claude Code(Anthropic Messages), Responses API, Entra ID 클라이언트 인증 (권장 순서 C→A→B)"
+description: "향후 지원 계획 — Entra ID 인증, Claude Code, Codex/Responses API"
 ---
 
-# 향후 확장
+# 향후 지원 계획
 
-현재 llm-gateway는 OpenAI 호환 클라이언트(VS Code BYOK, GitHub Copilot CLI, opencode, 직접 curl)를 지원합니다. 아래 세 가지 확장은 현재 코드베이스에 이미 일부 구현되어 있거나, 인프라를 최소한으로 추가해 활성화할 수 있는 항목들입니다.
+이 페이지는 아직 공식 온보딩 경로로 제공하지 않는 클라이언트와 인증 방식을 **지원 후보**로 정리합니다. 지금 지원하는 경로는 [클라이언트 온보딩](07-connect-clients.md)에 있고, 이 페이지는 다음에 제품화할 후보의 우선순위와 설계 기준을 설명합니다.
 
-- [1. 확장 개요](#1-확장-개요)
-- [2. 확장 A — Claude Code 입구](#2-확장-a--claude-code-입구)
-- [3. 확장 B — Responses API](#3-확장-b--responses-api)
-- [4. 확장 C — Entra ID 클라이언트 인증](#4-확장-c--entra-id-클라이언트-인증-구독-키-미사용)
+## 1. 지원 후보와 우선순위
 
-권장 구현 순서: **C → A → B** (아래 [1. 확장 개요](#1-확장-개요) 참조)
+{% hint style="success" %}
+**권장 표현**
 
-## 1. 확장 개요
+문서 제목은 **“향후 지원 계획”**이 자연스럽습니다. 아직 공식 지원하지 않는 클라이언트와 인증 방식을 순서대로 제품화한다는 의미가 명확합니다.
+{% endhint %}
 
-***
+| 후보 | 목적 | 현재 상태 | 우선순위 |
+|---|---|---|---:|
+| Entra ID 클라이언트 인증 | API key 없이 JWT로 consumer 식별 | Terraform/APIM 토글 구현 완료, 운영 검증 전 | 1 |
+| Claude Code | Anthropic Messages API 클라이언트 연결 | 신규 APIM 경로 필요 | 2 |
+| Codex + Responses API | Codex provider와 stateful Responses API 연결 | 신규 APIM 경로와 클라이언트 설정 검증 필요 | 2 |
 
-### 1. 세 가지 확장 요약
-
-***
-
-| 확장 | 설명 | 구현 상태 |
-|---|---|---|
-| **C — Entra ID 클라이언트 인증** | 구독 키 없이 Entra ID 토큰으로 클라이언트 인증 | 토글 구현 완료, 운영 검증 전 |
-| **A — Claude Code 입구** | Anthropic Messages API(`/v1/messages`) 신규 APIM 입구 추가 | 미구현 (신규 APIM API 필요) |
-| **B — Responses API** | gpt 전용 stateful Responses API 입구 추가 | 미구현 (신규 입구 필요) |
-
----
-
-### 2. 권장 구현 순서: **C → A → B**
-
-***
-
-세 확장의 권장 구현 순서는 **C → A → B**입니다.
-
-1. **C를 먼저**: `client_auth_mode="entra-id"` 토글이 이미 구현되어 있습니다. production 권고 사항(consumerId 설계 개선)만 적용하면 운영에 투입할 수 있습니다. 이미 있는 기능을 완성하는 것이므로 리스크가 가장 낮습니다.
-
-2. **A를 다음으로**: Claude Code를 게이트웨이에 연결하려는 수요가 큽니다. 신규 APIM API를 추가해야 하지만, 기존 consumerId·rate·budget·metric 파이프라인을 그대로 재사용할 수 있어 개발 범위가 명확합니다.
-
-3. **B를 마지막으로**: Responses API는 현재 연동된 클라이언트가 보내지 않는 형식입니다. 클라이언트 측 준비가 완료된 뒤에 구현해도 늦지 않습니다.
-
-각 확장 상세는 아래 [4. 확장 C — Entra ID 클라이언트 인증](#4-확장-c--entra-id-클라이언트-인증-구독-키-미사용), [2. 확장 A — Claude Code 입구](#2-확장-a--claude-code-입구), [3. 확장 B — Responses API](#3-확장-b--responses-api) 절을 참조하세요.
-
-## 2. 확장 A — Claude Code 입구
-
-***
-
-Claude Code는 Anthropic Messages API(`/v1/messages`) 형식으로만 통신합니다. 현재 llm-gateway의 입구(`/openai`, `/foundry`)는 OpenAI 호환 형식만 처리하므로, **Claude Code는 현재 이 게이트웨이에 직접 연결할 수 없습니다**. 이 확장은 신규 APIM API를 추가하여 Claude Code를 게이트웨이로 라우팅하는 방법을 설명합니다.
+우선순위는 **Entra ID 인증 운영화 → Claude Code 또는 Codex 중 수요가 큰 클라이언트 → 남은 클라이언트** 순서가 안전합니다. Entra ID 인증을 먼저 안정화하면 Claude Code와 Codex 모두 `Authorization: Bearer <token>` 기반 흐름으로 설계하기 쉬워집니다.
 
 {% hint style="info" %}
-이 확장은 현재 미구현 상태입니다. 신규 APIM API 추가가 필요하며 운영 환경에서 검증되지 않았습니다.
+Claude Code와 Codex는 서로 다른 문제입니다. Claude Code는 Anthropic Messages API(`/v1/messages`) 형식이고, Codex는 OpenAI provider 설정과 Responses API wire format 검증이 핵심입니다.
 {% endhint %}
 
----
+## 2. Entra ID 클라이언트 인증 운영화
 
-### 1. 현황 및 제약
-
-***
-
-| 항목 | 현재 상태 |
-|---|---|
-| Claude Code API 형식 | Anthropic Messages API `POST /v1/messages` |
-| 현재 입구 | `/openai` (OpenAI path-route), `/foundry` (OpenAI body-route) |
-| Claude Code 지원 여부 | **미지원** — 형식 불일치로 현재 입구에 연결 불가 |
-
----
-
-### 2. 구현 방향
-
-***
-
-#### Step 1. 신규 APIM API 추가
-
-| 항목 | 값 |
-|---|---|
-| APIM API path | `anthropic` |
-| 백엔드 엔드포인트 | Foundry Claude 배포의 `.../anthropic` 경로 |
-| 클라이언트 요청 형식 | `POST https://<apim-host>/anthropic/v1/messages` |
-
-Azure AI Foundry는 Claude 모델에 대해 Anthropic Messages API 호환 엔드포인트(`.../anthropic`)를 제공합니다. 신규 APIM API는 이 경로를 백엔드로 지정합니다.
-
-아래는 Claude Code가 게이트웨이로 전송하는 요청 형식입니다.
-
-```jsonc
-// Claude Code → APIM /anthropic/v1/messages
-POST https://<apim-host>/anthropic/v1/messages
-anthropic-version: 2023-06-01
-Authorization: Bearer <APIM subscription key>
-
-{
-  "model": "claude-sonnet-4-5",
-  "max_tokens": 1024,
-  "messages": [{"role": "user", "content": "Hello"}]
-}
-```
-
-#### Step 2. 클라이언트 설정
-
-Claude Code 클라이언트에 아래 환경 변수를 설정합니다.
-
-```bash
-export ANTHROPIC_BASE_URL=https://<apim-host>
-export ANTHROPIC_AUTH_TOKEN=<APIM subscription key>
-```
-
-`ANTHROPIC_BASE_URL`을 게이트웨이 호스트로 지정하면 Claude Code가 APIM을 통해 백엔드에 도달합니다. 구독 키는 `ANTHROPIC_AUTH_TOKEN`으로 전달됩니다.
-
-Claude Code llm-gateway 연동 공식 문서: [https://code.claude.com/docs/en/llm-gateway](https://code.claude.com/docs/en/llm-gateway) · [https://code.claude.com/docs/en/llm-gateway-protocol](https://code.claude.com/docs/en/llm-gateway-protocol)
-
-#### Step 3. 기존 파이프라인 재사용
-
-consumerId 도출, 토큰 rate limit, 예산 모델 전환, 관리 ID 백엔드 인증은 OpenAI 입구와 동일한 정책을 재사용할 수 있습니다.
-
-단, **토큰 메트릭 정책**은 수정이 필요합니다. Anthropic Messages API의 사용량 스키마는 OpenAI와 다릅니다.
-
-| API | 사용량 필드 |
-|---|---|
-| OpenAI Chat Completions | `usage.prompt_tokens` / `usage.completion_tokens` |
-| Anthropic Messages | `usage.input_tokens` / `usage.output_tokens` |
-
-`llm-emit-token-metric` 정책에서 응답 body의 `usage.input_tokens`와 `usage.output_tokens`를 읽도록 매핑을 추가해야 합니다.
-
-#### Step 4. 헤더 처리 주의 사항
-
-Anthropic Messages API는 요청에 아래 헤더를 사용합니다.
-
-| 헤더 | 역할 |
-|---|---|
-| `anthropic-version` | API 버전 지정 (예: `2023-06-01`) |
-| `anthropic-beta` | 베타 기능 활성화 |
-
-{% hint style="warning" %}
-`anthropic-version` 및 `anthropic-beta` 헤더를 APIM 정책에서 제거(strip)해서는 안 됩니다. 백엔드로 그대로 전달해야 Claude 모델이 올바르게 동작합니다.
-{% endhint %}
-
----
-
-### 3. 구현 체크리스트
-
-***
-
-- [ ] Foundry 계정에 Claude 모델 배포 확인 (Azure AI Foundry 포털)
-- [ ] `modules/apim`에 `anthropic` path APIM API 추가
-- [ ] 백엔드 URL을 Foundry Claude `.../anthropic` 경로로 설정
-- [ ] `llm-emit-token-metric` 정책에 `input_tokens`/`output_tokens` 매핑 추가
-- [ ] `anthropic-version` / `anthropic-beta` 헤더 pass-through 확인
-- [ ] consumerId·rate·budget 정책을 신규 API에 적용
-- [ ] smoke test: `POST https://<apim-host>/anthropic/v1/messages`
-
----
-
-### 4. 참고 문서
-
-***
-
-- [Claude Code llm-gateway 공식 문서](https://code.claude.com/docs/en/llm-gateway)
-- [Claude Code llm-gateway 프로토콜 명세](https://code.claude.com/docs/en/llm-gateway-protocol)
-- [Azure AI Foundry — Microsoft 파트너 모델](https://learn.microsoft.com/en-us/azure/ai-foundry/concepts/models-featured)
-- [정책 흐름](08-architecture.md) — 재사용하는 파이프라인 단계 상세
-
-## 3. 확장 B — Responses API
-
-***
-
-Responses API는 Azure OpenAI(gpt 계열)가 제공하는 stateful 대화 API입니다. 클라이언트가 `previous_response_id`를 통해 이전 응답을 참조하면 서버 측에서 대화 상태를 관리합니다. 현재 llm-gateway에 연결된 클라이언트(VS Code BYOK, GitHub Copilot CLI, opencode)는 이 형식을 보내지 않으므로 현재는 미구현 상태입니다.
-
-{% hint style="info" %}
-이 확장은 현재 미구현 상태입니다. 연결된 클라이언트 중 Responses API 형식을 사용하는 클라이언트가 생긴 뒤에 구현을 진행합니다.
-{% endhint %}
-
----
-
-### 1. Responses API 특성 및 현황
-
-***
-
-| 항목 | 설명 |
-|---|---|
-| 지원 모델 | gpt 계열 전용 (OSS 파트너 모델 미지원) |
-| 요청 형식 | `input` 필드 사용 (Chat Completions의 `messages`와 다름) |
-| 상태 관리 | `previous_response_id`로 이전 응답 참조, 30일 저장 |
-| 현재 클라이언트 지원 | 연결된 클라이언트 중 Responses API 형식을 보내는 클라이언트 없음 |
-| OSS 미지원 | grok-4.3, DeepSeek-V4-Pro 등 파트너 모델은 지원 안 함 |
-
-Chat Completions와 Responses API의 요청 body 구조 차이:
-
-```jsonc
-// Chat Completions (현재 지원)
-{
-  "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Hello"}]
-}
-
-// Responses API (확장 B)
-{
-  "model": "gpt-5.4",
-  "input": "Hello",
-  "previous_response_id": "resp_abc123"  // optional, stateful
-}
-```
-
----
-
-### 2. 구현 방향
-
-***
-
-#### Step 1. 신규 APIM 입구 추가
-
-| 항목 | 값 |
-|---|---|
-| 신규 입구 경로 | `/openai/v1/responses` |
-| 백엔드 | 기존 동일 v1 백엔드 (`/openai/v1`) |
-| 라우팅 방식 | `/responses` 엔드포인트를 백엔드로 그대로 전달 |
-
-백엔드 URL 자체는 기존 v1 통일 구조를 유지합니다. 신규 입구는 `/openai/v1/responses`를 받아 동일 AIServices 계정의 `/openai/v1/responses`로 전달합니다.
-
-#### Step 2. Stateful 요청 처리
-
-`previous_response_id`를 포함한 stateful 요청은 변환 없이 백엔드로 통과합니다. 대화 상태는 Azure OpenAI 서비스가 서버 측에서 관리하며(30일 보존), APIM 정책은 상태를 건드리지 않습니다.
-
-#### Step 3. 기존 정책 재사용
-
-consumerId 도출, allowed-models 검사, rate limit, 예산 모델 전환, 관리 ID 인증 정책은 기존 파이프라인을 그대로 재사용할 수 있습니다. `model` 필드 위치가 동일하므로 body rewrite 정책도 수정 없이 동작합니다.
-
----
-
-### 3. 구현 전 확인 사항
-
-***
-
-- 연결된 클라이언트 중 Responses API 형식을 사용하는 클라이언트가 생기면 구현을 진행합니다
-- gpt-5.4 계열 배포에 Responses API가 활성화되어 있는지 Azure 포털에서 확인합니다
-- `previous_response_id` 기반 stateful 세션의 APIM 정책 pass-through 동작을 검증합니다
-
----
-
-### 4. 참고 문서
-
-***
-
-- [Azure OpenAI Responses API 사용 방법](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses)
-- [Azure OpenAI API 버전 수명 주기](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/api-version-lifecycle)
-- [정책 흐름](08-architecture.md) — 재사용하는 파이프라인 단계 상세
-
-## 4. 확장 C — Entra ID 클라이언트 인증 (구독 키 미사용)
-
-***
-
-이 확장은 **이미 코드에 구현되어 있습니다**. `client_auth_mode="entra-id"` 변수 토글로 활성화할 수 있으며, APIM 정책이 구독 키 대신 JWT(Entra ID 토큰)로 클라이언트를 인증합니다. 운영 환경 검증이 완료되지 않아 확장 항목으로 분류합니다.
-
-{% hint style="info" %}
-토글 구현은 완료되어 있으나 운영 환경 검증 전입니다. 아래 체크리스트를 완료한 뒤 운영에 투입합니다.
-{% endhint %}
-
----
-
-### 1. 현재 구현 상태
-
-***
+이 항목은 신규 클라이언트 추가가 아니라, 이미 구현된 `client_auth_mode="entra-id"` 토글을 운영 가능한 상태로 검증하는 작업입니다.
 
 | 항목 | 상태 |
 |---|---|
-| `client_auth_mode="entra-id"` 토글 | 구현 완료 |
-| `validate-jwt` 정책 | 구현 완료 |
-| consumerId = JWT claim 추출 | 구현 완료 |
-| `subscription_required=false` | 구현 완료 |
-| 운영 환경 검증 | **미완료** |
+| `client_auth_mode="entra-id"` 변수 | 구현 완료 |
+| APIM `validate-jwt` 정책 | 구현 완료 |
+| JWT claim 기반 consumerId 추출 | 구현 완료 |
+| subscription key 미사용 모드 | 구현 완료 |
+| 운영 환경 검증 | 필요 |
 
----
+### consumerId claim 설계
 
-### 2. 동작 방식
+`groups` claim은 대규모 조직에서 over-claim 문제가 생길 수 있으므로 consumerId 용도로 권장하지 않습니다. 단일 값을 안정적으로 담을 수 있는 방식을 선택하세요.
 
-***
-
-`client_auth_mode="entra-id"`로 설정하면 APIM inbound 정책이 아래와 같이 바뀝니다.
-
-#### Step 1. JWT 검증
-
-`validate-jwt` 정책이 `Authorization: Bearer <token>` 헤더를 검증합니다.
-
-#### Step 2. consumerId 추출
-
-JWT의 지정된 claim 값을 `consumerId`로 추출합니다.
-
-#### Step 3. 거버넌스 파이프라인 통과
-
-이후 allowed-models 검사, rate limit, 예산 모델 전환 등 모든 거버넌스 파이프라인은 동일하게 동작합니다.
-
-구독 키 검증이 없으므로 `subscription_required=false`로 설정해야 합니다.
-
-([APIM validate-jwt 정책 공식 문서](https://learn.microsoft.com/en-us/azure/api-management/validate-jwt-policy))
-
----
-
-### 3. consumerId 설계 — 권고 사항
-
-***
-
-`client_auth_mode="entra-id"` 모드에서 consumerId를 어떤 JWT claim에서 가져올지는 중요한 설계 결정입니다.
-
-#### groups claim 사용의 문제점
-
-Azure Entra ID는 사용자가 속한 그룹을 JWT `groups` claim에 포함합니다. 그러나 이 방식에는 한계가 있습니다.
-
-- `groups` claim에는 **GUID**가 들어옵니다 (사람이 읽기 어려움)
-
-{% hint style="warning" %}
-사용자가 **150개 초과** 그룹에 속해 있으면 `groups` claim이 누락되고 Graph API 조회 링크로 대체됩니다 (over-claim 문제). consumerId 추출이 실패하므로 대규모 조직에서 `groups` claim에 의존하면 안 됩니다.
-{% endhint %}
-
-#### 권고: custom app-role 또는 extension attribute
-
-consumerId로 사용할 단일 값을 명시적으로 표현하려면 아래 방법 중 하나를 권장합니다.
-
-| 방법 | 설명 |
+| 방식 | 설명 |
 |---|---|
-| **Custom app-role** | BFF API 앱 등록에 app-role 정의 → 사용자/그룹에 역할 할당 → JWT `roles` claim으로 수신 |
-| **Extension attribute** | `user.extension_<appId>_consumerId` 형태로 디렉터리 확장 속성 정의 → JWT에 포함 |
+| Custom app role | 앱 등록에 역할 정의 → 사용자/그룹에 역할 할당 → JWT `roles` claim으로 수신 |
+| Directory extension attribute | 사용자 속성에 consumerId 저장 → JWT에 해당 claim 포함 |
 
-두 방법 모두 단일 값으로 consumerId를 명확히 표현할 수 있고, groups over-claim 문제를 피할 수 있습니다.
-
-([Azure Entra ID app roles 공식 문서](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-app-roles-in-apps))
-
----
-
-### 4. 설정 예시
-
-***
-
-```hcl
-# infra/terraform.tfvars
+```text
 client_auth_mode = "entra-id"
-entra_tenant_id  = "<your-tenant-id>"
-api_audience     = "api://<bff-app-id>"
-team_claim       = "roles"   # 또는 extension attribute 이름
+entra_tenant_id  = "<tenant-id>"
+api_audience     = "api://<gateway-api-app-id>"
+team_claim       = "roles"
 ```
 
-`team_claim` 변수가 consumerId를 추출할 JWT claim 이름을 지정합니다.
+### 운영 투입 체크리스트
 
----
+| 확인 항목 | 기대 결과 |
+|---|---|
+| audience / issuer | APIM `validate-jwt`가 올바른 tenant와 app만 허용 |
+| consumerId claim | 토큰에서 단일 consumerId 추출 |
+| 무토큰 요청 | `401 Unauthorized` |
+| 허용 모델 검사 | JWT consumerId 기준으로 `403`/허용 분기 정상 동작 |
+| rate limit / budget | subscription key 없이도 consumer별 집계 정상 동작 |
 
-### 5. 운영 투입 전 체크리스트
+## 3. Claude Code 지원 후보
 
-***
+Claude Code는 Anthropic Messages API 형식으로 요청합니다. 현재 gateway의 `/openai`, `/vscode/models`, `/foundry` 경로는 OpenAI Chat Completions 호환 형식이므로 Claude Code를 그대로 붙일 수 없습니다.
 
-- [ ] BFF API 앱 등록에 app-role 또는 extension attribute 정의
-- [ ] 테스트 사용자/서비스 주체에 역할 할당 후 JWT claim 포함 여부 확인
-- [ ] `validate-jwt` 정책의 audience, issuer, claim 추출 동작 검증
-- [ ] `subscription_required=false` 상태에서 무인증 요청이 401로 차단되는지 확인
-- [ ] rate limit, allowed-models 검사가 JWT 기반 consumerId로 정상 동작하는지 smoke test
+### 설계 방향
 
----
+| 항목 | 방향 |
+|---|---|
+| 신규 APIM path | `/anthropic/v1/messages` |
+| 백엔드 | Azure AI Foundry Claude 배포의 Anthropic Messages 엔드포인트 |
+| 요청 형식 | `POST /v1/messages`, `anthropic-version` 헤더, `messages` body |
+| 인증 | Entra ID Bearer 토큰 권장. subscription key 모드는 별도 헤더 처리 설계 필요 |
+| 재사용 정책 | consumerId, allowed models, rate limit, budget, metric 파이프라인 |
 
-### 6. 참고 문서
+```bash
+export ANTHROPIC_BASE_URL="https://<apim-host>/anthropic"
+export ANTHROPIC_AUTH_TOKEN="<entra-token-or-gateway-token>"
+```
 
-***
+{% hint style="warning" %}
+Claude Code는 일반적으로 `Authorization: Bearer <token>` 형태로 토큰을 보냅니다. 현재 subscription key 중심 경로처럼 `Ocp-Apim-Subscription-Key`를 기대하면 바로 호환되지 않을 수 있으므로, Entra ID 인증을 먼저 운영화하거나 Anthropic 경로의 인증 정책을 별도로 설계해야 합니다.
+{% endhint %}
 
+### 정책 변경 포인트
+
+| 영역 | 필요한 변경 |
+|---|---|
+| APIM API | `anthropic` API와 `/v1/messages` operation 추가 |
+| Header pass-through | `anthropic-version`, `anthropic-beta` 제거 금지 |
+| Token metric | `usage.input_tokens`, `usage.output_tokens`를 기존 metric에 매핑 |
+| Model governance | body의 `model` 값을 allowed models와 budget 정책에 연결 |
+| Smoke test | Claude 모델 배포 기준으로 `POST /anthropic/v1/messages` 호출 |
+
+## 4. Codex + Responses API 지원 후보
+
+Codex 지원은 단순히 “OpenAI 호환 endpoint 하나 추가”로 끝나지 않습니다. Codex provider가 어떤 wire API와 인증 헤더를 쓰는지 확인하고, gateway가 Responses API를 통과시킬 수 있어야 합니다.
+
+### 먼저 결정할 것
+
+| 결정 | 선택지 | 기준 |
+|---|---|---|
+| Codex wire API | Chat Completions / Responses | Codex profile에서 사용할 `wire_api` |
+| APIM 경로 | 기존 `/openai` 재사용 / 신규 `/openai/v1/responses` | Responses API를 쓰면 신규 path 필요 |
+| 인증 헤더 | `Ocp-Apim-Subscription-Key` / `api-key` / Bearer JWT | Codex provider 설정과 Entra ID 적용 여부 |
+| 지원 모델 | gpt 계열만 / partner 모델 포함 | Responses API는 gpt 계열 중심으로 먼저 검증 |
+| 모델 전환 | response-capable 모델끼리만 전환 | budget 전환이 unsupported 모델로 떨어지면 실패 |
+
+### Codex provider 설정 초안
+
+아래는 Codex를 gateway에 붙일 때 검증할 수 있는 사용자 설정 예시입니다. 실제 키 이름과 provider 동작은 Codex 버전에 맞춰 확인해야 합니다.
+
+```toml
+# ~/.codex/config.toml
+model = "gpt-5.4"
+model_provider = "aigateway"
+
+[model_providers.aigateway]
+name = "AI Gateway APIM"
+base_url = "https://<apim-host>/openai/v1"
+wire_api = "responses"
+env_http_headers = { "Ocp-Apim-Subscription-Key" = "AI_GATEWAY_API_KEY" }
+```
+
+{% hint style="info" %}
+Codex는 custom provider에서 base URL, wire API, 추가 HTTP header를 설정할 수 있습니다. gateway 쪽에서는 Codex가 실제로 보내는 path, header, streaming 방식을 먼저 캡처한 뒤 APIM operation을 고정하는 편이 안전합니다.
+{% endhint %}
+
+### Responses API 경로 설계
+
+Responses API는 Chat Completions와 body 구조가 다릅니다.
+
+```jsonc
+// 현재 Chat Completions
+{
+  "model": "gpt-5.4",
+  "messages": [{"role": "user", "content": "Hello"}]
+}
+
+// Responses API
+{
+  "model": "gpt-5.4",
+  "input": "Hello",
+  "previous_response_id": "resp_abc123"
+}
+```
+
+| 항목 | 설계 기준 |
+|---|---|
+| APIM path | `/openai/v1/responses` |
+| 백엔드 | 동일 AIServices 계정의 `/openai/v1/responses` |
+| Body 변환 | 가능하면 변환 없이 pass-through |
+| Stateful 대화 | `previous_response_id`는 APIM이 저장하지 않고 백엔드로 전달 |
+| Streaming | SSE 응답을 끊지 않고 pass-through |
+| Tool calls | Codex agent payload를 수정하지 않고 전달 |
+| Token metric | `usage.input_tokens`, `usage.output_tokens`, `usage.total_tokens` 매핑 |
+
+### 모델 권한과 budget 정책 보강
+
+Responses API 경로는 allowed models와 budget 정책을 그대로 재사용하되, 전환 후보를 더 엄격하게 제한해야 합니다.
+
+| 정책 | 보강 내용 |
+|---|---|
+| Allowed models | Responses API를 지원하는 gpt 모델만 허용 |
+| Budget model switch | 전환 사다리를 response-capable 모델로만 구성 |
+| Partner/OSS 모델 | `/openai/v1/responses` 경로에서는 제외 |
+| Stateful 세션 | `previous_response_id`가 있는 요청에서 모델 전환이 안전한지 별도 검증 |
+
+{% hint style="warning" %}
+Responses API 요청을 budget 정책으로 다른 모델에 전환할 때, 이전 응답 ID와 모델 호환성이 깨질 수 있습니다. `previous_response_id`가 있는 요청은 모델 전환을 금지하거나, 같은 모델 패밀리 안에서만 전환하도록 정책을 분리하는 것이 안전합니다.
+{% endhint %}
+
+### 구현 체크리스트
+
+| 확인 항목 | 기대 결과 |
+|---|---|
+| Codex config | gateway base URL과 header로 요청 생성 |
+| APIM operation | `/openai/v1/responses`가 backend까지 전달 |
+| Auth | subscription key 또는 Entra ID 모드 중 하나로 인증 성공 |
+| Governance | consumerId, allowed models, rate limit, budget 적용 |
+| Streaming | Codex 실행 중 SSE stream이 중간에 끊기지 않음 |
+| Metrics | input/output/total token metric 기록 |
+
+## 5. 공통 완료 기준
+
+새 지원 후보를 공식 온보딩 문서로 올리기 전에 아래 기준을 통과해야 합니다.
+
+| 기준 | 완료 조건 |
+|---|---|
+| 배포 | Terraform module과 variables에 반영 |
+| 보안 | subscription key 또는 Entra ID 인증 방식 명확화 |
+| 정책 | allowed models, rate limit, budget, metric 모두 적용 |
+| 관측 | Monitoring과 Application Insights에서 요청·차단·토큰 확인 |
+| 문서 | 클라이언트 온보딩에 별도 페이지 추가 |
+| 검증 | 실제 클라이언트로 smoke test 성공 |
+
+## 6. 참고 문서
+
+- [Claude Code llm-gateway](https://code.claude.com/docs/en/llm-gateway)
+- [Claude Code gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol)
+- [OpenAI Codex advanced configuration](https://developers.openai.com/codex/config-advanced)
+- [Azure OpenAI Responses API](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses)
 - [APIM validate-jwt 정책](https://learn.microsoft.com/en-us/azure/api-management/validate-jwt-policy)
-- [Azure Entra ID app roles 설정 방법](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-app-roles-in-apps)
-- [정책 흐름](08-architecture.md) — consumerId 도출 단계 상세
-- [보안 설계](08-architecture.md) — 전체 passwordless 아키텍처

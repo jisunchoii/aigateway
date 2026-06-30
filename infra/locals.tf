@@ -38,4 +38,12 @@ locals {
   # directly, so the apim module signature is unchanged across both modes.
   gpt_backend_account_id = var.reuse_foundry ? module.foundry.id : module.openai[0].id
   gpt_backend_endpoint   = var.reuse_foundry ? module.foundry.endpoint_openai_host : module.openai[0].endpoint
+
+  model_tokens_per_minute = {
+    for model in var.allowed_models : model => try(
+      var.foundry_deployments[model].capacity * 1000,
+      var.openai_deployments[model].capacity * 1000,
+      var.tokens_per_minute
+    )
+  }
 }

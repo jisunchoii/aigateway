@@ -8,6 +8,7 @@
 #   gpt-5.4-mini    in $0.75/out $4.5  -> prompt 0.00075 / completion 0.0045
 #   grok-4.3        in $1.25/out $2.5  -> prompt 0.00125 / completion 0.0025
 #   DeepSeek-V4-Pro in $1.74/out $3.48 -> prompt 0.00174 / completion 0.00348
+#   Kimi-K2.6       in $0.95/out $4.00 -> prompt 0.00095 / completion 0.004
 #
 # Usage (controller invokes via az vm run-command):
 #   ./seed-pricing-jumpbox.sh https://<account>.documents.azure.com:443/
@@ -54,7 +55,8 @@ read -r -d '' doc <<'JSON' || true
     "gpt-5.4":         { "prompt": 0.0025,  "completion": 0.015 },
     "gpt-5.4-mini":    { "prompt": 0.00075, "completion": 0.0045 },
     "grok-4.3":        { "prompt": 0.00125, "completion": 0.0025 },
-    "DeepSeek-V4-Pro": { "prompt": 0.00174, "completion": 0.00348 }
+    "DeepSeek-V4-Pro": { "prompt": 0.00174, "completion": 0.00348 },
+    "Kimi-K2.6-1":     { "prompt": 0.00095, "completion": 0.004 }
   }
 }
 JSON

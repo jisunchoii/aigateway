@@ -1,240 +1,105 @@
 ---
-description: "배포 전 준비 — Azure 요구사항, Entra ID 객체, Greenfield/Brownfield 결정"
+description: "사전 준비 — 권한·도구 확인, 모델 백엔드와 Entra 객체 방식 결정"
 ---
 
 # 사전 준비
 
+이 페이지는 배포 전에 필요한 **공통 체크리스트와 결정 항목**만 정리합니다. 모델 quota 상세, 기존 계정 보안 설정, Admin UI Entra 앱 등록 같은 실행 절차는 각 배포 페이지에서 다룹니다.
 
-## 1. Azure 요구사항
+## 1. 권한과 도구
 
-### 구독·권한
-
-- **Azure 구독** 1개 이상 필요. 게이트웨이 리소스(APIM, AIServices, Cosmos DB, Container Apps 등)가 모두 같은 구독에 배포됩니다.
-- 배포 실행자는 해당 구독에서 **Contributor + User Access Administrator** 역할(또는 동등한 커스텀 역할)이 필요합니다. Terraform이 RBAC 역할 할당을 자동으로 수행하기 때문입니다.
-
-### 모델 쿼터
-
-배포 전에 아래 모델의 쿼터가 목표 지역에 충분히 확보되어 있는지 확인하세요.
-
-| 모델 | 타입 | 쿼터 확인 위치 |
-|---|---|---|
-| gpt-5.4 | Azure OpenAI | Azure 포털 → Azure OpenAI → 쿼터 |
-| gpt-5.4-mini | Azure OpenAI | 동일 |
-| grok-4.3 | Azure AI Foundry (파트너) | Azure 포털 → AI Foundry 허브 |
-| DeepSeek-V4-Pro | Azure AI Foundry (파트너) | 동일 |
-
-{% hint style="info" %}
-**파트너 모델 참고:** grok-4.3, DeepSeek-V4-Pro 등 파트너 모델은 테넌트에서 **마켓플레이스 약관 동의**가 필요할 수 있습니다. Azure 포털의 배포 플로우에서 약관에 동의한 뒤 재시도하세요.
-{% endhint %}
-
-기본 쿼터가 낮은 경우 [Azure OpenAI 쿼터 증설 요청](https://learn.microsoft.com/ko-kr/azure/ai-services/openai/quotas-limits)을 통해 사전에 증설하세요.
-
-### 지원 지역
-
-검증된 지역:
-
-- `koreacentral` (기본값, Terraform 변수 `location`)
-- `eastus2`
-
-APIM Developer/Premium SKU와 AIServices VNet 통합이 지원되는 지역이면 대부분 동작합니다. 지역별 서비스 가용성은 [Azure 제품 지역별 가용성](https://azure.microsoft.com/ko-kr/explore/global-infrastructure/products-by-region/)에서 확인하세요.
-
-### 필요 도구
-
-| 도구 | 최소 버전 | 설치·확인 |
-|---|---|---|
-| [Terraform](https://developer.hashicorp.com/terraform/install) | ≥ 1.7 | `terraform version` |
-| [Azure CLI](https://learn.microsoft.com/ko-kr/cli/azure/install-azure-cli) | 최신 안정 | `az version` |
-| az login | — | `az login` 으로 구독 인증 |
+| 항목 | 필요 조건 |
+|---|---|
+| Azure 구독 | gateway 리소스(APIM, Cosmos DB, Container Apps, ACR 등)를 배포할 구독 |
+| Azure RBAC | 배포 실행자는 구독에서 `Contributor` + `User Access Administrator` 또는 동등 권한 필요 |
+| Entra ID 권한 | Admin UI 배포 시 앱 등록/그룹 생성 또는 기존 객체 조회 권한 필요 |
+| Marketplace 권한 | partner/community 모델을 새로 배포할 경우 Azure Marketplace 약관 동의 권한 필요 |
+| Terraform | 1.7 이상 |
+| Azure CLI | 최신 안정 버전 |
 
 ```bash
-# 버전 확인
 terraform version
 az version
 
-# Azure 로그인 (Entra ID 기반)
 az login
-az account set --subscription "<구독 ID>"
+az account set --subscription "<subscription-id>"
 ```
 
 {% hint style="info" %}
-**인증 방식:** 모든 Azure CLI 및 Terraform 작업은 `az login`으로 얻은 Entra ID 기반 토큰을 사용합니다. API 키나 서비스 주체 시크릿을 환경 변수에 노출하지 않습니다.
+이 가이드는 `az login`으로 얻은 Entra ID 기반 토큰을 사용합니다. 배포용 API key나 서비스 주체 시크릿을 문서 예시에 두지 않습니다.
 {% endhint %}
 
-### Terraform azurerm provider
+Terraform 원격 state backend는 첫 `terraform init` 전에 한 번 부트스트랩해야 합니다. 사전 준비에서는 backend 리전, 리소스 그룹, state key 이름만 정하고, 실제 생성 명령은 선택한 배포 runbook의 backend bootstrap 단계에서 실행합니다.
 
-`infra/providers.tf`에서 `hashicorp/azurerm` 공급자 버전이 고정되어 있습니다. 첫 `terraform init` 시 자동 다운로드됩니다.
+## 2. 먼저 결정할 것
 
-```bash
-cd infra
-terraform init
-```
-
-공급자 문서: [azurerm Terraform Registry](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
-
-## 2. Entra ID 객체
-
-이 프로젝트의 Terraform은 `azurerm`·`azapi` provider만 사용하므로, **Entra ID 객체 3종은 Terraform 범위 밖에서 별도로 준비**합니다. 첫 배포 전 한 번만 준비하면 되며, `./scripts/app-registration.sh` 스크립트가 이 과정을 자동화합니다.
-
-### 왜 별도로 준비하는가
-
-`azurerm` provider는 Entra ID(구 Azure AD) 앱 등록·그룹 생성을 다루지 않습니다. 이 작업은 **`azuread` provider**가 담당하므로, Terraform으로 만들려면 `azuread` provider를 추가로 구성해야 합니다. 즉 "Terraform이 못 만든다"가 아니라 **provider 구성이 별도로 필요한 영역**입니다.
-
-이 프로젝트는 다음 이유로 `azuread` provider를 추가하지 않고 az CLI 스크립트로 분리합니다.
-
-- **권한 분리** — 디렉터리(Entra) 쓰기 권한과 구독 리소스 배포 권한을 분리하려는 조직이 많습니다. IaC 실행 주체에 디렉터리 쓰기 권한을 주지 않아도 됩니다.
-- **단순한 provider 구성** — 인프라 스택은 `azurerm`·`azapi`만 유지해 의존성을 줄입니다.
-- **일회성 작업** — Entra 객체는 첫 배포 전 한 번만 만들면 되므로, 매 apply마다 Terraform이 관리할 필요가 없습니다.
-
-따라서 Entra ID 객체는 스크립트로 먼저 만들고, 생성된 ID를 tfvars에 입력하는 방식을 취합니다. (조직 정책상 Terraform으로 일괄 관리하고 싶다면 `azuread` provider를 구성해 직접 리소스화할 수도 있습니다.)
-
-{% hint style="info" %}
-**📸 [스크린샷 자리]** — Azure Portal — Entra ID 보안 그룹 생성 화면
-{% endhint %}
-
-### 3종 객체 상세
-
-#### ① Admin 보안 그룹
-
-Admin UI에 접근할 수 있는 사용자 그룹입니다. Entra ID 보안 그룹의 Object ID를 tfvars에 전달합니다.
-
-| 속성 | 값 |
-|---|---|
-| 유형 | Entra ID 보안 그룹 |
-| 목적 | Admin UI 접근 제어 (그룹 멤버만 관리 기능 접근 가능) |
-| tfvars 변수 | `admin_group_object_id` |
-
-```hcl
-# infra/terraform.tfvars
-admin_group_object_id = "<entra security group object id>"
-```
-
-참고: [Microsoft Entra 보안 그룹 관리](https://learn.microsoft.com/ko-kr/entra/fundamentals/how-to-manage-groups)
-
-#### ② BFF API 앱등록
-
-Admin UI의 FastAPI BFF(Backend For Frontend)가 사용하는 앱 등록입니다. SPA가 이 API에 접근할 때 Bearer 토큰을 발급받는 대상(audience)이 됩니다.
-
-| 속성 | 값 |
-|---|---|
-| 유형 | Entra ID 앱 등록 (웹 API) |
-| 노출 스코프 | `access_as_user` |
-| 토큰 버전 | `requestedAccessTokenVersion=2` (v2.0 토큰) |
-| tfvars 변수 | `bff_api_audience` |
-
-```hcl
-# infra/terraform.tfvars
-bff_api_audience = "api://<bff app id>"
-```
-
-`bff_api_audience` 형식은 반드시 `api://` 접두사를 포함합니다. 앱 등록 생성 후 **앱 ID URI**를 확인하세요.
-
-참고: [앱 등록에 API 범위 노출](https://learn.microsoft.com/ko-kr/entra/identity-platform/quickstart-configure-app-expose-web-apis)
-
-#### ③ SPA public-client 앱등록
-
-Admin UI React SPA가 사용하는 public-client 앱 등록입니다. 시크릿이 없고 PKCE 흐름으로 인증합니다.
-
-| 속성 | 값 |
-|---|---|
-| 유형 | Entra ID 앱 등록 (SPA, public client) |
-| 인증 흐름 | Authorization Code + PKCE (시크릿 없음) |
-| redirect URI | Admin UI FQDN (`https://<admin-ui-fqdn>`) — 두 번째 apply 후 등록 |
-| tfvars 변수 | `spa_client_id` |
-
-```hcl
-# infra/terraform.tfvars
-spa_client_id = "<spa app id>"
-```
-
-redirect URI는 두 번째 `terraform apply` 이후 `admin_ui_fqdn` 출력값이 확정되면 등록합니다. 자동화된 등록 명령은 [배포 — Seed 및 최종 설정](03-deploy.md)을 참고하세요.
-
-참고: [단일 페이지 앱 등록](https://learn.microsoft.com/ko-kr/entra/identity-platform/scenario-spa-app-registration)
-
-### app-registration.sh 스크립트
-
-위 3종 객체를 한 번에 생성하는 스크립트입니다.
-
-```bash
-# 사전 조건: az login 완료, 구독 설정 완료
-./scripts/app-registration.sh
-```
-
-스크립트 실행 후 출력되는 값을 `infra/terraform.tfvars`에 입력합니다.
-
-```hcl
-admin_group_object_id = "<출력된 그룹 Object ID>"
-bff_api_audience      = "api://<출력된 BFF App ID>"
-spa_client_id         = "<출력된 SPA App ID>"
-```
-
-### 객체 → tfvars 변수 매핑 요약
-
-| Entra ID 객체 | tfvars 변수 | 예시 값 |
+| 결정 | 선택지 | 다음 페이지 |
 |---|---|---|
-| Admin 보안 그룹 | `admin_group_object_id` | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
-| BFF API 앱등록 | `bff_api_audience` | `api://yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy` |
-| SPA public-client | `spa_client_id` | `zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz` |
-
-## 3. Greenfield vs Brownfield 결정
-
-배포를 시작하기 전에 **AIServices(Foundry) 계정을 새로 만들 것인지, 아니면 구독 내 기존 계정을 재사용할 것인지** 결정해야 합니다. 이 결정에 따라 이어지는 배포 챕터가 달라집니다.
-
-### 핵심 원칙
-
-- **Greenfield:** Terraform이 AIServices 계정과 모델 배포를 포함한 모든 리소스를 신규 생성합니다.
-- **Brownfield (reuse_foundry=true):** 기존 AIServices 계정은 `data` 소스로 읽기만 하고, Terraform은 Private Endpoint와 RBAC 할당만 신규 생성합니다. 핵심 원칙은 **"data로 읽기 + PE/RBAC만 신규"**입니다.
-
-### 의사결정 플로우
-
-<figure><img src="images/diagram-greenfield-vs-brownfield.png" alt="Greenfield(신규 생성) vs Brownfield(기존 Foundry 재사용) 비교"><figcaption>🖼️ Greenfield(신규 생성) vs Brownfield(기존 Foundry 재사용) 비교 <em>(다이어그램 이미지 추가 예정)</em></figcaption></figure>
-
-### 비교 표
-
-| 리소스 | Greenfield (기본) | Brownfield (reuse_foundry=true) |
-|---|---|---|
-| 게이트웨이 RG | 생성 (별도 RG) | 생성 (별도 RG, 변경 없음) |
-| AIServices 계정 | `azurerm_cognitive_account` 생성 | **data로 읽기** (생성 안 함) |
-| 모델 배포 | `azurerm_cognitive_deployment` 생성 | **생성 안 함** (`for_each={}`) |
-| 계정 속성(local_auth off·public block) | Terraform이 설정 | **배포 전 `az` 토글 + precondition 검증** |
-| Private Endpoint | 생성 | **생성** (게이트웨이 VNet → 기존 계정) |
-| APIM MI RBAC | 부여 | **부여** |
-
-### Brownfield 제약사항
-
-1. **같은 구독만 지원.** 게이트웨이와 기존 AIServices 계정이 **같은 Azure 구독**에 있어야 합니다. 교차 구독 재사용은 현재 지원하지 않습니다.
-
-2. **계정 잠금 사전 준비 필요.** Brownfield 경로에서는 Terraform `apply` 전에 `az` CLI로 기존 계정의 `disableLocalAuth=true`, `publicNetworkAccess=Disabled`를 수동으로 설정해야 합니다. Terraform의 `precondition`이 이를 검증합니다.
+| 모델 백엔드 | 신규 생성 / 기존 계정 재사용 | [모델 백엔드 신규 생성](03-deploy/case-foundry-greenfield.md), [모델 백엔드 기존 계정 재사용](04-reuse-foundry.md) |
+| APIM 공개 여부 | public / private | [APIM 게이트웨이 배포](03-deploy/case-apim-core-first.md) |
+| Admin UI 배포 여부 | 배포 / 미배포 | [Admin UI 배포](03-deploy/case-admin-ui.md) |
+| Admin 그룹 | 새 그룹 생성 / 기존 그룹 재사용 | [Admin UI 배포](03-deploy/case-admin-ui.md) |
+| Entra 앱 등록 | 새 BFF/SPA 앱 생성 / 기존 앱 재사용 | [Admin UI 배포](03-deploy/case-admin-ui.md) |
+| 배포 방식 | 단계적 / All-in-one | [APIM 게이트웨이 배포](03-deploy/case-apim-core-first.md), [All-in-one 배포](03-deploy/case-all-in-one.md) |
 
 {% hint style="warning" %}
-Brownfield 경로에서는 `terraform apply` 전에 반드시 기존 AIServices 계정에 `disableLocalAuth=true`, `publicNetworkAccess=Disabled`를 설정하세요. 사전 준비 없이 apply하면 `precondition` 검증에서 실패합니다.
+`apim_public`, `admin_ui_public`, 모델 deployment 설정은 첫 배포 전에 확정하세요. 나중에 변경하면 APIM, Private Endpoint, Container Apps 환경이 재구성될 수 있습니다.
 {% endhint %}
 
-3. **foundry_deployments 키 = 실제 배포 이름.** `foundry_deployments` tfvars의 map 키가 계정에 실제로 존재하는 배포 이름과 **정확히 일치**해야 합니다. 이 값이 `allowed_models`, 라우팅, Admin UI 레이블에 모두 사용됩니다.
+## 3. 모델 백엔드 결정
 
-{% hint style="danger" %}
-`foundry_deployments` map 키가 실제 배포 이름과 다르면 라우팅이 조용히 실패하거나 잘못된 모델로 연결됩니다. apply 전에 `az cognitiveservices account deployment list` 출력과 대조해 키를 정확히 맞추세요.
+배포를 시작하기 전에 AIServices(Foundry) 계정을 새로 만들지, 구독 내 기존 계정을 재사용할지 결정합니다.
+
+<figure><img src="images/diagram-greenfield-vs-brownfield.svg" alt="Greenfield 신규 생성과 Brownfield 기존 계정 재사용 의사결정 플로우"><figcaption>Greenfield는 계정과 모델을 새로 만들고, Brownfield는 기존 계정을 읽기 전용으로 참조한 뒤 Private Endpoint와 RBAC만 추가합니다.</figcaption></figure>
+
+| 질문 | 신규 생성 | 기존 계정 재사용 |
+|---|---|---|
+| 기존 운영 AIServices 계정이 있나? | 없음 | 있음 |
+| Terraform이 모델 계정을 만들까? | 예 | 아니오 |
+| Terraform이 모델 deployment를 만들까? | 예 | 아니오 |
+| 사전에 quota/약관 확인이 필요한가? | 예 | 기존 deployment가 이미 있으면 보통 완료됨 |
+| 사전에 직접 호출 경로를 차단해야 하나? | Terraform이 설정 | 고객이 `disableLocalAuth=true`, `publicNetworkAccess=Disabled` 설정 |
+
+모델 quota, partner 모델 약관, capacity 설정은 [모델 백엔드 신규 생성](03-deploy/case-foundry-greenfield.md)에서 다룹니다. 기존 계정의 보안 설정과 실제 deployment 이름 검증은 [모델 백엔드 기존 계정 재사용](04-reuse-foundry.md)에서 다룹니다.
+
+## 4. Admin UI와 Entra 객체 결정
+
+Admin UI를 배포하려면 Entra 값 3개가 필요합니다. 이 값은 Terraform이 직접 만들지 않고, 배포 전에 스크립트 또는 기존 객체 조회로 준비합니다.
+
+| 값 | tfvars 변수 | 결정 |
+|---|---|---|
+| Admin 보안 그룹 Object ID | `admin_group_object_id` | 새 그룹 생성 또는 기존 그룹 재사용 |
+| BFF API audience | `bff_api_audience` | 새 앱 등록 또는 기존 앱 재사용 |
+| SPA client ID | `spa_client_id` | 새 앱 등록 또는 기존 앱 재사용 |
+
+| 상황 | 권장 |
+|---|---|
+| 데모/검증 환경 | `app-registration.sh`로 Admin 그룹, BFF API 앱, SPA 앱을 새로 생성 |
+| 고객 운영 환경 | 기존 admin 보안 그룹을 재사용하고, BFF/SPA 앱 등록만 새로 만들거나 기존 앱을 재사용 |
+
+{% hint style="warning" %}
+`app-registration.sh`는 새 Admin 그룹을 생성합니다. 기존 admin 그룹을 그대로 사용할 운영 환경에서는 스크립트를 그대로 실행하기 전에 [Admin UI 배포](03-deploy/case-admin-ui.md)의 기존 그룹 재사용 절차를 확인하세요.
 {% endhint %}
 
-### 각 경로의 tfvars 핵심 차이
+SPA redirect URI는 `admin_ui_fqdn`이 나온 뒤 등록합니다. 이 작업도 [Admin UI 배포](03-deploy/case-admin-ui.md)에서 다룹니다.
 
-**Greenfield (기본값, 별도 설정 불필요):**
-```hcl
-reuse_foundry         = false   # 기본값
-```
+## 5. 배포 경로 선택
 
-**Brownfield:**
-```hcl
-reuse_foundry         = true
-existing_foundry_name = "ais-customer-prod"
-existing_foundry_rg   = "rg-customer-ai"
-# foundry_deployments에 기존 계정의 실제 배포 이름을 키로 선언
-foundry_deployments = {
-  "grok-4.3"          = { ... }
-  "DeepSeek-V4-Pro"   = { ... }
-}
-```
+| 목표 | 시작 페이지 |
+|---|---|
+| 모델 backend와 APIM만 먼저 검증 | [APIM 게이트웨이 배포](03-deploy/case-apim-core-first.md) |
+| 신규 환경에 전체 스택 배포 | [All-in-one 배포](03-deploy/case-all-in-one.md) |
+| 기존 Foundry/AIServices 계정 연결 | [모델 백엔드 기존 계정 재사용](04-reuse-foundry.md) |
+| Admin UI만 별도 배포 | [Admin UI 배포](03-deploy/case-admin-ui.md) |
 
-### 결정 후 다음 단계
+## 6. 사전 준비 완료 기준
 
-- [03 배포 — 새 AIServices 계정 포함 전체 스택 (Greenfield)](03-deploy.md)
-- [04 기존 Foundry 재사용 — 기존 Foundry 계정 재사용 (Brownfield)](04-reuse-foundry.md)
+| 항목 | 완료 기준 |
+|---|---|
+| Azure 권한 | Terraform apply와 RBAC 할당이 가능한 권한 확보 |
+| Terraform state backend | 첫 `terraform init` 전에 backend bootstrap을 실행할 계획과 이름 확정 |
+| 모델 백엔드 | 신규 생성 또는 기존 계정 재사용 중 하나로 결정 |
+| 모델 quota/약관 | 신규 생성 경로에서 목표 모델 배포 가능 여부 확인 |
+| 기존 계정 보안 | 재사용 경로에서 API key 인증과 공용 접근 차단 계획 확정 |
+| Entra 객체 | Admin UI 배포 여부와 새 그룹/기존 그룹 방식을 결정 |
+| 공개 여부 | `apim_public`, `admin_ui_public` 값 결정 |

@@ -15,6 +15,9 @@ function Root() {
     loadConfig().then(async (c) => {
       const instance = makeMsal(c);
       await instance.initialize();
+      const redirectResult = await instance.handleRedirectPromise();
+      const account = redirectResult?.account ?? instance.getAllAccounts()[0];
+      if (account) instance.setActiveAccount(account);
       setCfg(c);
       setMsal(instance);
     }).catch((e) => setConfigError(String(e)));

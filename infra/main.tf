@@ -121,6 +121,7 @@ module "apim" {
   appinsights_id                = module.observability.appi_id
   appinsights_connection_string = module.observability.appi_connection_string
   tokens_per_minute             = var.tokens_per_minute
+  model_tokens_per_minute       = local.model_tokens_per_minute
   token_quota                   = var.token_quota
   token_quota_period            = var.token_quota_period
   allowed_models                = var.allowed_models
@@ -193,15 +194,11 @@ module "control_plane" {
   admin_group_object_id = var.admin_group_object_id
   cosmos_map_container  = module.config_store.map_container_name
   rate_tiers_json       = jsonencode(var.rate_tiers)
-  # Deployment names ARE the real model names now (no alias indirection), so this is a
-  # model-id -> display-label map for the Admin UI. Keys MUST match the deployment names /
-  # allowed_models entries the policy uses.
-  alias_models_json = jsonencode({
-    "gpt-5.4"         = "GPT-5.4"
-    "gpt-5.4-mini"    = "GPT-5.4 mini"
-    "grok-4.3"        = "Grok 4.3 (xAI)"
-    "DeepSeek-V4-Pro" = "DeepSeek V4 Pro"
-  })
+  # Deployment names ARE the real model names (no alias indirection): build the Admin UI
+  # model-id -> display-label map dynamically from allowed_models so a new tfvars model shows in
+  # the Models UI automatically (label = id; modelLabel.ts hides labels equal to the id). Prices are
+  # operator-owned (Cosmos `pricing` doc, scripts/seed-pricing-jumpbox.sh), not derived here.
+  alias_models_json          = jsonencode({ for m in var.allowed_models : m => m })
   log_analytics_workspace_id = module.observability.law_customer_id
 }
 

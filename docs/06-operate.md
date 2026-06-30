@@ -4,527 +4,306 @@ description: "게이트웨이 운영 — 설정 변경, 모니터링, 비용 관
 
 # 운영
 
-- [1. 설정 변경 — 소비자 등록·키·정책 관리](#1-설정-변경--소비자-등록키정책-관리)
-- [2. 모니터링](#2-모니터링)
-- [3. 비용 관리 — 예산 기반 모델 전환 운영](#3-비용-관리--예산-기반-모델-전환-운영)
-- [4. 스케일링 및 SKU 변경](#4-스케일링-및-sku-변경)
-- [5. 리소스 정리 (Cleanup)](#5-리소스-정리-cleanup)
+이 페이지는 배포 이후 플랫폼팀이 반복적으로 수행하는 **consumer/API key 운영, 정책 반영, 모니터링, 비용 제어, 스케일 변경, 리소스 정리** 절차를 정리합니다. 배포 직후 호출 확인은 각 배포 페이지의 검증 절에서 처리하고, 이 페이지는 운영 중 변경과 진단에 집중합니다.
 
-## 1. 설정 변경 — 소비자 등록·키·정책 관리
+## 1. 운영 범위
 
-***
+{% hint style="success" %}
+**이 페이지가 다루는 것**
 
-{% hint style="info" %}
-**관리자 작업 요약** — 소비자/키: **Consumers 탭** · 정책: **Policies 탭** · 반영: 약 5분 cron 또는 즉시 실행(`az containerapp job start`)
+- Admin UI에서 consumer 등록, API key 발급, 모델 권한·티어·예산 정책 변경
+- config-sync worker로 Cosmos DB 설정을 APIM Named Value에 반영
+- Admin UI Monitoring과 Application Insights로 요청·차단·모델 전환 이벤트 확인
+- 예산 기반 모델 전환, 가격 데이터 갱신, 월 예산 알림 운영
+- APIM SKU, 모델 capacity, 공개 모드 변경과 리소스 정리
 {% endhint %}
 
-Admin UI는 React SPA + FastAPI BFF로 구성되어 있으며, Entra ID 로그인과 admin 보안 그룹(admin_group_object_id)에 의해 접근이 제한됩니다. 운영자는 이 UI를 통해 소비자 등록, API 키 발급, 모델·티어·예산 정책 편집을 모두 수행할 수 있습니다.
-
----
-
-### 1. Admin UI 접근
-
-***
-
-1. `terraform output -raw admin_ui_fqdn` 으로 URL을 확인합니다.
-2. 브라우저에서 해당 URL을 열면 Entra ID 로그인 화면이 나타납니다.
-3. admin 보안 그룹에 속한 계정으로 로그인합니다. 그룹 외 사용자는 403 응답을 받습니다.
-
-{% hint style="info" %}
-Admin UI에 접근하려면 `admin_ui_public = true` 와 `admin_ui_image` 가 설정된 상태에서 `terraform apply` 가 완료되어야 합니다. 설정 방법은 [03-deploy.md](03-deploy.md)를 참조하세요.
-{% endhint %}
-
----
-
-### 2. 소비자 등록 및 키 발급
-
-***
-
-{% hint style="info" %}
-**📸 [스크린샷 자리]** — Admin UI — Consumers 탭(소비자 등록·키 발급 화면)
-{% endhint %}
-
-**소비자(Consumer)** 는 게이트웨이를 사용하는 팀·서비스 단위입니다. Admin UI의 **Consumers 탭**에서 다음 작업을 수행합니다.
-
-| 작업 | 위치 |
+| 운영 작업 | 주로 사용하는 위치 |
 |---|---|
-| 소비자 신규 등록 | Consumers → New Consumer |
-| APIM 구독 키 발급 | Consumers → 해당 소비자 → Keys → Generate |
-| 소비자 비활성화 | Consumers → 해당 소비자 → Disable |
+| consumer 등록 / API key 발급 | Admin UI → Consumers |
+| 모델 허용 목록 / rate tier / budget 변경 | Admin UI → Policies |
+| 변경 즉시 반영 | Azure Container Apps Job `config-sync` |
+| 요청·차단·모델 전환 확인 | Admin UI → Monitoring, Application Insights |
+| 인프라 규모 변경 | `infra/terraform.tfvars` + `terraform apply` |
 
-발급된 구독 키(`Ocp-Apim-Subscription-Key`)는 소비자가 API 호출 시 헤더에 포함해야 합니다. Entra ID 클라이언트 인증 모드(`client_auth_mode="entra-id"`)를 사용하는 경우 키 대신 JWT 토큰을 사용합니다. 자세한 내용은 [09-future.md](09-future.md)를 참조하세요.
+{% hint style="info" %}
+Admin UI는 Entra ID 로그인과 admin 보안 그룹으로 보호됩니다. public FQDN을 노출하더라도 그룹 권한을 통과하지 못하면 쓰기 작업을 수행할 수 없습니다.
+{% endhint %}
 
----
+## 2. 설정 변경
 
-### 3. 모델·티어·예산 정책 편집
+### Admin UI 접속
 
-***
+```bash
+cd infra
+terraform output -raw admin_ui_fqdn
+```
 
-Admin UI의 **Policies 탭**에서 소비자별 정책을 편집합니다.
+브라우저에서 출력된 URL을 열고 admin 보안 그룹에 속한 계정으로 로그인합니다. `admin_ui_public=false`인 환경은 VNet 내부, VPN, jumpbox 등 조직 네트워크 경로에서 접근해야 합니다.
 
-#### 허용 모델 변경
-소비자가 호출 가능한 모델 목록을 제한합니다. 목록에 없는 모델로 요청하면 APIM 정책이 `403 Forbidden`을 반환합니다.
+### Consumer와 API key 운영
 
-#### 토큰 티어(Rate Tier) 변경
-`rate_tiers`(small / medium / large)별로 분당 토큰 수(TPM)와 일별 쿼터가 다르게 설정됩니다. 소비자에 적절한 티어를 부여합니다.
+Admin UI의 **Consumers** 탭에서 팀·서비스 단위 consumer를 등록하고 APIM subscription key를 발급합니다.
 
-| 티어 | 분당 토큰(TPM) | 일별 쿼터(기본값) |
+| 작업 | 위치 | 결과 |
 |---|---|---|
-| small | 1,000 | 50,000 |
-| medium | (tfvars 설정에 따라) | (tfvars 설정에 따라) |
-| large | (tfvars 설정에 따라) | (tfvars 설정에 따라) |
+| consumer 등록 | Consumers → New Consumer | 정책 적용 대상 생성 |
+| API key 발급 | Consumers → Keys → Generate | 클라이언트 호출용 subscription key 생성 |
+| consumer 비활성화 | Consumers → Disable | 해당 consumer 호출 차단 |
 
-{% hint style="info" %}
-실제 TPM·쿼터 값은 `infra/terraform.tfvars`의 `tokens_per_minute`, `token_quota` 변수를 기준으로 합니다. [10-reference.md](10-reference.md)에서 전체 변수 목록을 확인하세요.
-{% endhint %}
+발급된 key는 클라이언트가 `Ocp-Apim-Subscription-Key` 또는 `api-key` 헤더로 전달합니다. 클라이언트별 헤더와 base URL은 [클라이언트 온보딩](07-connect-clients.md)을 참고하세요.
 
-#### 예산(Budget) 정책 편집
-소비자별 일별 USD 예산 한도를 설정합니다. 80% 도달 시 더 저렴한 모델로 전환(모델 전환 1단계), 100% 도달 시 추가 전환(모델 전환 2단계)됩니다. 예산 운영 상세는 아래 『3. 비용 관리』 절을 참조하세요.
+### 정책 변경
 
-{% hint style="info" %}
-**📸 [스크린샷 자리]** — Admin UI — Policies 탭(소비자별 allowed-models·tier·예산 편집)
-{% endhint %}
+Admin UI의 **Policies** 탭에서 consumer별 운영 정책을 조정합니다.
 
----
+| 정책 | 의미 | 운영 영향 |
+|---|---|---|
+| Allowed models | 호출 가능한 모델 목록 | 목록 밖 모델은 `403 Forbidden` |
+| Rate tier | 분당 토큰과 일별 토큰 쿼터 | 초과 시 `429 Too Many Requests` |
+| Daily budget | consumer별 일별 USD 예산 | 임계값 도달 시 모델 전환 |
+| Active downgrade | 예산 기반 모델 전환 활성화 | 꺼두면 예산 임계값에도 모델 유지 |
 
-### 4. 변경 반영 — config-sync worker
+### 변경 반영
 
-***
+Admin UI에서 저장한 설정은 Cosmos DB config 문서에 기록되고, config-sync worker가 APIM Named Value로 동기화합니다.
 
-Admin UI에서 저장된 설정은 **Azure Cosmos DB** 의 config 컨테이너에 기록됩니다. 이 변경이 APIM의 Named Values(정책 파라미터)로 반영되려면 **config-sync worker** 가 실행되어야 합니다.
-
-- **자동 반영:** config-sync worker는 `config_sync_cron = "*/5 * * * *"` 스케줄(약 5분)로 Container Apps Job으로 동작합니다.
-- **즉시 반영:** 아래 명령으로 worker를 수동 실행합니다.
-
-```bash
-az containerapp job start -g <rg> -n <config_sync_job_name>
-```
-
-`<config_sync_job_name>` 은 다음 명령으로 확인합니다.
-
-```bash
-terraform output -raw config_sync_job_name
-```
-
-{% hint style="info" %}
-worker_image가 설정되기 전에는 `config_sync_job_name` 출력이 null입니다. 이미지 빌드·푸시 단계([03-deploy.md](03-deploy.md))가 완료된 후 실행하세요.
-{% endhint %}
-
----
-
-### 5. 가격 데이터 갱신
-
-***
-
-모델 단가(per-1k 토큰)는 Cosmos DB의 `pricing` 문서에 저장됩니다. Azure AI 가격이 변경된 경우 jumpbox에서 다음 스크립트로 갱신합니다.
-
-```bash
-./scripts/seed-pricing-jumpbox.sh https://<cosmos-account>.documents.azure.com:443/
-```
-
-이 스크립트는 idempotent하므로 반복 실행해도 안전합니다. 갱신 후 config-sync worker를 즉시 실행하면 Admin UI의 가격 라벨과 예산 계산에 바로 반영됩니다.
-
----
-
-### 6. 참고 링크
-
-***
-
-- [Azure API Management — Named Values](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-properties)
-- [Azure Container Apps Jobs](https://learn.microsoft.com/en-us/azure/container-apps/jobs)
-- [Azure Cosmos DB — 문서 읽기/쓰기](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/quickstart-python)
-
-## 2. 모니터링
-
-***
-
-Admin UI의 **Monitoring** 페이지와 Azure Application Insights를 통해 게이트웨이의 요청 현황, 차단 이벤트, 모델 전환 이벤트를 실시간으로 파악할 수 있습니다.
-
----
-
-### 1. Admin UI Monitoring 페이지
-
-***
-
-{% hint style="info" %}
-**📸 [스크린샷 자리]** — Admin UI — Monitoring 페이지(최근 요청·차단 이벤트·모델 전환 이벤트 3개 테이블)
-{% endhint %}
-
-Monitoring 페이지에는 세 가지 테이블이 제공됩니다.
-
-| 테이블 | 내용 |
+| 단계 | 동작 |
 |---|---|
-| **최근 요청(Recent Requests)** | 소비자별 API 호출 목록 (타임스탬프, 소비자 ID, 모델, 상태 코드, 사용 토큰) |
-| **차단 이벤트(Blocked Events)** | 403·429 응답 목록 (차단 사유: 모델 비허용·레이트 리밋 초과) |
-| **모델 전환 이벤트(Model Downgrade Events)** | 예산 기반 모델 전환이 발생한 요청 목록 |
+| 1 | Admin UI가 Cosmos DB에 consumer/policy 저장 |
+| 2 | config-sync worker가 설정 읽기 |
+| 3 | APIM Named Value 업데이트 |
+| 4 | 이후 요청부터 APIM 정책에 반영 |
 
-{% hint style="info" %}
-UI 상의 한국어 용어는 **"모델 전환"** 입니다. 코드 식별자(`downgrade_ladder`, `active_downgrade`, `downgrade_level`)는 원문 그대로 사용됩니다.
+기본 스케줄은 `config_sync_cron = "*/5 * * * *"`입니다. 바로 반영해야 하면 job을 수동 실행합니다.
+
+```bash
+cd infra
+config_sync_job_name="$(terraform output -raw config_sync_job_name)"
+resource_group_name="$(terraform output -raw resource_group_name)"
+
+az containerapp job start \
+  -g "$resource_group_name" \
+  -n "$config_sync_job_name"
+```
+
+{% hint style="warning" %}
+`worker_image`가 비어 있으면 config-sync job이 배포되지 않습니다. Admin UI에서 정책을 바꿔도 APIM에 자동 반영되지 않으므로, 운영 환경에서는 worker 이미지를 함께 배포하세요.
 {% endhint %}
 
----
+## 3. 모니터링
 
-### 2. 모델 전환 이벤트 추적
+### Admin UI Monitoring
 
-***
+운영자는 Admin UI의 **Monitoring** 페이지에서 최근 요청, 차단 이벤트, 모델 전환 이벤트를 확인합니다.
 
-모델 전환이 발생한 요청은 응답 헤더에 다음 세 가지 값이 포함됩니다.
+| 화면 | 확인할 내용 |
+|---|---|
+| Recent Requests | consumer, model, status code, token usage |
+| Blocked Events | `403`, `429`와 차단 사유 |
+| Model Downgrade Events | 요청 모델, 실제 사용 모델, 전환 단계 |
 
-- 전환 여부는 `x-ai-gateway-downgrade-level` 값으로 판단합니다 (0=전환 없음).
-- Monitoring 페이지의 **모델 전환 이벤트** 테이블에서 세 헤더 값을 함께 확인할 수 있습니다.
+{% hint style="info" %}
+문서와 UI에서는 **모델 전환**이라고 표현합니다. 코드와 APIM 헤더의 `downgrade` 식별자는 구현 이름이므로 그대로 유지됩니다.
+{% endhint %}
+
+### 모델 전환 헤더
+
+예산 임계값 때문에 모델이 바뀌면 응답 헤더로 전환 상태를 확인할 수 있습니다.
 
 | 헤더 | 설명 |
 |---|---|
 | `x-ai-gateway-requested-model` | 클라이언트가 요청한 원래 모델 |
-| `x-ai-gateway-effective-model` | 실제로 호출된 모델 (전환 후 모델) |
-| `x-ai-gateway-downgrade-level` | 전환 단계 (0=전환 없음, 1=80% 임계, 2=100% 임계) |
+| `x-ai-gateway-effective-model` | 실제로 호출된 모델 |
+| `x-ai-gateway-downgrade-level` | `0` 전환 없음, `1` 80% 임계, `2` 100% 임계 |
 
-예산 설정 및 전환 사다리 상세는 아래 『3. 비용 관리』 절을 참조하세요.
+### Application Insights 쿼리
 
----
-
-### 3. Application Insights 토큰 메트릭
-
-***
-
-게이트웨이는 APIM 정책에서 처리된 토큰 수를 Application Insights로 내보냅니다. 다음 두 가지 차원으로 집계됩니다.
-
-- **consumerId**: 소비자 단위 토큰 사용량
-- **model**: 모델 단위 토큰 사용량
-
-#### 주요 커스텀 메트릭
-
-| 메트릭 이름 | 설명 |
-|---|---|
-| `llm_total_tokens` | 소비자+모델 차원의 전체 토큰 수 |
-| `llm_prompt_tokens` | 입력(프롬프트) 토큰 수 |
-| `llm_completion_tokens` | 출력(컴플리션) 토큰 수 |
-
-Application Insights에서 쿼리 예시:
+APIM 정책은 토큰 사용량을 Application Insights custom metric으로 기록합니다.
 
 ```kusto
 customMetrics
 | where name == "llm_total_tokens"
-| summarize sum(value) by tostring(customDimensions.consumerId), bin(timestamp, 1h)
+| summarize total_tokens=sum(value) by tostring(customDimensions.consumerId), tostring(customDimensions.model), bin(timestamp, 1h)
 | order by timestamp desc
 ```
 
-{% hint style="info" %}
-Application Insights 리소스는 Terraform이 자동으로 생성하며, Workspace 기반(Log Analytics) 모드로 구성됩니다.
-{% endhint %}
+운영 중 자주 보는 메트릭은 아래 세 가지입니다.
 
----
+| 메트릭 | 의미 |
+|---|---|
+| `llm_total_tokens` | 전체 토큰 수 |
+| `llm_prompt_tokens` | 입력 토큰 수 |
+| `llm_completion_tokens` | 출력 토큰 수 |
 
-### 4. 알림 설정
+## 4. 비용 관리
 
-***
+### 예산 기반 모델 전환
 
-Application Insights에서 임계값 기반 알림을 구성하면 레이트 리밋 초과나 오류율 급증 시 이메일·Teams 알림을 받을 수 있습니다.
-
-- [Azure Monitor 경고 규칙](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-overview)
-- [Application Insights — 커스텀 메트릭](https://learn.microsoft.com/en-us/azure/azure-monitor/app/api-custom-events-metrics)
-- [Azure API Management — 분석 및 모니터링](https://learn.microsoft.com/en-us/azure/api-management/howto-use-analytics)
-
-## 3. 비용 관리 — 예산 기반 모델 전환 운영
-
-***
-
-게이트웨이는 소비자별 일별 USD 예산 한도를 초과하면 자동으로 더 저렴한 모델로 전환(모델 전환)합니다. Azure Cost Management 월 예산은 경고(alert) 전용이며 하드 스톱이 아닙니다.
-
----
-
-### 1. 예산 기반 모델 전환 동작 원리
-
-***
-
-각 소비자에게는 Admin UI에서 **일별 USD 예산 한도(per-consumer daily budget)**를 설정합니다. 하루 동안 소비된 토큰 비용이 임계값에 도달하면 APIM 정책이 요청 본문의 `model` 필드를 자동으로 교체합니다.
+consumer별 일별 예산은 Admin UI Policies 탭에서 설정합니다. 사용량이 임계값에 도달하면 APIM 정책이 더 저렴한 모델로 요청을 전환합니다.
 
 | 임계값 | 동작 |
 |---|---|
-| 80% 도달 | `downgrade_level = 1` — 모델 전환 1단계: 더 저렴한 모델로 전환 |
-| 100% 도달 | `downgrade_level = 2` — 모델 전환 2단계: 추가로 더 저렴한 모델로 전환 |
+| 80% | `downgrade_level=1`, 1단계 모델 전환 |
+| 100% | `downgrade_level=2`, 2단계 모델 전환 |
 
-{% hint style="info" %}
-**📸 [스크린샷 자리]** — Admin UI — 소비자별 **일별 예산**(USD) 편집 화면
-{% endhint %}
+전환 순서는 Cosmos DB config의 `downgrade_ladder` 배열로 정의합니다.
 
-{% hint style="info" %}
-전환 이후에도 클라이언트가 요청한 원래 모델은 `x-ai-gateway-requested-model` 헤더에 보존됩니다. 실제 사용 모델은 `x-ai-gateway-effective-model`, 전환 단계는 `x-ai-gateway-downgrade-level` 헤더로 확인합니다. 모니터링 상세는 위 『2. 모니터링』 절을 참조하세요.
-{% endhint %}
-
-#### 모델 전환 사다리(downgrade_ladder)
-
-**모델 전환 사다리**는 Cosmos DB config 문서 내 **`downgrade_ladder`** 배열로 정의됩니다. 사다리 순서대로 더 저렴한 모델이 배치됩니다. 예:
-
-```
-gpt-5.4 → gpt-5.4-mini → DeepSeek-V4-Pro
+```text
+gpt-5.4 -> gpt-5.4-mini -> DeepSeek-V4-Pro
 ```
 
-**`active_downgrade`** 플래그가 `true`인 소비자에게만 모델 전환이 적용됩니다. Admin UI Policies 탭에서 소비자별로 활성화·비활성화할 수 있습니다.
+### 가격 데이터 갱신
 
----
-
-### 2. 가격 데이터 관리
-
-***
-
-모델 단가(per-1k 토큰)는 Cosmos DB의 `pricing` 문서에 저장됩니다. Azure AI 서비스 가격이 변경된 경우 jumpbox에서 다음 스크립트를 실행하여 갱신합니다.
+모델 단가가 바뀌면 jumpbox에서 pricing seed를 다시 실행합니다.
 
 ```bash
 ./scripts/seed-pricing-jumpbox.sh https://<cosmos-account>.documents.azure.com:443/
 ```
 
-이 스크립트는 idempotent하므로 반복 실행이 안전합니다. 갱신 후 config-sync worker를 즉시 실행하면 Admin UI의 가격 라벨과 예산 계산에 즉시 반영됩니다.
+갱신 후 config-sync worker를 실행하면 Admin UI의 가격 라벨과 예산 계산에 반영됩니다.
 
-```bash
-az containerapp job start -g <rg> -n <config_sync_job_name>
-```
+### Azure Cost Management 예산
 
----
+Terraform은 월 예산 알림을 생성할 수 있습니다.
 
-### 3. Azure Cost Management 월 예산
-
-***
-
-Terraform은 `monthly_budget_amount`(기본값: 200 USD) 변수를 기준으로 Azure Cost Management 예산을 자동 생성하고, `budget_alert_email`로 경고 이메일을 발송하도록 구성합니다.
-
-{% hint style="warning" %}
-Azure Cost Management 예산 경고는 **알림 전용(alert only)**입니다. 예산 초과 시 Azure가 리소스를 자동으로 중단하거나 API 호출을 차단하지 않습니다. 실제 비용 제어는 위의 게이트웨이 레벨 예산 기반 모델 전환을 활용하세요.
-{% endhint %}
-
-관련 tfvars 변수:
-
-```hcl
+```text
 monthly_budget_amount = 200
 budget_alert_email    = "<your-email@example.com>"
 budget_start_date     = "2025-01-01"
 ```
 
----
-
-### 4. 비용 최적화 팁
-
-***
-
-- **gpt-5.4-mini 우선 배치:** 저비용 작업에는 Admin UI에서 소비자 기본 모델을 `gpt-5.4-mini`로 설정합니다.
-- **토큰 쿼터 조정:** `token_quota` / `token_quota_period`(기본: Daily) 값을 낮춰 소비자별 일별 토큰 상한을 제한합니다.
-- **미사용 소비자 비활성화:** Admin UI에서 비사용 소비자를 Disable 처리하면 해당 구독 키로의 호출이 차단됩니다.
-- **Developer SKU는 개발·데모 전용:** SLA가 없으므로 프로덕션에서는 Premium_1으로 전환하세요. SKU 변경 방법은 아래 『4. 스케일링 및 SKU 변경』 절을 참조하세요.
-
----
-
-### 5. 참고 링크
-
-***
-
-- [Azure Cost Management — 예산 설정](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets)
-- [Azure API Management — 레이트 리밋 정책](https://learn.microsoft.com/en-us/azure/api-management/rate-limit-policy)
-- [Azure AI Foundry 가격](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/)
-
-## 4. 스케일링 및 SKU 변경
-
-***
-
-배포 이후 트래픽 증가나 SLA 요건 변경 시 APIM SKU와 모델 capacity(TPM)를 조정해야 합니다. 이 절은 Developer_1 → Premium_1 SKU 전환, 모델 TPM 조정, APIM 모드 변경 시 주의사항을 다룹니다.
-
----
-
-### 1. APIM SKU 변경 (Developer_1 → Premium_1)
-
-***
-
-기본 배포는 `apim_sku_name = "Developer_1"` 을 사용합니다. Developer SKU는 **SLA가 없으며** 개발·데모 목적으로만 적합합니다. 프로덕션 환경에서는 **Premium_1** 이상으로 전환해야 합니다.
-
-#### SKU 변경 절차
-
-{% hint style="info" %}
-**📸 [스크린샷 자리]** — Azure Portal — APIM SKU(Developer→Premium) 변경 화면
+{% hint style="warning" %}
+Azure Cost Management 예산은 알림 전용입니다. 예산 초과 시 Azure가 리소스를 자동 중지하거나 APIM 호출을 차단하지 않습니다. 실제 호출 제어는 gateway의 일별 budget과 모델 전환 정책으로 운영하세요.
 {% endhint %}
 
-##### Step 1. tfvars 값 변경
+## 5. 스케일과 SKU 변경
 
-`infra/terraform.tfvars` 에서 SKU 값을 변경합니다.
+### APIM SKU 변경
 
-```hcl
+기본 배포는 `Developer_1`을 사용합니다. 프로덕션 SLA가 필요하면 `Premium_1` 이상으로 전환합니다.
+
+```text
 apim_sku_name = "Premium_1"
 ```
-
-##### Step 2. 변경 사항 plan 검토
 
 ```bash
 cd infra
 terraform plan
-```
-
-##### Step 3. 적용
-
-```bash
 terraform apply
 ```
 
 {% hint style="warning" %}
-SKU 변경은 APIM 서비스 재구성을 동반하며 수십 분이 소요될 수 있습니다. 프로덕션 환경에서는 유지보수 윈도우를 잡고 진행하세요.
+APIM SKU 변경은 수십 분이 걸릴 수 있습니다. 프로덕션에서는 유지보수 창을 잡고 변경하세요.
 {% endhint %}
-
-#### SKU별 비교
 
 | SKU | SLA | VNet 주입 | 용도 |
 |---|---|---|---|
 | Developer_1 | 없음 | 지원 | 개발·데모 |
 | Premium_1 | 99.95% | 지원 | 프로덕션 |
 
-VNet 주입은 Developer와 Premium SKU에서만 지원됩니다. 참고: [Azure API Management SKU 비교](https://learn.microsoft.com/en-us/azure/api-management/api-management-features).
+### 모델 capacity 조정
 
----
+greenfield 배포에서는 `infra/` 디렉터리의 `terraform.tfvars` 파일에서 deployment map의 capacity를 조정합니다.
 
-### 2. 모델 Capacity(TPM) 조정
-
-***
-
-Azure AI Foundry에서 모델 배포별 분당 토큰 수(TPM)는 `infra/terraform.tfvars` 의 `openai_deployments` 및 `foundry_deployments` 맵에서 설정합니다.
-
-```hcl
+```text
 openai_deployments = {
   "gpt-5.4"      = { capacity = 50 }
   "gpt-5.4-mini" = { capacity = 100 }
 }
 
 foundry_deployments = {
-  "grok-4.3"         = { capacity = 30 }
-  "DeepSeek-V4-Pro"  = { capacity = 30 }
+  "grok-4.3"        = { capacity = 30 }
+  "DeepSeek-V4-Pro" = { capacity = 30 }
 }
 ```
 
-{% hint style="info" %}
-`capacity` 값은 Azure AI Foundry 포털에서 표시되는 단위(보통 1k TPM)를 기준으로 설정합니다. 쿼터가 부족한 경우 Azure 포털 또는 Azure AI Foundry 포털에서 쿼터 증가 요청을 제출하세요.
-{% endhint %}
+brownfield 재사용 모드(`reuse_foundry=true`)에서는 Terraform이 기존 모델 deployment를 소유하지 않으므로 Azure AI Foundry 포털 또는 `az` CLI에서 직접 capacity를 조정합니다.
 
-capacity 변경 후:
+### 모델 추가·제거
 
-```bash
-cd infra
-terraform apply
+게이트웨이에 모델을 추가하거나 빼려면 두 곳을 갱신합니다.
+
+| 위치 | 무엇 | 효과 |
+|---|---|---|
+| `infra/terraform.tfvars`의 `allowed_models`(+ `openai_deployments`/`foundry_deployments`) | 허용 모델 목록과 deployment 정의 | `terraform apply` 후 APIM이 호출을 허용하고, Admin UI Models 페이지에 자동 표시 |
+| `scripts/seed-pricing-jumpbox.sh`의 `models` 맵 | 모델별 per-1k 단가 | 시드 재실행 후 Admin UI 단가 표시와 budget 비용 계산 반영 |
+
+Admin UI 모델 목록은 `allowed_models`에서 자동 생성되므로 별도 코드 수정은 필요 없습니다. 단, 가격은 운영자 소유 Cosmos `pricing` 문서라 시드를 갱신하지 않으면 신규 모델은 단가가 표시되지 않고 budget 비용이 0으로 잡힙니다.
+
+```text
+"models": {
+  "gpt-5.4":         { "prompt": 0.0025,  "completion": 0.015 },
+  "Kimi-K2.6-1":     { "prompt": 0.00095, "completion": 0.004 }
+}
 ```
 
-brownfield 재사용 모드(`reuse_foundry = true`)에서는 모델 배포를 Terraform이 관리하지 않으므로 포털 또는 `az` CLI에서 직접 capacity를 조정해야 합니다.
+per-1k 단가는 모델별 per-1M 가격을 1000으로 나눈 값입니다. 예를 들어 Kimi K2.6은 Azure AI Foundry Models 공식 가격 기준 input $0.95/M, output $4.00/M이므로 per-1k 단가는 prompt 0.00095, completion 0.004입니다.
 
----
+### APIM 공개 모드 변경
 
-### 3. APIM 모드 변경 주의 (Internal ↔ External)
-
-***
-
-`apim_public` 변수는 APIM 게이트웨이를 인터넷에 노출할지 여부를 제어합니다.
+`apim_public`은 gateway를 인터넷에서 호출할 수 있게 할지 결정합니다.
 
 | 값 | 모드 | 설명 |
 |---|---|---|
-| `true` | External (Public) | 인터넷에서 직접 호출 가능 |
-| `false` | Internal (VNet 전용) | VNet 내부 또는 VPN/ExpressRoute 경유만 가능 |
+| `true` | External | 인터넷에서 직접 호출 가능 |
+| `false` | Internal | VNet 내부 또는 VPN/ExpressRoute 경유 |
 
 {% hint style="warning" %}
-`apim_public` 을 변경하면 APIM의 VNet 통합 모드가 재구성됩니다. 이는 단순 설정 변경이 아니라 **APIM 서비스 재구성**으로, 첫 apply 시와 동일하게 **~45분**이 소요될 수 있습니다. 프로덕션 환경에서 Internal → External로 전환할 때는 보안 검토를 먼저 완료하세요.
+`apim_public` 변경은 단순 토글이 아니라 APIM 네트워크 재구성입니다. 첫 배포와 비슷하게 오래 걸릴 수 있으므로 보안 검토와 유지보수 창을 먼저 잡으세요.
 {% endhint %}
 
-```hcl
-# 인터넷 공개 활성화
-apim_public = true
-```
+## 6. 리소스 정리
 
----
-
-### 4. 참고 링크
-
-***
-
-- [Azure API Management SKU 및 기능 비교](https://learn.microsoft.com/en-us/azure/api-management/api-management-features)
-- [Azure API Management 스케일링](https://learn.microsoft.com/en-us/azure/api-management/upgrade-and-scale)
-- [Azure AI Foundry 모델 배포 capacity](https://learn.microsoft.com/en-us/azure/ai-foundry/how-to/deploy-models-openai)
-- [Azure API Management VNet 통합](https://learn.microsoft.com/en-us/azure/api-management/virtual-network-concepts)
-
-## 5. 리소스 정리 (Cleanup)
-
-***
-
-게이트웨이를 더 이상 사용하지 않을 경우 Terraform으로 리소스를 제거합니다. VNet 주입 APIM 환경에서는 `terraform destroy`가 중간에 멈출 수 있으므로 주의가 필요합니다.
-
----
-
-### 1. 기본 정리 절차
-
-***
+### 기본 정리
 
 ```bash
 cd infra
 terraform destroy
 ```
 
-`terraform destroy`는 Terraform이 관리하는 모든 리소스(APIM, Container Apps, Cosmos DB, VNet, Private Endpoint, ACR 등)를 역순으로 삭제합니다.
+Terraform이 관리하는 APIM, Container Apps, Cosmos DB, VNet, Private Endpoint, ACR 등을 삭제합니다.
 
----
+### destroy가 멈출 때
 
-### 2. 주의: VNet 주입 APIM의 Named Value 삭제 문제
-
-***
-
-VNet 주입 모드(`apim_public`과 무관하게 Developer/Premium SKU는 VNet 주입)로 배포된 APIM은 `terraform destroy` 실행 중 **Named Value 삭제 단계에서 멈출 수 있습니다.** 이는 APIM 내부 의존성 처리 지연 때문이며, 일시적으로 보이더라도 수십 분 이상 멈춰 있을 수 있습니다.
-
-이 경우 **리소스 그룹 전체를 한 번에 삭제**하는 것이 더 깔끔합니다.
-
-{% hint style="warning" %}
-`terraform destroy`가 Named Value 삭제 단계에서 멈추면 `az group delete -n <rg> --yes` 로 리소스 그룹 전체를 삭제하세요. `<rg>`는 `terraform output -raw resource_group_name` 으로 확인합니다. `az group delete`는 APIM VNet 의존성 해제도 Azure 플랫폼이 내부적으로 처리합니다.
-{% endhint %}
+VNet 주입 APIM은 destroy 중 Named Value 삭제 단계에서 오래 멈출 수 있습니다. 데모·검증 환경이라면 리소스 그룹 삭제가 더 깔끔합니다.
 
 ```bash
-az group delete -n <rg> --yes
+resource_group_name="$(terraform output -raw resource_group_name)"
+az group delete -n "$resource_group_name" --yes
 ```
 
-`az group delete`는 해당 RG 내 모든 리소스를 비동기적으로 삭제하며, APIM VNet 의존성 해제도 Azure 플랫폼이 내부적으로 처리합니다.
-
----
-
-### 3. Brownfield(재사용) 모드에서의 정리
-
-***
-
-`reuse_foundry = true` 로 배포한 경우, **고객의 기존 Azure AI Foundry 계정은 별도의 리소스 그룹에 있습니다.** `terraform destroy` 또는 `az group delete`로 게이트웨이 RG를 삭제해도 기존 Foundry 계정은 영향을 받지 않습니다.
-
-{% hint style="info" %}
-brownfield 고객의 기존 Azure AI Foundry 계정은 별도 RG에 있으므로 게이트웨이 RG 삭제 시 안전하게 보존됩니다. 단, 역할 할당과 Private Endpoint는 제거되므로 해당 Foundry 계정을 다른 서비스에서도 사용 중이라면 사전 확인이 필요합니다.
+{% hint style="warning" %}
+`az group delete`는 해당 리소스 그룹의 모든 리소스를 삭제합니다. 같은 RG에 수동으로 만든 리소스가 있으면 먼저 옮기거나 백업하세요.
 {% endhint %}
 
-삭제 대상과 보존 대상을 정리하면 다음과 같습니다.
+### brownfield 재사용 모드
 
-| 리소스 | 삭제 여부 |
+`reuse_foundry=true`인 경우 기존 Azure AI Foundry 계정은 별도 리소스 그룹에 있으므로 gateway RG를 삭제해도 보존됩니다. 단, gateway VNet에서 만든 Private Endpoint와 APIM managed identity 역할 할당은 함께 제거됩니다.
+
+| 리소스 | 정리 결과 |
 |---|---|
-| 게이트웨이 RG (APIM, Container Apps, Cosmos DB 등) | 삭제됨 |
-| 기존 Foundry 계정 (별도 RG) | **보존됨** |
-| 기존 Foundry의 Private Endpoint (게이트웨이 VNet → Foundry) | 삭제됨 |
-| 기존 Foundry의 RBAC 역할 할당 (APIM MI) | 삭제됨 |
+| Gateway RG의 APIM, Container Apps, Cosmos DB, ACR | 삭제 |
+| 기존 Foundry 계정 | 보존 |
+| Gateway VNet에서 만든 Private Endpoint | 삭제 |
+| APIM managed identity의 기존 Foundry RBAC | 삭제 |
 
----
+### Entra ID 객체 수동 정리
 
-### 4. Entra ID 객체 수동 정리
-
-***
-
-`./scripts/app-registration.sh` 로 생성된 Entra ID 앱 등록(BFF API, SPA)과 관리자 보안 그룹은 Terraform 관리 범위 밖입니다. 필요한 경우 다음 명령으로 수동 삭제합니다.
+`scripts/app-registration.sh`로 만든 SPA 앱, BFF API 앱, admin 보안 그룹은 Terraform 관리 대상이 아닙니다. 더 이상 필요 없으면 Entra ID에서 수동 삭제합니다.
 
 ```bash
-# SPA 앱 등록 삭제
 spa_app_id="$(az ad app list --display-name "AI Gateway SPA" --query "[].appId" -o tsv)"
 az ad app delete --id "$spa_app_id"
 
-# BFF API 앱 등록 삭제
 bff_app_id="$(az ad app list --display-name "AI Gateway BFF" --query "[].appId" -o tsv)"
 az ad app delete --id "$bff_app_id"
 ```
 
----
+## 7. 다음 단계
 
-### 5. 참고 링크
-
-***
-
-- [Azure 리소스 그룹 삭제](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/delete-resource-group)
-- [Azure API Management — VNet 통합 정리](https://learn.microsoft.com/en-us/azure/api-management/virtual-network-concepts)
-- [Terraform — destroy 명령](https://developer.hashicorp.com/terraform/cli/commands/destroy)
+| 목적 | 이동 |
+|---|---|
+| 클라이언트 연결 | [클라이언트 온보딩](07-connect-clients.md) |
+| 변수·출력 전체 목록 | [부록: 변수·출력·문제 해결](10-reference.md) |
+| 향후 지원 계획 | [향후 지원 계획](09-future.md) |

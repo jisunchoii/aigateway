@@ -220,9 +220,13 @@ def main() -> int:
         container = client.get_database_client(
             os.environ["COSMOS_DATABASE"]
         ).get_container_client(os.environ["COSMOS_CONTAINER"])
-        config = container.read_item(item="global", partition_key="global")
-        log.info("read config doc: %s", {k: config.get(k) for k in FIELD_TO_NAMED_VALUE})
-        sync_named_values(cred, config)
+        try:
+            config = container.read_item(item="global", partition_key="global")
+        except CosmosResourceNotFoundError:
+            log.info("global config doc absent; keeping Terraform-managed APIM named values")
+        else:
+            log.info("read config doc: %s", {k: config.get(k) for k in FIELD_TO_NAMED_VALUE})
+            sync_named_values(cred, config)
         sync_budget_downgrades(cred, container)
         sync_consumer_config(cred, container)
     except Exception:  # noqa: BLE001 - top-level job boundary; log and fail the execution
