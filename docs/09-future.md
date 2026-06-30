@@ -8,12 +8,6 @@ description: "향후 지원 계획 — Entra ID 인증, Claude Code, Codex/Respo
 
 ## 1. 지원 후보와 우선순위
 
-{% hint style="success" %}
-**권장 표현**
-
-문서 제목은 **“향후 지원 계획”**이 자연스럽습니다. 아직 공식 지원하지 않는 클라이언트와 인증 방식을 순서대로 제품화한다는 의미가 명확합니다.
-{% endhint %}
-
 | 후보 | 목적 | 현재 상태 | 우선순위 |
 |---|---|---|---:|
 | Entra ID 클라이언트 인증 | API key 없이 JWT로 consumer 식별 | Terraform/APIM 토글 구현 완료, 운영 검증 전 | 1 |
