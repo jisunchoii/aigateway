@@ -12,7 +12,7 @@
 `llm-gateway`(english 브랜치)를 **고객 배포용 레퍼런스**로 다듬는다. 두 갈래:
 
 - **(IaC)** 고객이 **이미 떠 있는 단일 AIServices(Foundry) 계정 + 모델 배포**를 게이트웨이가 새로 만들지 않고 **재사용(brownfield)** 하도록 경로를 추가한다.
-- **(문서)** 고객 플랫폼팀이 **배포~운영 end-to-end**로 따라올 수 있는 **한국어 GitBook**을 레포 내 `docs/` 서브트리로 만든다.
+- **(문서)** 플랫폼 팀이 **배포~운영 end-to-end**로 따라올 수 있는 **한국어 GitBook**을 레포 내 `docs/` 서브트리로 만든다.
 
 ### 변하지 않는 전제 (게이트웨이의 정체성)
 - 클라이언트는 **public APIM**(`apim_public=true`)에 붙는다 — GHCP CLI / opencode / Copilot 같은 개발 툴 연동이 목적.
@@ -28,7 +28,7 @@
 | D4 | reuse 시 **단일 AIServices로 통합** (gpt+OSS 한 계정), `modules/openai`는 `count=0` | 다운그레이드 단순화 |
 | D5 | 백엔드 경로 **`/openai/v1` 통일** (dated api-version 종속 제거) | gpt path→body 변환은 스모크 검증 후 확정 |
 | D6 | 클라이언트 **입구는 chat completions(v1) 유지** | 대상 클라이언트가 보내는 형식이므로 불변 |
-| D7 | **한국어 GitBook**, 레포 내 `docs/` 서브트리 + `SUMMARY.md` | 고객 플랫폼팀 대상 end-to-end |
+| D7 | **한국어 GitBook**, 레포 내 `docs/` 서브트리 + `SUMMARY.md` | 플랫폼 팀 대상 end-to-end |
 | D8 | Admin UI **한국어화**(별도 Phase): i18n 문자열만 main에서 되돌리고 Copilot 기능 보존 | main = 한국어 SOT |
 
 ### 이번 범위 (IN)
@@ -235,12 +235,12 @@ foundry_deployments = {
 
 ---
 
-## 5. GitBook 구조 (한국어, `docs/` 서브트리, 고객 플랫폼팀 end-to-end)
+## 5. GitBook 구조 (한국어, `docs/` 서브트리, 플랫폼 팀 end-to-end)
 
 ### 5.1 위치 & 동기화
 - 레포 내 **`docs/`** 아래 GitBook 호환 마크다운 + **`docs/SUMMARY.md`**(목차). GitBook이 이 폴더를 Git 동기화.
 - 기존 `docs/images/`(architecture.png, aigateway.gif) 재사용.
-- 역할 분리: `README.md`(영문, 개발자/기여자) vs GitBook(한국어, 고객 플랫폼팀 운영).
+- 역할 분리: `README.md`(영문, 개발자/기여자) vs GitBook(한국어, 플랫폼 팀 운영).
 - `internal/`(DEVELOPMENT-HISTORY, demo-guide)는 **GitBook 비포함**.
 
 ### 5.2 목차 (★ = 이번 작업 핵심/신규 페이지)
