@@ -30,7 +30,7 @@ GitHub Copilot CLI를 Azure provider 모드로 설정해 APIM 게이트웨이를
 
 ## 3. 환경 변수 설정
 
-<figure><img src="../images/ghcp-04.png?v=20260630" alt="PowerShell에서 Copilot CLI provider 환경 변수와 bearer token을 설정하는 화면"><figcaption>Copilot CLI 실행 전 `COPILOT_PROVIDER_*` 환경 변수 설정</figcaption></figure>
+<figure><img src="../images/ghcp-04.png" alt="PowerShell에서 Copilot CLI provider 환경 변수와 bearer token을 설정하는 화면"><figcaption>Copilot CLI 실행 전 `COPILOT_PROVIDER_*` 환경 변수 설정</figcaption></figure>
 
 ```bash
 export COPILOT_PROVIDER_TYPE=azure
@@ -86,7 +86,7 @@ BYOK 모델은 GitHub 호스팅 카탈로그에 등록되지 않으므로 `/mode
 
 ## 6. 검증
 
-<figure><img src="../images/ghcp-05.png?v=20260630" alt="GitHub Copilot CLI가 게이트웨이를 통해 응답하는 터미널 화면"><figcaption>Copilot CLI 실행 결과 — 게이트웨이 경유 응답 확인</figcaption></figure>
+<figure><img src="../images/ghcp-05.png" alt="GitHub Copilot CLI가 게이트웨이를 통해 응답하는 터미널 화면"><figcaption>Copilot CLI 실행 결과 — 게이트웨이 경유 응답 확인</figcaption></figure>
 
 오류가 발생하면 아래를 확인합니다.
 
