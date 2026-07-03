@@ -103,7 +103,7 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 |---|---|---|
 | `monthly_budget_amount` | `200` | Azure Cost Management 월 예산. 알림 전용 |
 | `budget_alert_email` | 필수 | 예산 알림 수신 이메일 |
-| `budget_start_date` | `2026-06-01T00:00:00Z` | Cost Management budget 시작일 |
+| `budget_start_date` | `<당월 1일>T00:00:00Z` | Cost Management budget 시작일. 반드시 apply 당월 1일(UTC), 과거 달 금지 |
 | `rate_tiers` | `small`, `medium`, `large` | Admin UI와 APIM Named Values에 공급되는 티어 map |
 | `tokens_per_minute` | `1000` | 정적 TPM 기본값 |
 | `token_quota` | `50000` | 쿼터 기간 내 토큰 총량 |

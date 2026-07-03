@@ -264,6 +264,29 @@ terraform destroy
 
 Terraform이 관리하는 APIM, Container Apps, Cosmos DB, VNet, Private Endpoint, ACR 등을 삭제합니다.
 
+### Terraform state backend 정리
+
+`terraform destroy`는 게이트웨이 workload 리소스를 삭제하지만, Terraform state를 저장하는 backend 리소스 그룹은 삭제하지 않습니다. 데모·검증 환경을 완전히 내릴 때는 workload 삭제가 끝난 뒤 backend도 별도로 정리합니다.
+
+먼저 state가 비었고 같은 storage account에 보존해야 할 다른 state blob이 없는지 확인합니다. backend 리소스 그룹과 storage account 이름은 `infra/providers.tf`의 `backend "azurerm"` 블록에서 확인합니다.
+
+```bash
+cd infra
+terraform state list
+az storage blob list --account-name <storage_account_name> --container-name tfstate --auth-mode login -o table
+```
+
+`terraform state list` 출력이 비어 있고, `tfstate` 컨테이너에 삭제해도 되는 state blob만 남아 있으면 backend 리소스 그룹을 삭제합니다.
+
+```bash
+az group delete -n <backend_resource_group_name> --yes
+az group exists -n <backend_resource_group_name>
+```
+
+{% hint style="warning" %}
+backend 리소스 그룹을 삭제하면 해당 backend로 더 이상 `terraform init`, `plan`, `destroy`를 실행할 수 없습니다. 모든 workload 삭제와 확인이 끝난 뒤 마지막 단계로만 수행하세요. 나중에 같은 워킹카피에서 새 backend를 bootstrap하면 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
+{% endhint %}
+
 ### destroy가 멈출 때
 
 VNet 주입 APIM은 destroy 중 Named Value 삭제 단계에서 오래 멈출 수 있습니다. 데모·검증 환경이라면 리소스 그룹 삭제가 더 깔끔합니다.

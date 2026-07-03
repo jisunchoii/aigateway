@@ -71,16 +71,19 @@ az provider register -n Microsoft.Network
 
 ### 0.4 Terraform 상태 백엔드 부트스트랩 (구독당 1회)
 
-```powershell
-cd c:\workspace\aigateway
-./scripts/bootstrap-backend.ps1 -Location eastus2 -BackendRg rg-aigw-tfstate-dev-eastus2 -StoragePrefix staigwtfstate
+```bash
+cd /path/to/llm-gateway
+./scripts/bootstrap-backend.sh \
+  --location eastus2 \
+  --backend-rg rg-aigw-tfstate-dev-eastus2 \
+  --storage-prefix staigwtfstate \
+  --state-key ai-gateway-eus2.tfstate
 ```
 
-출력된 `resource_group_name` / `storage_account_name`을 `infra/providers.tf`의
-`backend "azurerm"` 블록에 반영합니다.
+스크립트가 Terraform state용 리소스 그룹, storage account, `tfstate` 컨테이너를 만들고 `infra/providers.tf`의 `backend "azurerm"` 블록을 자동으로 갱신합니다. 사용자가 `providers.tf` 값을 손으로 복사해 넣을 필요는 없습니다.
 
 ```hcl
-# infra/providers.tf
+# infra/providers.tf (bootstrap 스크립트가 자동 갱신)
 backend "azurerm" {
   resource_group_name  = "rg-aigw-tfstate-dev-eastus2"   # ← 부트스트랩 출력값
   storage_account_name = "staigwtfstatexxxxxx"           # ← 부트스트랩 출력값
@@ -89,6 +92,8 @@ backend "azurerm" {
   use_azuread_auth     = true
 }
 ```
+
+같은 워킹카피에서 backend 리소스 그룹이나 storage account를 삭제한 뒤 다시 bootstrap했다면, 로컬 `.terraform` 디렉터리에 이전 backend 설정이 남아 있을 수 있습니다. 이 경우 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
 
 ---
 
@@ -195,7 +200,7 @@ apim_sku_name        = "Developer_1"       # Internal VNet 지원 SKU (또는 Pr
 
 monthly_budget_amount = 200
 budget_alert_email    = "you@example.com"
-budget_start_date     = "2026-06-01T00:00:00Z"   # 과거 날짜 금지(첫 apply 시점 기준 당월 1일)
+budget_start_date     = "2026-07-01T00:00:00Z"   # 과거 날짜 금지(첫 apply 시점 기준 당월 1일)
 ```
 
 ```powershell
@@ -442,6 +447,26 @@ VM의 관리 ID가 IMDS 토큰으로 Cosmos 데이터 평면에 직접 upsert하
 cd infra
 terraform destroy
 ```
+
+위 명령은 Terraform이 관리하는 게이트웨이 리소스 그룹(APIM, VNet, Cosmos DB, ACR, Container Apps 등)을 삭제합니다. Terraform state를 저장하는 backend 리소스 그룹은 `terraform destroy` 대상이 아니므로, 완전한 데모/검증 환경 정리가 필요하면 마지막에 별도로 삭제합니다.
+
+먼저 state가 비었고 같은 storage account에 보존해야 할 다른 state blob이 없는지 확인합니다. backend 리소스 그룹과 storage account 이름은 `infra/providers.tf`의 `backend "azurerm"` 블록에서 확인합니다.
+
+```powershell
+terraform state list
+az storage blob list --account-name <storage_account_name> --container-name tfstate --auth-mode login -o table
+```
+
+`terraform state list` 출력이 비어 있고, `tfstate` 컨테이너에 삭제해도 되는 state blob만 남아 있으면 backend 리소스 그룹을 삭제합니다.
+
+```powershell
+az group delete -n <backend_resource_group_name> --yes
+az group exists -n <backend_resource_group_name>
+```
+
+{% hint style="warning" %}
+backend 리소스 그룹을 삭제하면 해당 backend로 더 이상 `terraform init`, `plan`, `destroy`를 실행할 수 없습니다. 모든 workload 삭제와 확인이 끝난 뒤 마지막 단계로만 수행하세요. 나중에 같은 워킹카피에서 새 backend를 bootstrap하면 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
+{% endhint %}
 
 > 경로 B(재사용)에서는 기존 모델 계정은 **삭제되지 않습니다**(`data` 소스라 Terraform 관리 대상
 > 아님). APIM에 부여했던 RBAC role assignment만 함께 제거됩니다. 경로 A(배포)에서는 새로 만든 모델

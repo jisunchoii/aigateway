@@ -64,17 +64,24 @@ apim_publisher_name   = "<publisher-name>"
 apim_publisher_email  = "<publisher-email>"
 apim_public           = true
 
+# Admin UI 환경 모드. Container Apps 환경의 internal/external은 immutable이라
+# 1차 apply에서 확정해야 함. 나중에 뒤집으면 환경 전체가 destroy+recreate 됨.
+# Admin UI를 공개 FQDN으로 쓸 계획이면 지금 true로 둔다(이미지는 2차에서 채움).
+admin_ui_public       = true
+
 reuse_foundry = false
 allowed_models = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
 
 monthly_budget_amount = 200
 budget_alert_email    = "<email>"
-budget_start_date     = "2026-07-01"
+budget_start_date     = "2026-07-01"   # 과거 날짜 금지(첫 apply 시점 기준 당월 1일)
 
 # 1차 apply에서는 ACR이 아직 없으므로 비워 둠
 worker_image   = ""
 admin_ui_image = ""
 ```
+
+> Container Apps 환경의 `internal_load_balancer_enabled`(= `!admin_ui_public`)는 생성 후 변경할 수 없습니다. 환경은 1차 apply에서 무조건 만들어지므로, Admin UI를 public으로 쓸 계획이면 `admin_ui_public`을 **1차 tfvars에서** `true`로 두어야 2차 apply 때 환경이 통째로 재생성되는 낭비를 피할 수 있습니다. internal(VNet 전용)로 운영할 계획이면 생략하거나 `false`로 둡니다.
 
 ## 5. 1차 apply
 
@@ -95,6 +102,8 @@ state_key="ai-gateway-eus2.tfstate"             # state blob 이름
   --storage-prefix "$storage_prefix" \
   --state-key "$state_key"
 ```
+
+같은 워킹카피에서 backend 리소스 그룹이나 storage account를 삭제한 뒤 다시 bootstrap했다면, 로컬 `.terraform` 디렉터리에 이전 backend 설정이 남아 있을 수 있습니다. 이 경우 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
 
 그 다음 Terraform을 실행합니다.
 
@@ -146,6 +155,7 @@ Admin UI 배포 전에 새 Admin 그룹을 만들지, 기존 그룹을 재사용
 필요한 출력값:
 
 ``` 
+entra_tenant_id       = "<tenant guid>"
 admin_group_object_id = "<admin group object id>"
 bff_api_audience      = "api://<bff app id>"
 spa_client_id         = "<spa app id>"
@@ -158,7 +168,8 @@ spa_client_id         = "<spa app id>"
 ``` 
 worker_image          = "<registry_login_server>/config-sync-worker:latest"
 admin_ui_image        = "<registry_login_server>/admin-ui:latest"
-admin_ui_public       = true
+admin_ui_public       = true   # Step 4에서 이미 설정했다면 값 유지(변경 금지 — 재생성 유발)
+entra_tenant_id       = "<tenant guid>"   # 누락 시 Admin UI 로그인이 AADSTS900023(tenant 'undefined')로 실패
 admin_group_object_id = "<entra security group object id>"
 bff_api_audience      = "api://<bff app id>"
 spa_client_id         = "<spa app id>"
@@ -195,18 +206,25 @@ az rest --method PATCH \
 
 Cosmos DB 초기 문서를 주입하고 config-sync worker를 즉시 실행합니다.
 
+seed 스크립트는 jumpbox의 관리 ID(IMDS)와 Cosmos **private endpoint**를 사용하므로 반드시 **jumpbox 안에서** 실행해야 합니다. 로컬에서 `../scripts/seed-*.sh`를 직접 실행하면 `169.254.169.254`(IMDS)에 접속하지 못해 실패합니다. `az vm run-command`로 jumpbox에서 실행합니다.
+
 ```bash
 cosmos_endpoint="$(terraform output -raw config_store_endpoint)"
 resource_group_name="$(terraform output -raw resource_group_name)"
 config_sync_job_name="$(terraform output -raw config_sync_job_name)"
+jumpbox_vm="vm-jump-${prefix}-${env}-<region-abbrev>"   # 예: vm-jump-aigw-dev-eus2
 
-../scripts/seed-cosmos-jumpbox.sh "$cosmos_endpoint"
-../scripts/seed-pricing-jumpbox.sh "$cosmos_endpoint"
+az vm run-command invoke -g "$resource_group_name" -n "$jumpbox_vm" \
+  --command-id RunShellScript --scripts @../scripts/seed-cosmos-jumpbox.sh \
+  --parameters "$cosmos_endpoint"
+az vm run-command invoke -g "$resource_group_name" -n "$jumpbox_vm" \
+  --command-id RunShellScript --scripts @../scripts/seed-pricing-jumpbox.sh \
+  --parameters "$cosmos_endpoint"
 az containerapp job start -g "$resource_group_name" -n "$config_sync_job_name"
 ```
 
 {% hint style="info" %}
-Seed 작업은 VNet 내부에서 실행되어야 합니다. `enable_jumpbox=true`로 배포한 환경에서는 jumpbox 경유 seed 스크립트를 사용합니다.
+Seed 작업은 VNet 내부에서 실행되어야 합니다. `enable_jumpbox=true` + `run_seed=true`로 배포하면 **1차 apply 때 Terraform run-command(`seed-cosmos-config`)로 자동 seed**되므로 위 seed 단계는 재실행/검증용입니다(idempotent upsert). 값을 바꿔 다시 주입할 때만 수동 실행하면 됩니다.
 {% endhint %}
 
 ## 10. 검증
