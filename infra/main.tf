@@ -100,6 +100,7 @@ module "jumpbox" {
 
 module "apim" {
   source                        = "./modules/apim"
+  depends_on                    = [module.network]
   name_suffix                   = local.name_suffix
   resource_group_name           = azurerm_resource_group.rg.name
   location                      = var.location

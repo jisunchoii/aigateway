@@ -128,6 +128,8 @@ allowed_models = ["grok-4.3", "DeepSeek-V4-Pro"]
 
 이 페이지에서 state backend를 먼저 만들지는 않습니다. 기존 계정 보안 설정과 `terraform.tfvars` 입력을 끝낸 뒤, 선택한 배포 runbook의 backend bootstrap 단계를 진행하고 첫 `terraform plan`에서 기존 계정/모델이 생성 또는 변경 대상이 아닌지 확인합니다.
 
+같은 워킹카피에서 backend 리소스 그룹이나 storage account를 삭제한 뒤 다시 bootstrap했다면, 로컬 `.terraform` 디렉터리에 이전 backend 설정이 남아 있을 수 있습니다. 이 경우 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
+
 ```bash
 cd infra
 terraform init

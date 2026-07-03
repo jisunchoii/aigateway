@@ -74,7 +74,7 @@ apim_public = true
 
 monthly_budget_amount = 200
 budget_alert_email    = "<alert-email>"
-budget_start_date     = "2026-07-01T00:00:00Z"
+budget_start_date     = "2026-07-01T00:00:00Z"   # 과거 날짜 금지(첫 apply 시점 기준 당월 1일)
 ```
 
 그 다음 모델 백엔드 경로를 하나만 선택합니다. 신규 생성 경로는 기본값을 그대로 써도 되지만, quota/capacity를 명확히 고정하려면 파일에 적습니다.
@@ -191,6 +191,8 @@ state_key="ai-gateway-eus2.tfstate"             # state blob 이름
   --storage-prefix "$storage_prefix" \
   --state-key "$state_key"
 ```
+
+같은 워킹카피에서 backend 리소스 그룹이나 storage account를 삭제한 뒤 다시 bootstrap했다면, 로컬 `.terraform` 디렉터리에 이전 backend 설정이 남아 있을 수 있습니다. 이 경우 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
 
 이미 같은 스택의 backend가 `infra/providers.tf`에 설정되어 있으면 bootstrap은 다시 실행하지 않습니다.
 

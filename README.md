@@ -70,6 +70,8 @@ state_key="ai-gateway-eus2.tfstate"
   --state-key "$state_key"
 ```
 
+같은 워킹카피에서 Terraform backend 리소스 그룹이나 storage account를 삭제한 뒤 다시 bootstrap했다면, 로컬 `.terraform` 디렉터리에 이전 backend 설정이 남아 있을 수 있습니다. 이 경우 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
+
 ### 2. `terraform.tfvars` 작성
 
 ```bash

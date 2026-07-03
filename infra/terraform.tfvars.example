@@ -53,7 +53,7 @@ allowed_models = ["gpt-5.4", "grok-4.3", "DeepSeek-V4-Pro"]
 # Cost guardrail (observability module)
 monthly_budget_amount = 200
 budget_alert_email    = "platform-team@example.com"
-budget_start_date     = "2026-06-01T00:00:00Z"
+budget_start_date     = "2026-07-01T00:00:00Z"  # 반드시 apply 당월 1일(UTC). 과거 달이면 Azure가 거부
 
 # eastus2 may restrict B-series VM sizes; use a D-series v7 for the optional jumpbox.
 jumpbox_vm_size = "Standard_D2s_v7"
