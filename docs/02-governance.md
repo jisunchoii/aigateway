@@ -73,11 +73,43 @@ Rate limit은 consumer별 토큰 사용 속도와 총량을 제어합니다. API
 | tier | 권장 용도 |
 |---|---|
 | `small` | 테스트, 저빈도 팀 |
-| `medium` | 일반 팀 |
-| `large` | VS Code/Copilot agent처럼 큰 context를 쓰는 팀 |
+| `medium` | 일반 팀, 일반적인 IDE assistant |
+| `large` | OpenCode, VS Code/Copilot agent처럼 큰 context와 agent 호출을 쓰는 팀 |
 | `default` | consumer에 tier가 없을 때 적용되는 전역 기본값 |
 
-APIM limit은 **consumer별 공정 사용량**을 제어합니다. 하지만 백엔드 모델 deployment capacity가 더 낮으면, APIM limit에 도달하기 전에 백엔드 429가 먼저 발생할 수 있습니다.
+### Capacity와 APIM limit의 관계
+
+토큰 한도는 두 레이어를 함께 봐야 합니다.
+
+| 레이어 | 설정 | 의미 |
+|---|---|---|
+| 모델 deployment | `openai_deployments[*].capacity`, `foundry_deployments[*].capacity` | Azure 모델 배포의 backend 처리 한도. Terraform이 `azurerm_cognitive_deployment.sku.capacity`로 설정 |
+| APIM default limit | `tokens_per_minute`, `token_quota`, `token_quota_period` | consumer에 tier가 없을 때 쓰는 fallback. 모델별 capacity가 있으면 TPM은 `capacity * 1000`으로 계산 |
+| APIM tier limit | `rate_tiers.small/medium/large` | consumer에 `tier`가 있으면 이 값이 우선 적용됨 |
+
+APIM limit은 **consumer별 공정 사용량**을 제어합니다. 하지만 백엔드 모델 deployment capacity가 더 낮으면, APIM limit에 도달하기 전에 백엔드 429가 먼저 발생할 수 있습니다. 반대로 APIM tier TPM이 너무 낮으면, backend에는 여유가 있어도 APIM에서 먼저 429가 발생합니다.
+
+{% hint style="info" %}
+OpenCode 같은 agentic client는 한 번의 작업에서 title 생성, main agent, subagent 요청이 연속으로 발생합니다. 멀티에이전트 검증이나 대형 repository 분석에는 `large` tier처럼 높은 TPM과 충분한 기간 quota를 배정하세요.
+{% endhint %}
+
+기본 tier 값:
+
+| tier | TPM | quota | period |
+|---|---:|---:|---|
+| `small` | 50,000 | 5,000,000 | Daily |
+| `medium` | 150,000 | 30,000,000 | Daily |
+| `large` | 300,000 | 1,000,000,000 | Monthly |
+
+`large`도 backend quota보다 높게 잡으면 효과가 없습니다. 예를 들어 `large.tpm=300000`을 온전히 쓰려면 해당 모델 deployment의 token rate limit도 최소 300,000 TPM 이상이어야 합니다. 배포 후 실제 backend 한도는 아래처럼 확인합니다.
+
+```bash
+az cognitiveservices account deployment show \
+  -g <resource-group> \
+  -n <account-name> \
+  --deployment-name <deployment-name> \
+  --query "{sku:sku, rateLimits:properties.rateLimits}" -o json
+```
 
 ## Budget switch
 

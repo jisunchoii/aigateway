@@ -134,9 +134,9 @@ def _settings():
         apim_name="apim", cosmos_endpoint="https://c",
         cosmos_database="gateway", cosmos_map_container="team_subscription_map",
         allowed_model_aliases=("gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"),
-        rate_tiers={"small": {"tpm": 500, "quota": 20000, "period": "Daily"},
-                    "medium": {"tpm": 2000, "quota": 100000, "period": "Daily"},
-                    "large": {"tpm": 10000, "quota": 500000, "period": "Monthly"}},
+        rate_tiers={"small": {"tpm": 50000, "quota": 5000000, "period": "Daily"},
+                    "medium": {"tpm": 150000, "quota": 30000000, "period": "Daily"},
+                    "large": {"tpm": 300000, "quota": 1000000000, "period": "Monthly"}},
     )
 
 
@@ -358,7 +358,7 @@ def test_list_tiers():
     assert r.status_code == 200
     tiers = {t["name"]: t for t in r.json()}
     assert set(tiers) == {"small", "medium", "large"}
-    assert tiers["medium"]["tpm"] == 2000
+    assert tiers["medium"]["tpm"] == 150000
     assert tiers["large"]["period"] == "Monthly"
 
 

@@ -23,7 +23,7 @@ def test_settings_read_from_env(monkeypatch):
     assert set(s.allowed_model_aliases) == set(s.alias_models.keys())
     assert "grok-4.3" in s.allowed_model_aliases
     assert set(s.rate_tiers.keys()) == {"small", "medium", "large"}
-    assert s.rate_tiers["medium"]["tpm"] == 2000
+    assert s.rate_tiers["medium"]["tpm"] == 150000
     assert s.issuer == "https://login.microsoftonline.com/entra_tenant_id/v2.0"
     assert s.jwks_uri == (
         "https://login.microsoftonline.com/entra_tenant_id/discovery/v2.0/keys"

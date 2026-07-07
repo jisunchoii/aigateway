@@ -105,17 +105,21 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | `budget_alert_email` | 필수 | 예산 알림 수신 이메일 |
 | `budget_start_date` | `<당월 1일>T00:00:00Z` | Cost Management budget 시작일. 반드시 apply 당월 1일(UTC), 과거 달 금지 |
 | `rate_tiers` | `small`, `medium`, `large` | Admin UI와 APIM Named Values에 공급되는 티어 map |
-| `tokens_per_minute` | `1000` | 정적 TPM 기본값 |
-| `token_quota` | `50000` | 쿼터 기간 내 토큰 총량 |
+| `tokens_per_minute` | `150000` | tier/model-derived limit이 없을 때 쓰는 fallback TPM |
+| `token_quota` | `30000000` | 쿼터 기간 내 토큰 총량 |
 | `token_quota_period` | `Daily` | `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly` |
 
 `rate_tiers` 기본값:
 
 ```text
-small  = { tpm = 500,   quota = 20000,  period = "Daily" }
-medium = { tpm = 2000,  quota = 100000, period = "Daily" }
-large  = { tpm = 10000, quota = 500000, period = "Monthly" }
+small  = { tpm = 50000,  quota = 5000000,    period = "Daily" }
+medium = { tpm = 150000, quota = 30000000,   period = "Daily" }
+large  = { tpm = 300000, quota = 1000000000, period = "Monthly" }
 ```
+
+{% hint style="info" %}
+`openai_deployments[*].capacity`와 `foundry_deployments[*].capacity`는 Azure 모델 deployment의 `sku.capacity`로 배포됩니다. APIM default tier는 모델별 `capacity * 1000`을 TPM으로 계산하지만, consumer에 `small`/`medium`/`large` tier가 있으면 `rate_tiers` 값이 우선합니다. APIM tier TPM은 backend deployment rate limit 이하로 잡아야 효과가 있습니다. 자세한 운영 기준은 [거버넌스 — Rate limit](02-governance.md#rate-limit)을 참고하세요.
+{% endhint %}
 
 ### Jumpbox
 

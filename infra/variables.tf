@@ -199,8 +199,8 @@ variable "openai_openapi_spec_url" {
 
 variable "tokens_per_minute" {
   type        = number
-  default     = 1000
-  description = "Per-team token-per-minute limit enforced by llm-token-limit. Static value for Phase 2."
+  default     = 150000
+  description = "Fallback per-consumer token-per-minute limit enforced by llm-token-limit when no tier/model-derived limit applies."
   validation {
     condition     = var.tokens_per_minute > 0
     error_message = "tokens_per_minute must be a positive number."
@@ -209,7 +209,7 @@ variable "tokens_per_minute" {
 
 variable "token_quota" {
   type        = number
-  default     = 50000
+  default     = 30000000
   description = "Per-team token quota per quota period (llm-token-limit)."
   validation {
     condition     = var.token_quota > 0
@@ -314,9 +314,9 @@ variable "admin_group_object_id" {
 variable "rate_tiers" {
   type = map(object({ tpm = number, quota = number, period = string }))
   default = {
-    small  = { tpm = 500, quota = 20000, period = "Daily" }
-    medium = { tpm = 2000, quota = 100000, period = "Daily" }
-    large  = { tpm = 10000, quota = 500000, period = "Monthly" }
+    small  = { tpm = 50000, quota = 5000000, period = "Daily" }
+    medium = { tpm = 150000, quota = 30000000, period = "Daily" }
+    large  = { tpm = 300000, quota = 1000000000, period = "Monthly" }
   }
   description = "Per-team rate-limit tiers. Single source feeding APIM tier named values (policy enforcement) and the Admin UI RATE_TIERS_JSON env (display)."
   validation {

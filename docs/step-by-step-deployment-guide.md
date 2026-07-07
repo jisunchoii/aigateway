@@ -121,6 +121,9 @@ module "foundry" { source = "./modules/foundry" ... deployments = var.foundry_de
    - `foundry_deployments`: OSS/파트너 모델. 값에 `model_format`(모델 공급자, 예: `OpenAI`,
      `Meta`, `Mistral` 등) 포함.
    - map의 **키**가 게이트웨이가 노출하는 client-facing 배포 이름(= alias)이 됩니다.
+   - `capacity`는 Azure 모델 deployment의 `sku.capacity`로 적용되며, APIM default TPM 계산에도
+     `capacity * 1000` 형태로 사용됩니다. 다만 consumer에 `small`/`medium`/`large` tier가
+     지정되어 있으면 `rate_tiers` 값이 우선합니다.
 
    예시 형태(실제 모델명/버전/SKU/용량은 아래 명령으로 확인한 값으로 채우세요):
 
