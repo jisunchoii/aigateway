@@ -1,5 +1,5 @@
 ---
-description: "GitHub Copilot CLI — Azure provider 환경 변수로 APIM 게이트웨이 연결"
+description: GitHub Copilot CLI — Azure provider 환경 변수로 APIM 게이트웨이 연결
 ---
 
 # GitHub Copilot CLI
@@ -11,26 +11,26 @@ GitHub Copilot CLI를 Azure provider 모드로 설정해 APIM 게이트웨이를
 {% hint style="success" %}
 **이 경로가 맞는 경우**
 
-- GitHub Copilot CLI를 사용한다.
-- `gh` CLI에서 `gh copilot` 명령을 실행할 수 있다.
-- CLI의 Azure provider 환경 변수를 설정할 수 있다.
-- 기본 모델을 하나 정해 CLI 세션에서 사용한다.
+* GitHub Copilot CLI를 사용한다.
+* `gh` CLI에서 `gh copilot` 명령을 실행할 수 있다.
+* CLI의 Azure provider 환경 변수를 설정할 수 있다.
+* 기본 모델을 하나 정해 CLI 세션에서 사용한다.
 {% endhint %}
 
 ## 2. 준비값
 
-| 값 | 예시 |
-|---|---|
-| APIM host | `https://<apim-host>` |
+| 값                     | 예시                        |
+| --------------------- | ------------------------- |
+| APIM host             | `https://<apim-host>`     |
 | APIM subscription key | `<APIM subscription key>` |
-| API version | `2025-01-01-preview` |
-| APIM 경로 | `/openai` |
+| API version           | `2025-01-01-preview`      |
+| APIM 경로               | `/openai`                 |
 
 `gh`가 없다면 먼저 설치하고 `gh copilot -- --help`가 실행되는지 확인합니다. `COPILOT_PROVIDER_BASE_URL`을 설정하는 BYOK 모드에서는 GitHub 인증 없이도 custom provider 호출을 시작할 수 있습니다.
 
 ## 3. 환경 변수 설정
 
-<figure><img src="../images/ghcp-04.png" alt="PowerShell에서 Copilot CLI provider 환경 변수와 bearer token을 설정하는 화면"><figcaption>Copilot CLI 실행 전 `COPILOT_PROVIDER_*` 환경 변수 설정</figcaption></figure>
+<figure><img src="../.gitbook/assets/ghcp-04.png" alt="PowerShell에서 Copilot CLI provider 환경 변수와 bearer token을 설정하는 화면"><figcaption><p>Copilot CLI 실행 전 `COPILOT_PROVIDER_*` 환경 변수 설정</p></figcaption></figure>
 
 ```bash
 export COPILOT_PROVIDER_TYPE=azure
@@ -60,12 +60,12 @@ export COPILOT_MODEL=<배포이름>
 
 ## 4. 동작 방식
 
-| 항목 | 값 |
-|---|---|
-| base URL | APIM host만 입력 |
-| 요청 경로 | CLI가 `/openai/deployments/<model>/chat/completions` 구성 |
-| APIM 인증 | `/openai` 경로에서 `api-key` 헤더 사용 |
-| APIM 처리 | URL의 deployment 이름을 body `model`에 주입 |
+| 항목       | 값                                                      |
+| -------- | ------------------------------------------------------ |
+| base URL | APIM host만 입력                                          |
+| 요청 경로    | CLI가 `/openai/deployments/<model>/chat/completions` 구성 |
+| APIM 인증  | `/openai` 경로에서 `api-key` 헤더 사용                         |
+| APIM 처리  | URL의 deployment 이름을 body `model`에 주입                   |
 
 Copilot CLI가 보내는 API key는 APIM subscription key입니다. `/openai` 경로는 CLI 호환성을 위해 `api-key` 헤더를 APIM subscription key carrier로 사용합니다.
 
@@ -86,17 +86,17 @@ BYOK 모델은 GitHub 호스팅 카탈로그에 등록되지 않으므로 `/mode
 
 ## 6. 검증
 
-<figure><img src="../images/ghcp-05.png" alt="GitHub Copilot CLI가 게이트웨이를 통해 응답하는 터미널 화면"><figcaption>Copilot CLI 실행 결과 — 게이트웨이 경유 응답 확인</figcaption></figure>
+<figure><img src="../.gitbook/assets/ghcp-05.png" alt="GitHub Copilot CLI가 게이트웨이를 통해 응답하는 터미널 화면"><figcaption><p>Copilot CLI 실행 결과 — 게이트웨이 경유 응답 확인</p></figcaption></figure>
 
 오류가 발생하면 아래를 확인합니다.
 
-- `COPILOT_PROVIDER_BASE_URL`에 `/openai`가 포함되어 있지 않은지
-- `COPILOT_PROVIDER_API_KEY`가 올바른 APIM subscription key인지
-- `COPILOT_PROVIDER_MODEL_ID`와 `COPILOT_PROVIDER_WIRE_MODEL`이 같은 모델인지
-- 해당 모델이 consumer allowed models에 포함되어 있는지
-- `gh copilot -- --help`가 실행되는지
+* `COPILOT_PROVIDER_BASE_URL`에 `/openai`가 포함되어 있지 않은지
+* `COPILOT_PROVIDER_API_KEY`가 올바른 APIM subscription key인지
+* `COPILOT_PROVIDER_MODEL_ID`와 `COPILOT_PROVIDER_WIRE_MODEL`이 같은 모델인지
+* 해당 모델이 consumer allowed models에 포함되어 있는지
+* `gh copilot -- --help`가 실행되는지
 
 ## 7. 참고 링크
 
-- [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli)
-- [Azure API Management — Subscriptions](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)
+* [GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli)
+* [Azure API Management — Subscriptions](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)

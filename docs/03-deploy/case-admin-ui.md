@@ -1,5 +1,5 @@
 ---
-description: "Admin UI 배포 — Entra 그룹 방식 결정, 이미지 빌드, tfvars, redirect URI 설정"
+description: Admin UI 배포 — Entra 그룹 방식 결정, 이미지 빌드, tfvars, redirect URI 설정
 ---
 
 # Admin UI 배포
@@ -11,10 +11,10 @@ description: "Admin UI 배포 — Entra 그룹 방식 결정, 이미지 빌드, 
 {% hint style="success" %}
 **이 경로가 맞는 경우**
 
-- APIM 게이트웨이와 ACR이 이미 준비되어 있다.
-- consumer 등록, 구독 키 발급, 정책 관리를 UI로 처리하고 싶다.
-- Admin UI 쓰기 권한을 Entra admin 그룹으로 제한할 수 있다.
-- `admin_ui_public` 값을 첫 배포 전에 결정할 수 있다.
+* APIM 게이트웨이와 ACR이 이미 준비되어 있다.
+* consumer 등록, 구독 키 발급, 정책 관리를 UI로 처리하고 싶다.
+* Admin UI 쓰기 권한을 Entra admin 그룹으로 제한할 수 있다.
+* `admin_ui_public` 값을 첫 배포 전에 결정할 수 있다.
 {% endhint %}
 
 {% hint style="warning" %}
@@ -23,27 +23,27 @@ description: "Admin UI 배포 — Entra 그룹 방식 결정, 이미지 빌드, 
 
 ## 2. 배포 전 결정
 
-| 결정 | 선택지 | 기준 |
-|---|---|---|
-| Admin 그룹 | 새 그룹 생성 / 기존 그룹 재사용 | 데모는 새 그룹, 운영 조직은 기존 보안 그룹 재사용 |
-| Entra 앱 등록 | 새로 생성 / 기존 앱 재사용 | 새 배포는 스크립트 생성, 조직 표준 앱이 있으면 재사용 |
-| Admin UI 공개 여부 | `admin_ui_public=true/false` | 외부 브라우저 접속이 필요하면 public |
-| config-sync worker | 함께 배포 / 나중에 배포 | consumer별 동적 정책과 budget switch가 필요하면 함께 배포 |
+| 결정                 | 선택지                          | 기준                                         |
+| ------------------ | ---------------------------- | ------------------------------------------ |
+| Admin 그룹           | 새 그룹 생성 / 기존 그룹 재사용          | 데모는 새 그룹, 운영 조직은 기존 보안 그룹 재사용              |
+| Entra 앱 등록         | 새로 생성 / 기존 앱 재사용             | 새 배포는 스크립트 생성, 조직 표준 앱이 있으면 재사용            |
+| Admin UI 공개 여부     | `admin_ui_public=true/false` | 외부 브라우저 접속이 필요하면 public                    |
+| config-sync worker | 함께 배포 / 나중에 배포               | consumer별 동적 정책과 budget switch가 필요하면 함께 배포 |
 
 Admin UI에는 네 가지 Entra 값이 필요합니다. 사용자가 Admin UI 화면에 직접 입력하는 값이 아니라, 배포자가 Admin UI를 켜기 전에 `terraform.tfvars`에 넣는 값입니다. 배포 후 BFF가 `/api/config`로 SPA에 내려주고, 브라우저 앱은 그 값을 사용해 MSAL 로그인을 자동 구성합니다.
 
-| 값 | tfvars 변수 | 역할 |
-|---|---|---|
-| Tenant ID | `entra_tenant_id` | SPA 로그인 authority와 BFF 토큰 검증에 사용할 Entra tenant |
-| Admin 보안 그룹 Object ID | `admin_group_object_id` | Admin UI 쓰기 권한 허용 그룹 |
-| BFF API audience | `bff_api_audience` | SPA가 BFF 호출용 토큰을 받을 대상 |
-| SPA client ID | `spa_client_id` | React SPA의 PKCE 로그인 앱 |
+| 값                     | tfvars 변수               | 역할                                             |
+| --------------------- | ----------------------- | ---------------------------------------------- |
+| Tenant ID             | `entra_tenant_id`       | SPA 로그인 authority와 BFF 토큰 검증에 사용할 Entra tenant |
+| Admin 보안 그룹 Object ID | `admin_group_object_id` | Admin UI 쓰기 권한 허용 그룹                           |
+| BFF API audience      | `bff_api_audience`      | SPA가 BFF 호출용 토큰을 받을 대상                         |
+| SPA client ID         | `spa_client_id`         | React SPA의 PKCE 로그인 앱                          |
 
 ## 3. Entra ID 객체 준비
 
-| Admin 그룹 | 앱 등록 |
-|---|---|
-| ![Entra ID Groups에서 Admin 그룹을 확인하는 화면](../images/screenshot-entra-admin-ui-groups.png) | ![Entra ID App registrations에서 BFF API 앱과 SPA 앱을 확인하는 화면](../images/screenshot-entra-admin-ui-apps.png) |
+| Admin 그룹                                                                                        | 앱 등록                                                                                                             |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| ![Entra ID Groups에서 Admin 그룹을 확인하는 화면](../.gitbook/assets/screenshot-entra-admin-ui-groups.png) | ![Entra ID App registrations에서 BFF API 앱과 SPA 앱을 확인하는 화면](../.gitbook/assets/screenshot-entra-admin-ui-apps.png) |
 
 ### 옵션 A — 새 Admin 그룹과 앱 등록 생성
 
@@ -64,7 +64,7 @@ spa_client_id         = "<spa app id>"
 
 스크립트가 admin consent를 자동으로 부여하지 못했다면, tenant admin 권한으로 아래 URL을 열어 SPA가 BFF API의 `access_as_user` scope를 사용할 수 있도록 동의합니다. 동의가 없거나 BFF API service principal이 없으면 로그인 중 `AADSTS650052` 오류가 발생할 수 있습니다.
 
-```text
+```
 https://login.microsoftonline.com/<tenant id>/adminconsent?client_id=<spa app id>
 ```
 
@@ -78,11 +78,11 @@ az ad group show --group "<existing-admin-group-name-or-id>" --query id -o tsv
 
 `scripts/app-registration.sh`는 현재 admin 그룹도 항상 생성합니다. 기존 그룹을 재사용하려면 아래 중 하나를 선택하세요.
 
-| 방식 | 설명 |
-|---|---|
-| BFF/SPA 앱만 수동 생성 | 조직 표준 Entra 앱 등록 절차로 BFF API audience와 SPA client ID 준비 |
-| 스크립트 일부만 실행 | `app-registration.sh`에서 admin group 생성 부분을 제외하고 BFF/SPA 앱 등록 부분만 실행 |
-| 기존 BFF/SPA 앱 재사용 | 기존 앱의 audience와 client ID를 조회해 tfvars에 입력 |
+| 방식               | 설명                                                                  |
+| ---------------- | ------------------------------------------------------------------- |
+| BFF/SPA 앱만 수동 생성 | 조직 표준 Entra 앱 등록 절차로 BFF API audience와 SPA client ID 준비             |
+| 스크립트 일부만 실행      | `app-registration.sh`에서 admin group 생성 부분을 제외하고 BFF/SPA 앱 등록 부분만 실행 |
+| 기존 BFF/SPA 앱 재사용 | 기존 앱의 audience와 client ID를 조회해 tfvars에 입력                           |
 
 기존 앱을 재사용하는 경우 값은 아래처럼 조회합니다.
 
@@ -127,15 +127,15 @@ spa_client_id         = "<spa app id>"
 worker_image = "<registry_login_server>/config-sync-worker:latest"
 ```
 
-| 변수 | 의미 |
-|---|---|
-| `admin_ui_image` | Admin UI 컨테이너 이미지 전체 URI |
-| `admin_ui_public` | Admin UI public FQDN 노출 여부 |
-| `entra_tenant_id` | Admin UI 로그인에 사용할 Entra tenant ID. `az account show --query tenantId -o tsv`로 확인 |
-| `admin_group_object_id` | Admin UI 쓰기 권한을 가진 Entra 보안 그룹 |
-| `bff_api_audience` | BFF API 토큰 audience |
-| `spa_client_id` | SPA public-client app ID |
-| `worker_image` | config-sync worker 이미지. 비워 두면 worker 미배포 |
+| 변수                      | 의미                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| `admin_ui_image`        | Admin UI 컨테이너 이미지 전체 URI                                                         |
+| `admin_ui_public`       | Admin UI public FQDN 노출 여부                                                       |
+| `entra_tenant_id`       | Admin UI 로그인에 사용할 Entra tenant ID. `az account show --query tenantId -o tsv`로 확인 |
+| `admin_group_object_id` | Admin UI 쓰기 권한을 가진 Entra 보안 그룹                                                   |
+| `bff_api_audience`      | BFF API 토큰 audience                                                              |
+| `spa_client_id`         | SPA public-client app ID                                                         |
+| `worker_image`          | config-sync worker 이미지. 비워 두면 worker 미배포                                         |
 
 `entra_tenant_id`는 Admin UI 배포 시 항상 필요합니다. `client_auth_mode="entra-id"`로 APIM 클라이언트 인증까지 Entra ID로 바꾸는 경우에도 같은 값을 사용합니다.
 
@@ -169,11 +169,11 @@ az rest --method PATCH \
 
 ## 8. 검증
 
-| 확인 항목 | 기대 결과 |
-|---|---|
-| Admin UI 접속 | `https://<admin_ui_fqdn>`에서 Entra 로그인 화면 표시 |
-| 그룹 멤버 로그인 | consumer 등록, 구독 키 발급, 정책 수정 가능 |
-| 그룹 비멤버 로그인 | 쓰기 작업 차단 또는 접근 거부 |
+| 확인 항목              | 기대 결과                                           |
+| ------------------ | ----------------------------------------------- |
+| Admin UI 접속        | `https://<admin_ui_fqdn>`에서 Entra 로그인 화면 표시     |
+| 그룹 멤버 로그인          | consumer 등록, 구독 키 발급, 정책 수정 가능                  |
+| 그룹 비멤버 로그인         | 쓰기 작업 차단 또는 접근 거부                               |
 | config-sync worker | worker를 배포한 경우 Cosmos 설정이 APIM named value로 동기화 |
 
 {% hint style="info" %}
@@ -182,8 +182,8 @@ az rest --method PATCH \
 
 ## 9. 다음 단계
 
-| 목적 | 이동 |
-|---|---|
-| consumer 등록과 key 발급 | [운영](../06-operate.md) |
-| APIM 직접 호출 | [직접 API 호출](../07-connect-clients/direct-api.md) |
-| 클라이언트 연결 | [클라이언트 온보딩](../07-connect-clients.md) |
+| 목적                  | 이동                                               |
+| ------------------- | ------------------------------------------------ |
+| consumer 등록과 key 발급 | [운영](../06-operate.md)                           |
+| APIM 직접 호출          | [직접 API 호출](../07-connect-clients/direct-api.md) |
+| 클라이언트 연결            | [클라이언트 온보딩](../07-connect-clients.md)            |
