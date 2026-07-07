@@ -30,6 +30,7 @@ APIM 정책은 backend URL, 모델 배포 이름, allowed model 목록을 포함
 | 이미 운영 중인 Foundry/AIServices 계정과 모델이 있다 | [모델 백엔드 기존 계정 재사용](04-reuse-foundry.md) |
 | 모델 백엔드 결정 후 APIM 게이트웨이만 먼저 검증하고 싶다 | [APIM 게이트웨이 배포](03-deploy/case-apim-core-first.md) |
 | APIM 게이트웨이 배포 후 Admin UI를 배포하고 싶다 | [Admin UI 배포](03-deploy/case-admin-ui.md) |
+| Codex CLI 등 Responses API 전용 클라이언트를 지원하고 싶다 | [Responses 브리지(LiteLLM) 배포](03-deploy/case-litellm-responses.md) |
 | 신규 데모/랩 환경에 전체 스택을 한 번에 올리고 싶다 | [All-in-one 배포](03-deploy/case-all-in-one.md) |
 
 ## 공통 배포 순서
