@@ -23,7 +23,7 @@ description: 플랫폼 팀을 위한 Azure AI Gateway 배포·운영 가이드
 
 ![아키텍처](images/architecture.png)
 
-클라이언트(VS Code, GitHub Copilot CLI, 직접 API 호출 등)가 공개 APIM 엔드포인트에 요청을 보내면, APIM 정책이 소비자를 식별하고 모델 허용 여부·속도 제한·예산 상태를 순차 검사한 뒤 Private Endpoint를 통해 백엔드 AIServices 계정으로 전달합니다. 백엔드는 Managed Identity 기반 RBAC으로만 접근하며 키 인증은 비활성화되어 있습니다.
+클라이언트(VS Code, GitHub Copilot CLI, OpenCode, 직접 API 호출 등)가 공개 APIM 엔드포인트에 요청을 보내면, APIM 정책이 소비자를 식별하고 모델 허용 여부·속도 제한·예산 상태를 순차 검사한 뒤 Private Endpoint를 통해 백엔드 AIServices 계정으로 전달합니다. 백엔드는 Managed Identity 기반 RBAC으로만 접근하며 키 인증은 비활성화되어 있습니다.
 
 ---
 
@@ -59,7 +59,7 @@ description: 플랫폼 팀을 위한 Azure AI Gateway 배포·운영 가이드
 {% endcontent-ref %}
 
 {% content-ref url="07-connect-clients.md" %}
-[07 클라이언트 온보딩 — VS Code, GHCP CLI, 직접 API 호출 등 클라이언트별 연결 방법](07-connect-clients.md)
+[07 클라이언트 온보딩 — VS Code, GHCP CLI, OpenCode, 직접 API 호출 등 클라이언트별 연결 방법](07-connect-clients.md)
 {% endcontent-ref %}
 
 {% content-ref url="09-future.md" %}

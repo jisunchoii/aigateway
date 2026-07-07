@@ -23,6 +23,7 @@ Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모
 |---|---|---|---|
 | GitHub Copilot CLI | `/openai/deployments/<model>/chat/completions` | `api-key` | CLI는 `COPILOT_PROVIDER_TYPE=azure` 사용 |
 | VS Code BYOK | `/vscode/models/deployments/<model>/chat/completions` | `Ocp-Apim-Subscription-Key` | VS Code provider는 **Custom Endpoint** 사용 |
+| OpenCode | `/openai/deployments/<model>/chat/completions` 또는 `/foundry/chat/completions` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | custom OpenAI-compatible provider를 APIM 경로별로 분리 |
 | 직접 API 호출 | `/openai` 또는 `/foundry` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | 앱/스크립트 검증용 |
 
 `api-key`와 `Ocp-Apim-Subscription-Key`는 서로 다른 credential이 아니라, 같은 APIM subscription key를 어떤 헤더 이름으로 보내는지만 다릅니다.
@@ -237,6 +238,10 @@ export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS=128000
 export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS=16000
 ```
+
+### OpenCode
+
+OpenCode는 **OpenAI-compatible custom provider**를 APIM 경로별로 나눠 사용합니다. gpt 계열은 `/openai/deployments/<model>`, partner/OSS 모델은 `/foundry`로 연결합니다. 자세한 설정은 [OpenCode 가이드](docs/07-connect-clients/opencode.md)를 따릅니다.
 
 ## 관측과 검증
 
