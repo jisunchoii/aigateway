@@ -83,3 +83,27 @@ output "worker_id" {
   description = "Resource ID of the config-sync worker identity (to attach to the Container Apps Job)."
   value       = azurerm_user_assigned_identity.config_sync_worker.id
 }
+
+# LiteLLM Responses-bridge identity. LiteLLM calls the Azure OpenAI + Foundry backends directly
+# with this identity (use_azure_ad), so it needs the same data-plane roles APIM's MI has.
+resource "azurerm_user_assigned_identity" "litellm" {
+  name                = "id-litellm-${var.name_suffix}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  tags                = var.tags
+}
+
+output "litellm_principal_id" {
+  description = "Object ID of the LiteLLM identity (for backend Cognitive Services + ACR RBAC)."
+  value       = azurerm_user_assigned_identity.litellm.principal_id
+}
+
+output "litellm_client_id" {
+  description = "Client ID of the LiteLLM identity (AZURE_CLIENT_ID for DefaultAzureCredential)."
+  value       = azurerm_user_assigned_identity.litellm.client_id
+}
+
+output "litellm_id" {
+  description = "Resource ID of the LiteLLM identity (to attach to the Container App)."
+  value       = azurerm_user_assigned_identity.litellm.id
+}

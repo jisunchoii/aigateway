@@ -1,0 +1,42 @@
+# LiteLLM Responses bridge config.
+#
+# Exposes /responses (Responses API) for Codex CLI and routes per model:
+#   - gpt-5.4         : Azure OpenAI, native Responses (passthrough)
+#   - grok-4.3        : Foundry Model Inference, Responses NOT supported -> Chat bridge
+#   - DeepSeek-V4-Pro : Foundry Model Inference, Responses NOT supported -> Chat bridge
+#
+# Backend auth is Entra ID (managed identity), NOT API keys:
+#   use_azure_ad: true makes LiteLLM fetch an AAD token via DefaultAzureCredential. The Container
+#   App runs with a user-assigned identity (AZURE_CLIENT_ID env) that has the backend RBAC roles.
+# Endpoints are injected as env vars by the Container App (see modules/control_plane).
+
+model_list:
+  # --- gpt (Azure OpenAI) — native Responses passthrough ---
+  - model_name: gpt-5.4
+    litellm_params:
+      model: azure/gpt-5.4
+      api_base: os.environ/AOAI_API_BASE
+      api_version: "2025-04-01-preview"
+      use_azure_ad: true
+
+  # --- partner/OSS (Foundry Model Inference) — Responses -> Chat bridge ---
+  - model_name: grok-4.3
+    litellm_params:
+      model: azure_ai/grok-4.3
+      api_base: os.environ/FOUNDRY_API_BASE
+      use_azure_ad: true
+      use_chat_completions_api: true
+
+  - model_name: DeepSeek-V4-Pro
+    litellm_params:
+      model: azure_ai/DeepSeek-V4-Pro
+      api_base: os.environ/FOUNDRY_API_BASE
+      use_azure_ad: true
+      use_chat_completions_api: true
+
+general_settings:
+  # APIM authenticates to LiteLLM with this key (Authorization: Bearer). Injected via env, not baked.
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+litellm_settings:
+  drop_params: true

@@ -480,6 +480,11 @@ output "id" {
   value       = azurerm_api_management.apim.id
 }
 
+output "logger_id" {
+  description = "Resource ID of the Application Insights APIM logger (for diagnostics on root-level APIs like /responses)."
+  value       = azurerm_api_management_logger.appinsights.id
+}
+
 output "name" {
   description = "Name of the APIM instance."
   value       = azurerm_api_management.apim.name

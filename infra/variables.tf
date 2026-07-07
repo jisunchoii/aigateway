@@ -293,6 +293,12 @@ variable "admin_ui_public" {
   description = "When true, the Container Apps environment is created EXTERNAL so the Admin UI gets a public FQDN (still gated by Entra OIDC + admin-group). Default false = internal (VNet-only). Immutable after env creation — flipping recreates the env + Admin UI app, so set it at first deploy of a stack."
 }
 
+variable "litellm_image" {
+  type        = string
+  default     = ""
+  description = "Full image reference for the LiteLLM Responses bridge, e.g. acrllmgwxxxx.azurecr.io/litellm:main-stable. Empty until imported+pushed; the /responses route and Container App are created only when set."
+}
+
 variable "bff_api_audience" {
   type        = string
   default     = ""
