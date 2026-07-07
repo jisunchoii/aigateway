@@ -541,8 +541,19 @@ resource "azurerm_container_app" "litellm" {
     container {
       name   = "litellm"
       image  = var.litellm_image
-      cpu    = 0.5
-      memory = "1Gi"
+      cpu    = 1.0
+      memory = "2Gi"
+
+      # LiteLLM takes tens of seconds to import providers and bind :4000. The default startup probe
+      # (few retries at 1s) kills it (exit 137) before the port opens. Give it a generous TCP
+      # startup window: up to 60 * 5s = 5 min before the platform considers startup failed.
+      startup_probe {
+        transport               = "TCP"
+        port                    = 4000
+        initial_delay           = 10
+        interval_seconds        = 5
+        failure_count_threshold = 60
+      }
 
       env {
         name  = "AOAI_API_BASE"
