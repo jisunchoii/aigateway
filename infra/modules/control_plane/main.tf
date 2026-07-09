@@ -159,57 +159,13 @@ variable "log_analytics_workspace_id" {
   description = "Log Analytics workspace customerId (GUID) the BFF queries via azure-monitor-query for the Dashboard/Monitoring pages."
 }
 
-variable "litellm_image" {
-  type        = string
-  description = "LiteLLM Responses-bridge container image reference. Empty string disables the app."
-  default     = ""
-}
-
-variable "litellm_identity_id" {
-  type        = string
-  description = "Resource ID of the LiteLLM user-assigned identity."
-  default     = ""
-}
-
-variable "litellm_principal_id" {
-  type        = string
-  description = "Principal (object) ID of the LiteLLM identity (for ACR pull RBAC)."
-  default     = ""
-}
-
-variable "litellm_client_id" {
-  type        = string
-  description = "Client ID of the LiteLLM identity (AZURE_CLIENT_ID for use_azure_ad backend auth)."
-  default     = ""
-}
-
-variable "litellm_master_key" {
-  type        = string
-  sensitive   = true
-  description = "Shared secret APIM presents to LiteLLM as 'Authorization: Bearer'. LiteLLM's master_key."
-  default     = ""
-}
-
-variable "aoai_api_base" {
-  type        = string
-  description = "Azure OpenAI host base (https://<res>.openai.azure.com) for LiteLLM's gpt route."
-  default     = ""
-}
-
-variable "foundry_api_base" {
-  type        = string
-  description = "Foundry OpenAI/v1 base (https://<res>.openai.azure.com/openai/v1) for LiteLLM's OSS routes."
-  default     = ""
-}
-
 locals {
   worker_enabled   = var.worker_image != ""
   admin_ui_enabled = var.admin_ui_image != ""
-  litellm_enabled  = var.litellm_image != ""
   # The in-VNet ACA private DNS zone + wildcard records are only needed to reach an INTERNAL env
   # by FQDN. An external (public) env gets public DNS automatically, so skip them when public.
-  # Needed whenever an internal-reachable app (Admin UI or LiteLLM) is deployed.
-  aca_private_dns_enabled = (local.admin_ui_enabled || local.litellm_enabled) && !var.admin_ui_public
+  # Needed whenever an internal-reachable app (Admin UI) is deployed.
+  aca_private_dns_enabled = local.admin_ui_enabled && !var.admin_ui_public
 }
 
 resource "azurerm_role_assignment" "worker_acr_pull" {
@@ -490,94 +446,6 @@ resource "azurerm_container_app" "admin_ui" {
       }
     }
   }
-}
-
-# LiteLLM pulls its image from ACR with its own identity.
-resource "azurerm_role_assignment" "litellm_acr_pull" {
-  count                = local.litellm_enabled ? 1 : 0
-  scope                = var.acr_id
-  role_definition_name = "AcrPull"
-  principal_id         = var.litellm_principal_id
-}
-
-# LiteLLM Responses bridge. Same CAE as the Admin UI; internal ingress on port 4000. APIM's
-# /responses API routes here and authenticates with the master key. LiteLLM itself calls the
-# Azure OpenAI + Foundry backends with its managed identity (use_azure_ad), no keys.
-# ponytail: follows the env's public/internal toggle (admin_ui_public); when external it gets a
-# public FQDN but stays gated by master_key. Split the env if LiteLLM must be internal-only.
-resource "azurerm_container_app" "litellm" {
-  count                        = local.litellm_enabled ? 1 : 0
-  name                         = "ca-litellm-${var.name_suffix}"
-  resource_group_name          = var.resource_group_name
-  container_app_environment_id = azurerm_container_app_environment.cp.id
-  revision_mode                = "Single"
-
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [var.litellm_identity_id]
-  }
-
-  registry {
-    server   = var.acr_login_server
-    identity = var.litellm_identity_id
-  }
-
-  ingress {
-    # external_enabled=true = reachable on the env load balancer (internal ILB when
-    # admin_ui_public=false), NOT necessarily public internet. APIM (VNet-injected) reaches it here.
-    external_enabled = true
-    target_port      = 4000
-    transport        = "auto"
-    traffic_weight {
-      latest_revision = true
-      percentage      = 100
-    }
-  }
-
-  template {
-    min_replicas = 1
-    max_replicas = 3
-
-    container {
-      name   = "litellm"
-      image  = var.litellm_image
-      cpu    = 1.0
-      memory = "2Gi"
-
-      # LiteLLM takes tens of seconds to import providers and bind :4000. The default startup probe
-      # (few retries at 1s) kills it (exit 137) before the port opens. Give it a generous TCP
-      # startup window: up to 60 * 5s = 5 min before the platform considers startup failed.
-      startup_probe {
-        transport               = "TCP"
-        port                    = 4000
-        initial_delay           = 10
-        interval_seconds        = 5
-        failure_count_threshold = 60
-      }
-
-      env {
-        name  = "AOAI_API_BASE"
-        value = var.aoai_api_base
-      }
-      env {
-        name  = "FOUNDRY_API_BASE"
-        value = var.foundry_api_base
-      }
-      env {
-        name  = "AZURE_CLIENT_ID"
-        value = var.litellm_client_id
-      }
-      env {
-        name  = "LITELLM_MASTER_KEY"
-        value = var.litellm_master_key
-      }
-    }
-  }
-}
-
-output "litellm_fqdn" {
-  description = "Internal FQDN of the LiteLLM Container App (null until litellm_image is set). APIM /responses service_url."
-  value       = one(azurerm_container_app.litellm[*].ingress[0].fqdn)
 }
 
 output "environment_id" {

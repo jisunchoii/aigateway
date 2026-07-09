@@ -40,7 +40,7 @@ APIM subscription key는 소스 코드, dotfiles, Git 저장소에 커밋하지 
 | VS Code BYOK | `/vscode/models` | `Ocp-Apim-Subscription-Key` | URL의 deployment 이름을 모델로 사용 |
 | GitHub Copilot CLI | `/openai` | `api-key` | CLI가 Azure OpenAI 경로를 자동 구성 |
 | OpenCode | `/openai` 또는 `/foundry` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | custom OpenAI-compatible provider를 APIM 경로별로 분리 |
-| Codex CLI | `/responses` | `Ocp-Apim-Subscription-Key` | Responses 전용. LiteLLM 브리지가 native/chat 라우팅 |
+| Codex CLI | `/responses` | `Ocp-Apim-Subscription-Key` | Responses 전용, **gpt 계열만**. AIServices native Responses로 직접 프록시 (grok·DeepSeek은 OpenCode 사용) |
 | curl / REST Client | `/openai` 또는 `/foundry` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | gpt 계열은 `/openai` path-route, partner 모델은 `/foundry` body-route |
 
 `api-key`와 `Ocp-Apim-Subscription-Key`는 서로 다른 credential이 아닙니다. 같은 APIM subscription key를 어떤 헤더 이름으로 보내는지만 다릅니다.

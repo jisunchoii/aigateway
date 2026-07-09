@@ -87,8 +87,8 @@
     </choose>
 
     <!-- [Cost] Budget downgrade. Rewrite the requested model DOWN the consumer's downgrade_ladder by
-         `level` steps. LiteLLM routes by the body "model" field, so any ladder target (gpt or OSS) is
-         reached on the SAME LiteLLM backend by rewriting "model". effectiveModel == requested when none. -->
+         `level` steps. All models live on the SAME AIServices account on /openai/v1, so any ladder
+         target is reached by rewriting the body "model" field. effectiveModel == requested when none. -->
     <set-variable name="effectiveModel" value="@{
         var req = (string)context.Variables["requestedDeployment"];
         if (req.Length == 0) { return req; }
@@ -160,15 +160,23 @@
       <dimension name="API ID" />
     </llm-emit-token-metric>
 
-    <!-- [Privilege] Backend boundary: the backend is the LiteLLM bridge, NOT Azure directly.
-         Present LiteLLM's master key (not a cognitiveservices MI token) — LiteLLM authenticates to
-         the Azure OpenAI/Foundry backends itself with ITS managed identity. MUST stay last. -->
+    <!-- [Privilege] Backend boundary: APIM authenticates to the AIServices account with its MI.
+         Same as the /foundry pipeline — the backend is the AIServices account directly (no LiteLLM
+         hop). grok/DeepSeek/gpt all accept native Responses incl. hosted + function tools, so the
+         request passes through unmodified. MUST stay last. -->
+    <authentication-managed-identity resource="https://cognitiveservices.azure.com"
+                                     output-token-variable-name="msi-access-token" />
     <set-header name="Authorization" exists-action="override">
-      <value>@("Bearer " + "{{litellm-master-key}}")</value>
+      <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
     </set-header>
   </inbound>
   <backend>
-    <base />
+    <!-- [Streaming] Codex uses SSE (text/event-stream) Responses. buffer-response="false" relays each
+         event to the client immediately; the default (buffered) collects the whole stream, which
+         stalls and disconnects long agent responses even though the backend completes 200. timeout=300
+         covers long reasoning turns (observed ~120s). See APIM "Configure API for Server-Sent Events".
+         Keep client-side or backend keepalive under Azure LB's 4-min idle cap for very long gaps. -->
+    <forward-request timeout="300" fail-on-error-status-code="false" buffer-response="false" />
   </backend>
   <outbound>
     <base />

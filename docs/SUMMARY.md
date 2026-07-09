@@ -10,7 +10,6 @@
   * [모델 백엔드 기존 계정 재사용](04-reuse-foundry.md)
   * [APIM 게이트웨이 배포](03-deploy/case-apim-core-first.md)
   * [Admin UI 배포](03-deploy/case-admin-ui.md)
-  * [Responses 브리지(LiteLLM) 배포](03-deploy/case-litellm-responses.md)
   * [All-in-one 배포](03-deploy/case-all-in-one.md)
 * [클라이언트 온보딩](07-connect-clients.md)
   * [VS Code BYOK](07-connect-clients/vscode-byok.md)

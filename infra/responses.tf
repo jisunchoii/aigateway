@@ -1,27 +1,33 @@
-# --- /responses API — Responses-API surface for Codex CLI, backed by the LiteLLM bridge. ---
+# --- /responses API — Responses-API surface for Codex CLI, backed DIRECTLY by the AIServices account. ---
 #
-# Declared at root (not in the apim module) because its backend is the LiteLLM Container App, which
-# lives in the control_plane module — and control_plane runs AFTER apim (it needs module.apim.id).
-# So the API/policy that points at LiteLLM must sit where BOTH modules are visible.
+# Codex CLI is Responses-only (wire_api = "responses"). The AIServices (Foundry) account exposes the
+# Azure OpenAI-compatible /openai/v1/responses path, and gpt-5.4 / grok-4.3 / DeepSeek-V4-Pro all
+# accept native Responses there — including hosted tools (web_search) and function tools (verified
+# against the live deployments). So /responses is just another wildcard-proxy API pointed at the same
+# backend as /foundry, with the same governance policy and managed-identity auth. No LiteLLM hop.
 #
 # Routing: Codex config base_url = https://<apim-host>/responses, wire_api = "responses". Codex POSTs
 # to {base_url}/responses, i.e. /responses/responses. APIM strips the "responses" path prefix, the
-# wildcard operation matches the "/responses" remainder, and service_url (.../v1) makes the backend
-# path .../v1/responses — LiteLLM's canonical Responses route.
+# wildcard operation matches the "/responses" remainder, and service_url (…/openai/v1) makes the
+# backend path …/openai/v1/responses — the AIServices account's native Responses route.
 #
-# Created only when the LiteLLM bridge is enabled (litellm_image set).
+# Declared at root (not in the apim module) alongside the other root wiring; it reuses the apim
+# module's outputs (name, logger_id, gateway_url) and the foundry endpoint. The APIM managed identity
+# already has Cognitive Services OpenAI User on the AIServices account (granted in the apim module),
+# so the managed-identity auth in the policy works with no additional role assignment.
 
 resource "azurerm_api_management_api" "responses" {
-  count                 = local.litellm_enabled ? 1 : 0
   name                  = "responses"
   resource_group_name   = azurerm_resource_group.rg.name
   api_management_name   = module.apim.name
   revision              = "1"
-  display_name          = "Responses (LiteLLM bridge)"
+  display_name          = "Responses (AIServices native)"
   path                  = "responses"
   protocols             = ["https"]
   subscription_required = var.client_auth_mode != "entra-id"
-  service_url           = "https://${module.control_plane.litellm_fqdn}/v1"
+  # GA OpenAI/v1 inference base (…/openai/v1). Codex calls POST /responses/responses with the
+  # deployment name in the body "model" field; APIM appends the path to this service_url.
+  service_url = module.foundry.endpoint_openai_v1
 
   subscription_key_parameter_names {
     header = "Ocp-Apim-Subscription-Key"
@@ -31,31 +37,18 @@ resource "azurerm_api_management_api" "responses" {
 
 # Wildcard POST so /responses/* routes (no OpenAPI import for the Responses API).
 resource "azurerm_api_management_api_operation" "responses_proxy" {
-  count               = local.litellm_enabled ? 1 : 0
   operation_id        = "proxy"
-  api_name            = azurerm_api_management_api.responses[0].name
+  api_name            = azurerm_api_management_api.responses.name
   api_management_name = module.apim.name
   resource_group_name = azurerm_resource_group.rg.name
   display_name        = "Proxy"
   method              = "POST"
   url_template        = "/*"
-  description         = "Catch-all proxy to the LiteLLM Responses bridge."
-}
-
-# The APIM<->LiteLLM hop secret, presented by the policy as Authorization: Bearer {{litellm-master-key}}.
-resource "azurerm_api_management_named_value" "litellm_master_key" {
-  count               = local.litellm_enabled ? 1 : 0
-  name                = "litellm-master-key"
-  api_management_name = module.apim.name
-  resource_group_name = azurerm_resource_group.rg.name
-  display_name        = "litellm-master-key"
-  value               = local.litellm_master_key
-  secret              = true
+  description         = "Catch-all proxy to the AIServices native Responses endpoint."
 }
 
 resource "azurerm_api_management_api_policy" "responses" {
-  count               = local.litellm_enabled ? 1 : 0
-  api_name            = azurerm_api_management_api.responses[0].name
+  api_name            = azurerm_api_management_api.responses.name
   api_management_name = module.apim.name
   resource_group_name = azurerm_resource_group.rg.name
   xml_content = templatefile("${path.root}/../policies/responses-pipeline.xml.tftpl", {
@@ -69,7 +62,6 @@ resource "azurerm_api_management_api_policy" "responses" {
 
   depends_on = [
     azurerm_api_management_api_operation.responses_proxy,
-    azurerm_api_management_named_value.litellm_master_key,
   ]
 
   lifecycle {
@@ -81,9 +73,8 @@ resource "azurerm_api_management_api_policy" "responses" {
 }
 
 resource "azurerm_api_management_api_diagnostic" "responses" {
-  count                    = local.litellm_enabled ? 1 : 0
   identifier               = "applicationinsights"
-  api_name                 = azurerm_api_management_api.responses[0].name
+  api_name                 = azurerm_api_management_api.responses.name
   api_management_name      = module.apim.name
   resource_group_name      = azurerm_resource_group.rg.name
   api_management_logger_id = module.apim.logger_id
@@ -96,9 +87,8 @@ resource "azurerm_api_management_api_diagnostic" "responses" {
 }
 
 resource "azapi_update_resource" "responses_diag_metrics" {
-  count       = local.litellm_enabled ? 1 : 0
   type        = "Microsoft.ApiManagement/service/apis/diagnostics@2022-08-01"
-  resource_id = azurerm_api_management_api_diagnostic.responses[0].id
+  resource_id = azurerm_api_management_api_diagnostic.responses.id
   body = {
     properties = {
       metrics = true
@@ -107,6 +97,6 @@ resource "azapi_update_resource" "responses_diag_metrics" {
 }
 
 output "responses_endpoint" {
-  description = "Codex CLI base_url for the Responses bridge (null until litellm_image is set)."
-  value       = local.litellm_enabled ? "${module.apim.gateway_url}/responses" : null
+  description = "Codex CLI base_url for the native Responses API."
+  value       = "${module.apim.gateway_url}/responses"
 }

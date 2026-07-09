@@ -161,36 +161,6 @@ module "registry" {
   tags                = local.tags
 }
 
-# Shared secret for the APIM<->LiteLLM hop. APIM presents it as Authorization: Bearer; LiteLLM
-# treats it as its master_key. Generated (not user-supplied) so it never lands in tfvars. Only
-# created when the LiteLLM bridge is enabled.
-resource "random_password" "litellm_master_key" {
-  count   = var.litellm_image != "" ? 1 : 0
-  length  = 48
-  special = false
-}
-
-locals {
-  litellm_enabled    = var.litellm_image != ""
-  litellm_master_key = local.litellm_enabled ? "sk-${random_password.litellm_master_key[0].result}" : ""
-}
-
-# LiteLLM calls the backends directly with its managed identity, so it needs the SAME data-plane
-# roles APIM's MI has: OpenAI User on the gpt account, Cognitive Services User on the Foundry account.
-resource "azurerm_role_assignment" "litellm_to_openai" {
-  count                = local.litellm_enabled ? 1 : 0
-  scope                = local.gpt_backend_account_id
-  role_definition_name = "Cognitive Services OpenAI User"
-  principal_id         = module.identity.litellm_principal_id
-}
-
-resource "azurerm_role_assignment" "litellm_to_foundry" {
-  count                = local.litellm_enabled ? 1 : 0
-  scope                = module.foundry.id
-  role_definition_name = "Cognitive Services User"
-  principal_id         = module.identity.litellm_principal_id
-}
-
 module "control_plane" {
   source                = "./modules/control_plane"
   name_suffix           = local.name_suffix
@@ -231,15 +201,6 @@ module "control_plane" {
   # operator-owned (Cosmos `pricing` doc, scripts/seed-pricing-jumpbox.sh), not derived here.
   alias_models_json          = jsonencode({ for m in var.allowed_models : m => m })
   log_analytics_workspace_id = module.observability.law_customer_id
-
-  # LiteLLM Responses bridge (created only when litellm_image is set).
-  litellm_image        = var.litellm_image
-  litellm_identity_id  = module.identity.litellm_id
-  litellm_principal_id = module.identity.litellm_principal_id
-  litellm_client_id    = module.identity.litellm_client_id
-  litellm_master_key   = local.litellm_master_key
-  aoai_api_base        = local.gpt_backend_endpoint
-  foundry_api_base     = module.foundry.endpoint_openai_v1
 }
 
 # The Admin UI BFF (cp_write identity) reads token metrics + request logs from Log Analytics
