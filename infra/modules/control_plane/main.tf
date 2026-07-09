@@ -159,13 +159,46 @@ variable "log_analytics_workspace_id" {
   description = "Log Analytics workspace customerId (GUID) the BFF queries via azure-monitor-query for the Dashboard/Monitoring pages."
 }
 
+variable "codexproxy_image" {
+  type        = string
+  default     = ""
+  description = "Codex proxy sidecar image reference. Empty disables the app."
+}
+variable "codexproxy_identity_id" {
+  type        = string
+  default     = ""
+  description = "Resource ID of the Codex proxy user-assigned identity."
+}
+variable "codexproxy_principal_id" {
+  type        = string
+  default     = ""
+  description = "Principal (object) ID of the Codex proxy identity (for ACR pull RBAC)."
+}
+variable "codexproxy_client_id" {
+  type        = string
+  default     = ""
+  description = "Client ID of the Codex proxy identity (AZURE_CLIENT_ID)."
+}
+variable "codexproxy_key" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "APIM<->sidecar hop secret (PROXY_KEY env)."
+}
+variable "codexproxy_project_base" {
+  type        = string
+  default     = ""
+  description = "Foundry project Responses base URL (FOUNDRY_PROJECT_BASE env)."
+}
+
 locals {
-  worker_enabled   = var.worker_image != ""
-  admin_ui_enabled = var.admin_ui_image != ""
+  worker_enabled     = var.worker_image != ""
+  admin_ui_enabled   = var.admin_ui_image != ""
+  codexproxy_enabled = var.codexproxy_image != ""
   # The in-VNet ACA private DNS zone + wildcard records are only needed to reach an INTERNAL env
   # by FQDN. An external (public) env gets public DNS automatically, so skip them when public.
-  # Needed whenever an internal-reachable app (Admin UI) is deployed.
-  aca_private_dns_enabled = local.admin_ui_enabled && !var.admin_ui_public
+  # Needed whenever an internal-reachable app (Admin UI, Codex proxy) is deployed.
+  aca_private_dns_enabled = (local.admin_ui_enabled || local.codexproxy_enabled) && !var.admin_ui_public
 }
 
 resource "azurerm_role_assignment" "worker_acr_pull" {
@@ -209,6 +242,13 @@ resource "azurerm_role_assignment" "admin_ui_start_job" {
   scope                = azurerm_container_app_job.config_sync[0].id
   role_definition_name = "Container Apps Jobs Operator"
   principal_id         = var.admin_ui_principal_id
+}
+
+resource "azurerm_role_assignment" "codexproxy_acr_pull" {
+  count                = local.codexproxy_enabled ? 1 : 0
+  scope                = var.acr_id
+  role_definition_name = "AcrPull"
+  principal_id         = var.codexproxy_principal_id
 }
 
 resource "azurerm_container_app_environment" "cp" {
@@ -448,6 +488,74 @@ resource "azurerm_container_app" "admin_ui" {
   }
 }
 
+# Codex proxy sidecar. Same CAE as the Admin UI; internal ingress on 8789. APIM's /responses API
+# routes here and authenticates with the hop key. The proxy calls the Foundry project backend with
+# its managed identity (ManagedIdentityCredential), no keys.
+resource "azurerm_container_app" "codexproxy" {
+  count                        = local.codexproxy_enabled ? 1 : 0
+  name                         = "ca-codexproxy-${var.name_suffix}"
+  resource_group_name          = var.resource_group_name
+  container_app_environment_id = azurerm_container_app_environment.cp.id
+  revision_mode                = "Single"
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.codexproxy_identity_id]
+  }
+
+  registry {
+    server   = var.acr_login_server
+    identity = var.codexproxy_identity_id
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 8789
+    transport        = "auto"
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
+  template {
+    min_replicas = 1
+    max_replicas = 3
+
+    container {
+      name   = "codexproxy"
+      image  = var.codexproxy_image
+      cpu    = 0.5
+      memory = "1Gi"
+
+      startup_probe {
+        transport               = "TCP"
+        port                    = 8789
+        initial_delay           = 5
+        interval_seconds        = 5
+        failure_count_threshold = 30
+      }
+
+      env {
+        name  = "FOUNDRY_PROJECT_BASE"
+        value = var.codexproxy_project_base
+      }
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = var.codexproxy_client_id
+      }
+      env {
+        name  = "PROXY_KEY"
+        value = var.codexproxy_key
+      }
+      env {
+        name  = "PORT"
+        value = "8789"
+      }
+    }
+  }
+}
+
 output "environment_id" {
   description = "Container Apps environment resource ID."
   value       = azurerm_container_app_environment.cp.id
@@ -460,4 +568,9 @@ output "job_name" {
 output "admin_ui_fqdn" {
   description = "Internal FQDN of the Admin UI Container App (null until admin_ui_image is set). Resolves to the env static IP via the ACA private DNS zone, from inside the VNet only."
   value       = one(azurerm_container_app.admin_ui[*].ingress[0].fqdn)
+}
+
+output "codexproxy_fqdn" {
+  description = "Internal FQDN of the Codex proxy Container App (null until codexproxy_image is set). APIM /responses service_url."
+  value       = one(azurerm_container_app.codexproxy[*].ingress[0].fqdn)
 }

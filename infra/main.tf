@@ -203,6 +203,12 @@ module "control_plane" {
   # operator-owned (Cosmos `pricing` doc, scripts/seed-pricing-jumpbox.sh), not derived here.
   alias_models_json          = jsonencode({ for m in var.allowed_models : m => m })
   log_analytics_workspace_id = module.observability.law_customer_id
+  codexproxy_image           = var.codexproxy_image
+  codexproxy_identity_id     = module.identity.codexproxy_id
+  codexproxy_principal_id    = module.identity.codexproxy_principal_id
+  codexproxy_client_id       = module.identity.codexproxy_client_id
+  codexproxy_key             = local.codexproxy_key
+  codexproxy_project_base    = module.foundry.project_responses_base
 }
 
 # The Admin UI BFF (cp_write identity) reads token metrics + request logs from Log Analytics

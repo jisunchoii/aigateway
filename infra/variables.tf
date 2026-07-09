@@ -317,6 +317,12 @@ variable "enable_codexproxy" {
   description = "Master toggle for the Codex proxy sidecar: the project-enabled Foundry account, its deployments, the identity/hop-key/RBAC, and the Container App. When false, none are created and /responses stays on its current backend."
 }
 
+variable "codexproxy_image" {
+  type        = string
+  default     = ""
+  description = "Full image reference for the Codex proxy sidecar, e.g. acrllmgwxxxx.azurecr.io/codexproxy:latest. Empty disables the Container App."
+}
+
 variable "project_deployments" {
   type = map(object({
     model_name    = string
