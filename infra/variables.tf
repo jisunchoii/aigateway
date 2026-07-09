@@ -317,6 +317,40 @@ variable "enable_codexproxy" {
   description = "Master toggle for the Codex proxy sidecar: the project-enabled Foundry account, its deployments, the identity/hop-key/RBAC, and the Container App. When false, none are created and /responses stays on its current backend."
 }
 
+variable "project_deployments" {
+  type = map(object({
+    model_name    = string
+    model_format  = string
+    model_version = string
+    sku_name      = string
+    capacity      = number
+  }))
+  default = {
+    "FW-GLM-5.2" = {
+      model_name    = "FW-GLM-5.2"
+      model_format  = "Fireworks"
+      model_version = "1"
+      sku_name      = "DataZoneStandard"
+      capacity      = 500
+    }
+    "DeepSeek-V4-Pro" = {
+      model_name    = "DeepSeek-V4-Pro"
+      model_format  = "DeepSeek"
+      model_version = "2026-04-23"
+      sku_name      = "GlobalStandard"
+      capacity      = 500
+    }
+    "grok-4.3" = {
+      model_name    = "grok-4.3"
+      model_format  = "xAI"
+      model_version = "1"
+      sku_name      = "GlobalStandard"
+      capacity      = 10
+    }
+  }
+  description = "Model deployments on the project-enabled account fronted by the Codex proxy sidecar. Includes the sidecar's models (GLM, DeepSeek) plus every downgrade-ladder target that could arrive via APIM downgrade, so a rewritten model always resolves. gpt-5.4/mini stay on the OpenAI path (openai module) and are NOT deployed here — a consumer whose ladder downgrades a sidecar model down to gpt-5.4 would 404 at the sidecar; this plan's scope is sidecar models (GLM/DeepSeek) whose ladders stay within Foundry models (-> grok-4.3)."
+}
+
 variable "rate_tiers" {
   type = map(object({ tpm = number, quota = number, period = string }))
   default = {

@@ -75,10 +75,12 @@ module "foundry" {
     module.network.dns_zone_ids["aiservices"],
     module.network.dns_zone_ids["openai"],
   ]
-  deployments           = var.foundry_deployments
-  reuse_existing        = var.reuse_foundry
-  existing_account_name = var.existing_foundry_name
-  existing_account_rg   = var.existing_foundry_rg
+  deployments            = var.foundry_deployments
+  reuse_existing         = var.reuse_foundry
+  existing_account_name  = var.existing_foundry_name
+  existing_account_rg    = var.existing_foundry_rg
+  enable_project_account = var.enable_codexproxy
+  project_deployments    = var.project_deployments
 }
 
 module "jumpbox" {

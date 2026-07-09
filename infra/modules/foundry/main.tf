@@ -72,6 +72,17 @@ variable "project_account_name" {
   default     = ""
   description = "Name of the project-enabled AIServices account. Defaults to aisproj-<suffix> when empty."
 }
+variable "project_deployments" {
+  type = map(object({
+    model_name    = string
+    model_format  = string
+    model_version = string
+    sku_name      = string
+    capacity      = number
+  }))
+  default     = {}
+  description = "Deployments for the project-enabled account (passed from root)."
+}
 
 resource "azurerm_cognitive_account" "foundry" {
   count                         = var.reuse_existing ? 0 : 1
@@ -225,6 +236,23 @@ resource "azapi_resource" "project" {
   body = {
     identity   = { type = "SystemAssigned" }
     properties = {}
+  }
+}
+
+resource "azurerm_cognitive_deployment" "project_models" {
+  for_each             = var.enable_project_account ? var.project_deployments : {}
+  name                 = each.key
+  cognitive_account_id = azapi_resource.project_account[0].id
+
+  model {
+    format  = each.value.model_format
+    name    = each.value.model_name
+    version = each.value.model_version
+  }
+
+  sku {
+    name     = each.value.sku_name
+    capacity = each.value.capacity
   }
 }
 
