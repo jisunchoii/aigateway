@@ -311,6 +311,12 @@ variable "admin_group_object_id" {
   description = "Entra ID security group object id whose members are gateway admins (prereq P1). The BFF gates writes on membership."
 }
 
+variable "enable_codexproxy" {
+  type        = bool
+  default     = false
+  description = "Master toggle for the Codex proxy sidecar: the project-enabled Foundry account, its deployments, the identity/hop-key/RBAC, and the Container App. When false, none are created and /responses stays on its current backend."
+}
+
 variable "rate_tiers" {
   type = map(object({ tpm = number, quota = number, period = string }))
   default = {

@@ -1,3 +1,14 @@
+terraform {
+  required_providers {
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
+  }
+}
+
+data "azurerm_client_config" "current" {}
+
 variable "name_suffix" {
   type        = string
   description = "Naming suffix (workload-env-region) used in deterministic resource names."
@@ -50,6 +61,16 @@ variable "existing_account_rg" {
   type        = string
   default     = ""
   description = "Resource group of the existing AIServices account (required when reuse_existing = true)."
+}
+variable "enable_project_account" {
+  type        = bool
+  default     = false
+  description = "Create a NEW project-enabled AIServices account (allowProjectManagement=true) + one project for the Codex proxy sidecar backend. Fireworks models need the project route for Responses."
+}
+variable "project_account_name" {
+  type        = string
+  default     = ""
+  description = "Name of the project-enabled AIServices account. Defaults to aisproj-<suffix> when empty."
 }
 
 resource "azurerm_cognitive_account" "foundry" {
@@ -163,4 +184,56 @@ output "endpoint_openai_host" {
 output "deployment_names" {
   description = "Model deployment names created by this module (empty in reuse mode; the account already has them)."
   value       = [for k, d in azurerm_cognitive_deployment.models : k]
+}
+
+locals {
+  project_account_name = var.project_account_name != "" ? var.project_account_name : "aisproj-${var.suffix}"
+  project_name         = "codexproj"
+}
+
+# NEW project-enabled AIServices account. azapi (not azurerm) because azurerm ~>4.20 has no
+# allowProjectManagement argument. Fireworks models require the project route for Responses.
+resource "azapi_resource" "project_account" {
+  count     = var.enable_project_account ? 1 : 0
+  type      = "Microsoft.CognitiveServices/accounts@2025-04-01-preview"
+  name      = local.project_account_name
+  parent_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.resource_group_name}"
+  location  = var.location
+  tags      = var.tags
+
+  body = {
+    kind     = "AIServices"
+    sku      = { name = "S0" }
+    identity = { type = "SystemAssigned" }
+    properties = {
+      allowProjectManagement = true
+      customSubDomainName    = local.project_account_name
+      disableLocalAuth       = true
+      publicNetworkAccess    = "Enabled"
+    }
+  }
+  response_export_values = ["properties.endpoints", "properties.endpoint"]
+}
+
+# Child project. Its inference route is /api/projects/<name>/openai/v1.
+resource "azapi_resource" "project" {
+  count     = var.enable_project_account ? 1 : 0
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview"
+  name      = local.project_name
+  parent_id = azapi_resource.project_account[0].id
+  location  = var.location
+  body = {
+    identity   = { type = "SystemAssigned" }
+    properties = {}
+  }
+}
+
+output "project_account_id" {
+  description = "Resource id of the project-enabled AIServices account (for RBAC + deployments). Null when disabled."
+  value       = one(azapi_resource.project_account[*].id)
+}
+
+output "project_responses_base" {
+  description = "Project-route OpenAI/v1 base for the sidecar backend: https://<acct>.services.ai.azure.com/api/projects/<proj>/openai/v1. Null when disabled."
+  value       = var.enable_project_account ? "https://${local.project_account_name}.services.ai.azure.com/api/projects/${local.project_name}/openai/v1" : null
 }
