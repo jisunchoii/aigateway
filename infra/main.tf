@@ -224,3 +224,31 @@ resource "azurerm_role_assignment" "worker_log_reader" {
   role_definition_name = "Log Analytics Reader"
   principal_id         = module.identity.worker_principal_id
 }
+
+resource "random_password" "codexproxy_key" {
+  count   = var.enable_codexproxy ? 1 : 0
+  length  = 48
+  special = false
+}
+
+locals {
+  codexproxy_key = var.enable_codexproxy ? "sk-${random_password.codexproxy_key[0].result}" : ""
+}
+
+# APIM<->sidecar hop secret, presented by the policy as Authorization: Bearer {{codexproxy-key}}.
+resource "azurerm_api_management_named_value" "codexproxy_key" {
+  count               = var.enable_codexproxy ? 1 : 0
+  name                = "codexproxy-key"
+  api_management_name = module.apim.name
+  resource_group_name = azurerm_resource_group.rg.name
+  display_name        = "codexproxy-key"
+  value               = local.codexproxy_key
+  secret              = true
+}
+
+resource "azurerm_role_assignment" "codexproxy_to_project_account" {
+  count                = var.enable_codexproxy ? 1 : 0
+  scope                = module.foundry.project_account_id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = module.identity.codexproxy_principal_id
+}
