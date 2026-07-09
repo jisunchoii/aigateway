@@ -11,35 +11,25 @@ Run:      python foundry_codex_proxy.py           (serves 127.0.0.1:8789)
 Selftest: python foundry_codex_proxy.py --selftest (no network)
 """
 import json
-import subprocess
+import os
 import sys
 import threading
-import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT = 8789
+PORT = int(os.environ.get("PORT", "8789"))
+FOUNDRY_PROJECT_BASE = os.environ.get("FOUNDRY_PROJECT_BASE", "").rstrip("/")
+PROXY_KEY = os.environ.get("PROXY_KEY", "")
+MI_SCOPE = os.environ.get("MI_SCOPE", "https://cognitiveservices.azure.com/.default")
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "")
 
-# model -> backend. reasoning_effort: GLM needs a reasoning object incl. effort;
-# DeepSeek/Kimi 400 on reasoning.effort (verified) so the proxy strips that key.
-ROUTES = {
-    "bench-glm-52-westus": {
-        "base_url": "https://ai-fw-wus-jc-486745.services.ai.azure.com/api/projects/glm-proj/openai/v1",
-        "reasoning_effort": True,
-    },
-    "bench-kimi-k27-code-westus": {
-        "base_url": "https://ai-fw-wus-jc-486745.services.ai.azure.com/api/projects/glm-proj/openai/v1",
-        "reasoning_effort": False,
-    },
-    "DeepSeek-V4-Pro": {
-        "base_url": "https://ais-c0gvf2.services.ai.azure.com/openai/v1",
-        "reasoning_effort": False,
-    },
-}
 
-TOKEN_RESOURCE = "https://ai.azure.com"
-_AZ = "az.cmd" if sys.platform == "win32" else "az"
+def _key_ok(auth_header, expected):
+    if not expected:
+        return True  # local dev: no key configured, skip the check
+    token = auth_header[7:] if auth_header.lower().startswith("bearer ") else ""
+    return token == expected
 
 
 def log(msg):
@@ -192,13 +182,28 @@ def _normalize_text(body):
         t["verbosity"] = "medium"  # REPLACE value (only one backend allows); keep text
 
 
+# Single backend: the sidecar fronts one project-enabled Foundry account. The body "model"
+# selects the deployment; base_url is fixed (never per-model). reasoning_effort handling is
+# per-model, keyed by model name, since GLM needs an effort object and DeepSeek rejects it.
+REASONING_EFFORT_MODELS = {"FW-GLM-5.2"}  # models that REQUIRE reasoning.effort; others get it stripped
+
+
+def _route_for(model):
+    if not FOUNDRY_PROJECT_BASE:
+        return None
+    return {
+        "base_url": FOUNDRY_PROJECT_BASE,
+        "reasoning_effort": model in REASONING_EFFORT_MODELS,
+    }
+
+
 def normalize_request(body):
     """Mutate body in place; return (route, ns_map) or (None, {}) for unknown model.
 
     ns_map maps flattened tool name -> namespace, used to restore `namespace` on the
     response stream and history so Codex's executor recognizes sub-agent calls.
     """
-    route = ROUTES.get(body.get("model"))
+    route = _route_for(body.get("model"))
     if route is None:
         return None, {}
     ns_map = {}
@@ -212,36 +217,28 @@ def normalize_request(body):
     return route, ns_map
 
 
-# --- Entra ID token (proxy-side injection, cached + auto-refreshed) ---
+# --- Managed Identity token (proxy-side injection; azure-identity caches internally) ---
 
-_token_lock = threading.Lock()
-_token_cache = {"token": None, "exp": 0.0}
+from azure.identity import ManagedIdentityCredential
+
+_cred = None
+_cred_lock = threading.Lock()
+
+
+def _credential():
+    global _cred
+    with _cred_lock:
+        if _cred is None:
+            _cred = (ManagedIdentityCredential(client_id=AZURE_CLIENT_ID)
+                     if AZURE_CLIENT_ID else ManagedIdentityCredential())
+        return _cred
 
 
 def get_token(now=None, force=False):
-    now = time.time() if now is None else now
-    with _token_lock:
-        # Use the token's REAL expiry (from az), not a guessed 55-min timer — a guessed
-        # timer keeps serving a token that AAD already expired (early expiry / clock skew
-        # / CAE revocation), which is exactly the 401 seen in practice.
-        if not force and _token_cache["token"] and now < _token_cache["exp"] - 120:
-            return _token_cache["token"]
-        try:
-            proc = subprocess.run(
-                [_AZ, "account", "get-access-token", "--resource", TOKEN_RESOURCE,
-                 "--query", "{t:accessToken,e:expires_on}", "-o", "json"],
-                capture_output=True, text=True, timeout=30,
-            )
-            data = json.loads(proc.stdout or "{}")
-            tok = (data.get("t") or "").strip()
-            if tok:
-                _token_cache["token"] = tok
-                # az gives expires_on as a unix timestamp; fall back to now+3000 if absent.
-                _token_cache["exp"] = float(data.get("e") or (now + 3000))
-                return tok
-            log("az returned no token: %s" % (proc.stderr or "").strip()[:200])
-        except Exception as e:  # az missing / not logged in -> fall back to header
-            log("az token refresh failed: %s" % e)
+    try:
+        return _credential().get_token(MI_SCOPE).token
+    except Exception as e:
+        log("MI token acquisition failed: %s" % e)
         return None
 
 
@@ -287,6 +284,9 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
+        if not _key_ok(self.headers.get("Authorization", ""), PROXY_KEY):
+            self._json(401, {"error": "invalid or missing proxy key"})
+            return
         if not self.path.rstrip("/").endswith("/responses"):
             self._json(404, {"error": "only /responses is proxied"})
             return
@@ -304,10 +304,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "unknown model '%s'" % model})
             return
 
-        az_tok = get_token()
-        tok = az_tok or self._incoming_bearer()
+        tok = get_token()
         if not tok:
-            self._json(401, {"error": "no token: az failed and no Authorization header"})
+            self._json(502, {"error": "backend auth unavailable (MI token failed)"})
             return
 
         url = route["base_url"].rstrip("/") + "/responses"
@@ -324,33 +323,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             resp = send(tok)
         except urllib.error.HTTPError as e:
-            # 401 with a proxy-injected az token usually means the cached token expired
-            # early (skew/CAE); force a fresh token and retry once before giving up.
-            if e.code == 401 and az_tok:
-                e.read()
-                fresh = get_token(force=True)
-                if fresh and fresh != tok:
-                    log("<- 401; force-refreshed token, retrying")
-                    try:
-                        resp = send(fresh)
-                    except urllib.error.HTTPError as e2:
-                        err = e2.read()
-                        log("<- %d BACKEND REJECT (after refresh): %s" % (e2.code, err[:600]))
-                        self._raw(e2.code, e2.headers.get_content_type() or "application/json", err)
-                        return
-                    except Exception as e2:
-                        self._json(502, {"error": "upstream failed: %s" % e2})
-                        return
-                else:
-                    err = b'{"error":"401 and token refresh did not yield a new token"}'
-                    log("<- 401; refresh yielded no new token")
-                    self._raw(401, "application/json", err)
-                    return
-            else:
-                err = e.read()
-                log("<- %d BACKEND REJECT: %s" % (e.code, err[:600]))
-                self._raw(e.code, e.headers.get_content_type() or "application/json", err)
-                return
+            err = e.read()
+            log("<- %d BACKEND REJECT: %s" % (e.code, err[:600]))
+            self._raw(e.code, e.headers.get_content_type() or "application/json", err)
+            return
         except Exception as e:
             self._json(502, {"error": "upstream failed: %s" % e})
             return
@@ -410,10 +386,6 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             log("stream relay ended: %s" % e)
 
-    def _incoming_bearer(self):
-        h = self.headers.get("Authorization", "")
-        return h[7:] if h.lower().startswith("bearer ") else None
-
     def _json(self, code, obj):
         self._raw(code, "application/json", json.dumps(obj).encode())
 
@@ -427,8 +399,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def selftest():
+    global FOUNDRY_PROJECT_BASE
+    FOUNDRY_PROJECT_BASE = "https://fake.example.com/api/projects/proj/openai/v1"  # single backend, env-driven
+
     b = {
-        "model": "bench-glm-52-westus",
+        "model": "FW-GLM-5.2",
         "tools": [
             {"type": "local_shell"},
             {"type": "custom", "name": "apply_patch", "format": {"type": "grammar"}},
@@ -486,7 +461,7 @@ def selftest():
     assert n3 == 0
 
     # incoming history: namespaced function_call gets namespace stripped for the backend
-    b_hist = {"model": "bench-glm-52-westus", "input": [
+    b_hist = {"model": "FW-GLM-5.2", "input": [
         {"type": "function_call", "name": "spawn_agent", "namespace": "multi_agent_v1",
          "call_id": "c9", "arguments": "{}"},
         {"type": "function_call_output", "namespace": "multi_agent_v1", "call_id": "c9", "output": "id_1"},
@@ -505,9 +480,17 @@ def selftest():
     normalize_request(b3)
     assert "reasoning" not in b3
 
-    # unknown model
-    r4, _ = normalize_request({"model": "nope"})
+    # no backend configured (FOUNDRY_PROJECT_BASE unset): route stays None regardless of model
+    FOUNDRY_PROJECT_BASE = ""
+    r4, _ = normalize_request({"model": "FW-GLM-5.2"})
     assert r4 is None
+    FOUNDRY_PROJECT_BASE = "https://fake.example.com/api/projects/proj/openai/v1"
+
+    # master-key check: helper returns True only when the header matches PROXY_KEY
+    assert _key_ok("Bearer secret", "secret") is True
+    assert _key_ok("Bearer wrong", "secret") is False
+    assert _key_ok("", "secret") is False
+    assert _key_ok("anything", "") is True   # empty PROXY_KEY (local dev) disables the check
 
     print("selftest OK")
 
