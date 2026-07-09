@@ -314,7 +314,17 @@ variable "admin_group_object_id" {
 variable "enable_codexproxy" {
   type        = bool
   default     = false
-  description = "Master toggle for the Codex proxy sidecar: the project-enabled Foundry account, its deployments, the identity/hop-key/RBAC, and the Container App. When false, none are created and /responses stays on its current backend."
+  description = "Master toggle for the Codex proxy sidecar BACKEND: the project-enabled Foundry account, its deployments, the identity/hop-key/RBAC, and the Container App. When false, none are created. This does NOT flip the /responses route by itself — see route_via_codexproxy."
+}
+
+variable "route_via_codexproxy" {
+  type        = bool
+  default     = false
+  description = "Phase-2 route flip: when true, APIM /responses points at the sidecar Container App and the policy injects the hop key; when false, /responses stays direct-to-Foundry (managed-identity auth). Kept separate from enable_codexproxy so the sidecar backend can be created and health-checked BEFORE the live route is flipped. Requires enable_codexproxy=true (the sidecar must exist first)."
+  validation {
+    condition     = !var.route_via_codexproxy || var.enable_codexproxy
+    error_message = "route_via_codexproxy=true requires enable_codexproxy=true (the sidecar must be created before /responses can route to it)."
+  }
 }
 
 variable "codexproxy_image" {
