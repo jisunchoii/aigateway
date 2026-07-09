@@ -28,7 +28,7 @@ resource "azurerm_api_management_api" "responses" {
   # GA OpenAI/v1 inference base (…/openai/v1). Codex calls POST /responses/responses with the
   # deployment name in the body "model" field; APIM appends the path to this service_url.
   # When the Codex proxy sidecar is enabled, /responses fronts the sidecar (which normalizes Codex
-  # payloads + forwards to the Foundry project route). Otherwise it hits the AIServices account直接.
+  # payloads + forwards to the Foundry project route). Otherwise it hits the AIServices account directly.
   service_url = var.enable_codexproxy ? "https://${module.control_plane.codexproxy_fqdn}" : module.foundry.endpoint_openai_v1
 
   subscription_key_parameter_names {
