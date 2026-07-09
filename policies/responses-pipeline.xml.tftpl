@@ -160,15 +160,21 @@
       <dimension name="API ID" />
     </llm-emit-token-metric>
 
+%{ if codexproxy_enabled ~}
+    <!-- [Privilege] Backend boundary: the backend is the Codex proxy sidecar. Present the hop key
+         (the sidecar validates it, then calls Foundry with ITS managed identity). MUST stay last. -->
+    <set-header name="Authorization" exists-action="override">
+      <value>@("Bearer " + "{{codexproxy-key}}")</value>
+    </set-header>
+%{ else ~}
     <!-- [Privilege] Backend boundary: APIM authenticates to the AIServices account with its MI.
-         Same as the /foundry pipeline — the backend is the AIServices account directly (no LiteLLM
-         hop). grok/DeepSeek/gpt all accept native Responses incl. hosted + function tools, so the
-         request passes through unmodified. MUST stay last. -->
+         Same as the /foundry pipeline — the backend is the AIServices account directly. MUST stay last. -->
     <authentication-managed-identity resource="https://cognitiveservices.azure.com"
                                      output-token-variable-name="msi-access-token" />
     <set-header name="Authorization" exists-action="override">
       <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
     </set-header>
+%{ endif ~}
   </inbound>
   <backend>
     <!-- [Streaming] Codex uses SSE (text/event-stream) Responses. buffer-response="false" relays each
