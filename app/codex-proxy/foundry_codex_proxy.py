@@ -156,13 +156,12 @@ def _normalize_input(items):
 
 
 def _normalize_reasoning(body, route):
+    mode = route["reasoning_mode"]
     r = body.get("reasoning")
-    if route["reasoning_effort"]:
-        # GLM: reasoning must be a non-null object (null -> 400).
+    if mode == "required":
         if not isinstance(r, dict):
             body["reasoning"] = {"effort": "medium"}
-    else:
-        # DeepSeek/Kimi: reject reasoning.effort; {} or {summary} is fine.
+    elif mode == "unsupported":
         if isinstance(r, dict):
             r.pop("effort", None)
         elif "reasoning" in body:
@@ -183,9 +182,12 @@ def _normalize_text(body):
 
 
 # Single backend: the sidecar fronts one project-enabled Foundry account. The body "model"
-# selects the deployment; base_url is fixed (never per-model). reasoning_effort handling is
-# per-model, keyed by model name, since GLM needs an effort object and DeepSeek rejects it.
-REASONING_EFFORT_MODELS = {"FW-GLM-5.2"}  # models that REQUIRE reasoning.effort; others get it stripped
+# selects the deployment; base_url is fixed (never per-model). reasoning_mode is per-model
+# so GPT-5.6 can passthrough reasoning, GLM can require it, and unsupported models strip effort.
+REASONING_MODES = {
+    "FW-GLM-5.2": "required",
+    "gpt-5.6-sol": "passthrough",
+}
 
 
 def _route_for(model):
@@ -193,7 +195,7 @@ def _route_for(model):
         return None
     return {
         "base_url": FOUNDRY_PROJECT_BASE,
-        "reasoning_effort": model in REASONING_EFFORT_MODELS,
+        "reasoning_mode": REASONING_MODES.get(model, "unsupported"),
     }
 
 
@@ -436,6 +438,7 @@ def selftest():
     }
     route, ns_map = normalize_request(b)
     assert route is not None
+    assert route["reasoning_mode"] == "required"
     assert all(t["type"] == "function" for t in b["tools"])  # local_shell/custom/namespace all -> function
     assert [t["name"] for t in b["tools"]] == \
         ["shell", "apply_patch", "keep_me", "spawn_agent", "close_agent"]  # namespace flattened
@@ -477,10 +480,17 @@ def selftest():
     normalize_request(b_hist)
     assert all("namespace" not in x for x in b_hist["input"])
 
+    # GPT-5.6: reasoning passes through unchanged
+    b1 = {"model": "gpt-5.6-sol", "reasoning": {"effort": "high", "summary": "auto"}}
+    r1, _ = normalize_request(b1)
+    assert r1["reasoning_mode"] == "passthrough"
+    assert b1["reasoning"] == {"effort": "high", "summary": "auto"}
+
     # DeepSeek/Kimi: reasoning.effort stripped, object preserved
     b2 = {"model": "DeepSeek-V4-Pro", "reasoning": {"effort": "high", "summary": "auto"}}
     r2, _ = normalize_request(b2)
     assert r2 is not None
+    assert r2["reasoning_mode"] == "unsupported"
     assert b2["reasoning"] == {"summary": "auto"}
 
     # DeepSeek: null reasoning removed entirely (backend accepts no reasoning field)
