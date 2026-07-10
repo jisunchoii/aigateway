@@ -46,13 +46,11 @@ model_deployments = {
   }
 }
 
-# Brownfield reuse: set reuse_foundry=true and declare the
-# EXISTING account's deployment names (map key MUST match the real deployment name).
+# Brownfield reuse: set reuse_foundry=true and point to the EXISTING account.
+# Keep this single canonical model_deployments block, but edit it so each map key/value
+# exactly matches the real deployment name/version/SKU already present in that account.
 # existing_foundry_name = "<existing-aiservices-account>"
 # existing_foundry_rg   = "<existing-resource-group>"
-# model_deployments = {
-#   "gpt-5.6-sol" = { model_name = "gpt-5.6-sol", model_format = "OpenAI", model_version = "2026-07-09", sku_name = "GlobalStandard", capacity = 500 }
-# }
 
 # /responses sidecar bootstrap
 # First apply: leave empty so ACR can be created.
