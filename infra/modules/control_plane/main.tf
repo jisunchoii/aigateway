@@ -151,7 +151,7 @@ variable "rate_tiers_json" {
 
 variable "alias_models_json" {
   type        = string
-  description = "JSON of the deployment alias -> model name map (jsonencode of openai_deployments model_names), surfaced to the BFF via ALIAS_MODELS_JSON so the Models UI shows what each alias is."
+  description = "JSON of the deployment name -> display label map (jsonencode of the canonical deployment catalog), surfaced to the BFF via ALIAS_MODELS_JSON so the Models UI shows every available model."
 }
 
 variable "log_analytics_workspace_id" {
@@ -188,7 +188,7 @@ variable "codexproxy_key" {
 variable "codexproxy_project_base" {
   type        = string
   default     = ""
-  description = "Foundry project Responses base URL (FOUNDRY_PROJECT_BASE env)."
+  description = "Canonical child-project Responses base URL (FOUNDRY_PROJECT_BASE env)."
 }
 
 locals {
@@ -489,8 +489,8 @@ resource "azurerm_container_app" "admin_ui" {
 }
 
 # Codex proxy sidecar. Same CAE as the Admin UI; internal ingress on 8789. APIM's /responses API
-# routes here and authenticates with the hop key. The proxy calls the Foundry project backend with
-# its managed identity (ManagedIdentityCredential), no keys.
+# routes here and authenticates with the hop key. The proxy calls the canonical child-project
+# backend with its managed identity (ManagedIdentityCredential), no keys.
 resource "azurerm_container_app" "codexproxy" {
   count                        = local.codexproxy_enabled ? 1 : 0
   name                         = "ca-codexproxy-${var.name_suffix}"

@@ -84,7 +84,7 @@ output "worker_id" {
   value       = azurerm_user_assigned_identity.config_sync_worker.id
 }
 
-# Codex proxy sidecar identity. Calls the project-enabled Foundry account with this identity
+# Codex proxy sidecar identity. Calls the canonical AIServices account with this identity
 # (ManagedIdentityCredential), so it needs Cognitive Services User on that account.
 resource "azurerm_user_assigned_identity" "codex_proxy" {
   name                = "id-codexproxy-${var.name_suffix}"

@@ -58,29 +58,14 @@ variable "public" {
   description = "When true, APIM is created in EXTERNAL VNet mode (gateway published on a public VIP, reachable from the internet). When false (default), Internal mode keeps the gateway private (VNet-only). VNet injection is retained either way so APIM can reach the private model backends."
 }
 
-variable "openai_account_id" {
+variable "model_account_id" {
   type        = string
-  description = "Resource ID of the Azure OpenAI account to grant the APIM identity access to."
+  description = "Canonical project-enabled AIServices account ID."
 }
 
-variable "openai_endpoint" {
+variable "model_openai_v1_base" {
   type        = string
-  description = "Base endpoint URL of the backing Azure OpenAI account."
-}
-
-variable "foundry_account_id" {
-  type        = string
-  description = "Resource ID of the AIServices (Foundry) account to grant the APIM identity inference access to."
-}
-
-variable "foundry_endpoint" {
-  type        = string
-  description = "AIServices OpenAI/v1 inference base (e.g. https://ais-<suffix>.openai.azure.com/openai/v1); used verbatim as the foundry API service_url."
-}
-
-variable "foundry_v1_base" {
-  type        = string
-  description = "AIServices account OpenAI/v1 base used by the openai policy to route requests, e.g. https://ais-<suffix>.openai.azure.com/openai/v1."
+  description = "Canonical OpenAI/v1 inference base."
 }
 
 variable "policy_template_path" {
@@ -134,7 +119,7 @@ variable "token_quota_period" {
   description = "Token quota reset period."
 }
 
-variable "allowed_models" {
+variable "allowed_model_names" {
   type        = list(string)
   description = "Allowed deployment aliases."
 }
@@ -169,6 +154,10 @@ variable "entra_team_claim" {
   description = "JWT claim used to derive consumerId."
 }
 
+locals {
+  allowed_models = var.allowed_model_names
+}
+
 resource "azurerm_api_management" "apim" {
   name                = "apim-${var.name_suffix}"
   resource_group_name = var.resource_group_name
@@ -191,16 +180,29 @@ resource "azurerm_api_management" "apim" {
   tags = var.tags
 }
 
-resource "azurerm_role_assignment" "apim_to_openai" {
-  scope                = var.openai_account_id
+removed {
+  from = azurerm_role_assignment.apim_to_openai
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+moved {
+  from = azurerm_role_assignment.apim_to_foundry
+  to   = azurerm_role_assignment.apim_to_model_foundry
+}
+
+resource "azurerm_role_assignment" "apim_to_model_openai" {
+  scope                = var.model_account_id
   role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
 }
 
-# APIM MI calls the AIServices account for OSS-model inference. "Cognitive Services User" is the
-# inference data-plane role for AIServices (broader than the OpenAI-only role used above).
-resource "azurerm_role_assignment" "apim_to_foundry" {
-  scope                = var.foundry_account_id
+# APIM MI calls the canonical AIServices account for unified inference. "Cognitive Services User"
+# is the broader inference data-plane role needed for non-OpenAI models on the same account.
+resource "azurerm_role_assignment" "apim_to_model_foundry" {
+  scope                = var.model_account_id
   role_definition_name = "Cognitive Services User"
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
 }
@@ -220,7 +222,7 @@ resource "azurerm_api_management_api" "openai" {
   path                  = "openai"
   protocols             = ["https"]
   subscription_required = var.client_auth_mode != "entra-id"
-  service_url           = "${trimsuffix(var.openai_endpoint, "/")}/openai"
+  service_url           = var.model_openai_v1_base
 
   # Import the Azure OpenAI inference OpenAPI spec so the API has real operations
   # (chat/completions, embeddings, etc). Without operations APIM 404s every request.
@@ -248,12 +250,12 @@ resource "azurerm_api_management_api_policy" "openai" {
     entra_team_claim        = var.entra_team_claim
     rate_tiers              = var.rate_tiers
     model_tokens_per_minute = var.model_tokens_per_minute
-    foundry_v1_base         = var.foundry_v1_base
+    model_openai_v1_base    = var.model_openai_v1_base
   })
 
   depends_on = [
-    azurerm_role_assignment.apim_to_openai,
-    azurerm_role_assignment.apim_to_foundry,
+    azurerm_role_assignment.apim_to_model_openai,
+    azurerm_role_assignment.apim_to_model_foundry,
     azurerm_api_management_named_value.allowed_models,
     azurerm_api_management_named_value.tokens_per_minute,
     azurerm_api_management_named_value.token_quota,
@@ -282,7 +284,7 @@ resource "azurerm_api_management_api" "vscode_openai" {
   path                  = "vscode/models"
   protocols             = ["https"]
   subscription_required = true
-  service_url           = "${trimsuffix(var.openai_endpoint, "/")}/openai"
+  service_url           = var.model_openai_v1_base
 
   import {
     content_format = "openapi+json-link"
@@ -306,12 +308,12 @@ resource "azurerm_api_management_api_policy" "vscode_openai" {
     entra_team_claim        = var.entra_team_claim
     rate_tiers              = var.rate_tiers
     model_tokens_per_minute = var.model_tokens_per_minute
-    foundry_v1_base         = var.foundry_v1_base
+    model_openai_v1_base    = var.model_openai_v1_base
   })
 
   depends_on = [
-    azurerm_role_assignment.apim_to_openai,
-    azurerm_role_assignment.apim_to_foundry,
+    azurerm_role_assignment.apim_to_model_openai,
+    azurerm_role_assignment.apim_to_model_foundry,
     azurerm_api_management_named_value.allowed_models,
     azurerm_api_management_named_value.tokens_per_minute,
     azurerm_api_management_named_value.token_quota,
@@ -396,7 +398,7 @@ resource "azurerm_api_management_api" "foundry" {
   subscription_required = var.client_auth_mode != "entra-id"
   # GA OpenAI/v1 inference base (…/openai/v1). Clients call POST /foundry/chat/completions with the
   # deployment name in the body "model" field; APIM appends the path to this service_url.
-  service_url = var.foundry_endpoint
+  service_url = var.model_openai_v1_base
 
   subscription_key_parameter_names {
     header = "Ocp-Apim-Subscription-Key"
@@ -427,12 +429,12 @@ resource "azurerm_api_management_api_policy" "foundry" {
     entra_team_claim        = var.entra_team_claim
     rate_tiers              = var.rate_tiers
     model_tokens_per_minute = var.model_tokens_per_minute
-    foundry_v1_base         = var.foundry_v1_base
+    model_openai_v1_base    = var.model_openai_v1_base
   })
 
   depends_on = [
-    azurerm_role_assignment.apim_to_openai,
-    azurerm_role_assignment.apim_to_foundry,
+    azurerm_role_assignment.apim_to_model_openai,
+    azurerm_role_assignment.apim_to_model_foundry,
     azurerm_api_management_named_value.allowed_models,
     azurerm_api_management_named_value.tokens_per_minute,
     azurerm_api_management_named_value.token_quota,
@@ -515,7 +517,7 @@ resource "azurerm_api_management_named_value" "allowed_models" {
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   display_name        = "allowed-models"
-  value               = join(",", var.allowed_models)
+  value               = join(",", local.allowed_models)
 
   lifecycle {
     # The Phase 3a config-sync worker is the runtime owner of this value (it writes it from

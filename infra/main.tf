@@ -48,18 +48,12 @@ module "observability" {
   budget_start_date   = var.budget_start_date
 }
 
-module "openai" {
-  count               = var.reuse_foundry ? 0 : 1
-  source              = "./modules/openai"
-  name_suffix         = local.name_suffix
-  suffix              = local.sfx
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
-  tags                = local.tags
-  pe_subnet_id        = module.network.pe_subnet_id
-  dns_zone_id         = module.network.dns_zone_ids["openai"]
-  deployments         = var.openai_deployments
-  enabled             = true
+removed {
+  from = module.openai
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 module "foundry" {
@@ -75,12 +69,13 @@ module "foundry" {
     module.network.dns_zone_ids["aiservices"],
     module.network.dns_zone_ids["openai"],
   ]
-  deployments            = var.foundry_deployments
-  reuse_existing         = var.reuse_foundry
-  existing_account_name  = var.existing_foundry_name
-  existing_account_rg    = var.existing_foundry_rg
-  enable_project_account = var.enable_codexproxy
-  project_deployments    = var.project_deployments
+  deployments                   = var.model_deployments
+  account_name                  = var.foundry_account_name
+  project_name                  = var.foundry_project_name
+  public_network_access_enabled = var.foundry_public_network_access_enabled
+  reuse_existing                = var.reuse_foundry
+  existing_account_name         = var.existing_foundry_name
+  existing_account_rg           = var.existing_foundry_rg
 }
 
 module "jumpbox" {
@@ -102,7 +97,7 @@ module "jumpbox" {
 
 module "apim" {
   source                        = "./modules/apim"
-  depends_on                    = [module.network]
+  depends_on                    = [module.network, module.foundry]
   name_suffix                   = local.name_suffix
   resource_group_name           = azurerm_resource_group.rg.name
   location                      = var.location
@@ -113,13 +108,10 @@ module "apim" {
   apim_subnet_id                = module.network.apim_subnet_id
   public_ip_id                  = module.network.apim_public_ip_id
   public                        = var.apim_public
-  openai_account_id             = local.gpt_backend_account_id
-  openai_endpoint               = local.gpt_backend_endpoint
-  foundry_account_id            = module.foundry.id
-  foundry_endpoint              = module.foundry.endpoint_openai_v1
+  model_account_id              = module.foundry.id
+  model_openai_v1_base          = module.foundry.endpoint_openai_v1
   policy_template_path          = "${path.root}/../policies/openai-pipeline.xml.tftpl"
   foundry_policy_template_path  = "${path.root}/../policies/foundry-pipeline.xml.tftpl"
-  foundry_v1_base               = module.foundry.endpoint_openai_v1
   openai_openapi_spec_url       = var.openai_openapi_spec_url
   appinsights_id                = module.observability.appi_id
   appinsights_connection_string = module.observability.appi_connection_string
@@ -127,7 +119,7 @@ module "apim" {
   model_tokens_per_minute       = local.model_tokens_per_minute
   token_quota                   = var.token_quota
   token_quota_period            = var.token_quota_period
-  allowed_models                = var.allowed_models
+  allowed_model_names           = local.allowed_models
   rate_tiers                    = var.rate_tiers
   client_auth_mode              = var.client_auth_mode
   entra_tenant_id               = var.entra_tenant_id
@@ -201,7 +193,7 @@ module "control_plane" {
   # model-id -> display-label map dynamically from allowed_models so a new tfvars model shows in
   # the Models UI automatically (label = id; modelLabel.ts hides labels equal to the id). Prices are
   # operator-owned (Cosmos `pricing` doc, scripts/seed-pricing-jumpbox.sh), not derived here.
-  alias_models_json          = jsonencode({ for m in var.allowed_models : m => m })
+  alias_models_json          = jsonencode({ for model in local.allowed_models : model => model })
   log_analytics_workspace_id = module.observability.law_customer_id
   codexproxy_image           = var.codexproxy_image
   codexproxy_identity_id     = module.identity.codexproxy_id
@@ -232,18 +224,18 @@ resource "azurerm_role_assignment" "worker_log_reader" {
 }
 
 resource "random_password" "codexproxy_key" {
-  count   = var.enable_codexproxy ? 1 : 0
+  count   = local.codexproxy_enabled ? 1 : 0
   length  = 48
   special = false
 }
 
 locals {
-  codexproxy_key = var.enable_codexproxy ? "sk-${random_password.codexproxy_key[0].result}" : ""
+  codexproxy_key = local.codexproxy_enabled ? "sk-${random_password.codexproxy_key[0].result}" : ""
 }
 
 # APIM<->sidecar hop secret, presented by the policy as Authorization: Bearer {{codexproxy-key}}.
 resource "azurerm_api_management_named_value" "codexproxy_key" {
-  count               = var.enable_codexproxy ? 1 : 0
+  count               = local.codexproxy_enabled ? 1 : 0
   name                = "codexproxy-key"
   api_management_name = module.apim.name
   resource_group_name = azurerm_resource_group.rg.name
@@ -253,8 +245,8 @@ resource "azurerm_api_management_named_value" "codexproxy_key" {
 }
 
 resource "azurerm_role_assignment" "codexproxy_to_project_account" {
-  count                = var.enable_codexproxy ? 1 : 0
-  scope                = module.foundry.project_account_id
+  count                = local.codexproxy_enabled ? 1 : 0
+  scope                = module.foundry.id
   role_definition_name = "Cognitive Services User"
   principal_id         = module.identity.codexproxy_principal_id
 }

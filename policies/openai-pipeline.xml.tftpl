@@ -111,13 +111,13 @@
             return ladder[target];
         } catch { return req; }
     }" />
-    <!-- [Backend v1] The incoming route is the Azure OpenAI path route (model in the URL,
-         ?api-version=…). The unified backend is the AIServices GA OpenAI/v1 route (model in body,
+    <!-- [Backend v1] The incoming route is the Azure OpenAI-compatible path route (model in the URL,
+         ?api-version=…). The canonical backend is the AIServices GA OpenAI/v1 route (model in body,
          no api-version). Convert EVERY request: point at the v1 base, rewrite to /chat/completions
          (dropping ?api-version, which the v1 route 400s on), and put the effective deployment in the
          body "model". gpt-5 reasoning models need max_completion_tokens; if a client sent max_tokens,
          translate it. effectiveDeployment == requestedDeployment when no budget downgrade applies. -->
-    <set-backend-service base-url="${foundry_v1_base}" />
+    <set-backend-service base-url="${model_openai_v1_base}" />
     <rewrite-uri template="/chat/completions" copy-unmatched-params="false" />
     <set-body>@{
         var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>();
@@ -184,9 +184,9 @@
       <dimension name="API ID" />
     </llm-emit-token-metric>
 
-    <!-- [Privilege] Backend boundary: APIM authenticates to Azure OpenAI with its managed identity.
-         Key auth is disabled on the account, so this is the only working path. MUST stay last
-         so it overrides any client Authorization with the MI bearer for the backend call. -->
+    <!-- [Privilege] Backend boundary: APIM authenticates to the canonical AIServices account with its
+         managed identity. Key auth is disabled on the account, so this is the only working path.
+         MUST stay last so it overrides any client Authorization with the MI bearer for the backend call. -->
     <authentication-managed-identity resource="https://cognitiveservices.azure.com"
                                      output-token-variable-name="msi-access-token" />
     <set-header name="Authorization" exists-action="override">

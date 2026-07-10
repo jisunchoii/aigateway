@@ -18,7 +18,7 @@ if [[ -z "$token" ]]; then echo "Failed to get MI token from IMDS." >&2; exit 1;
 
 code="$(curl -sS -o /tmp/smoke_be.json -w '%{http_code}' -X POST "${BASE%/}/chat/completions" \
   -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
-  --data '{"model":"gpt-5.4","messages":[{"role":"user","content":"ping"}],"max_completion_tokens":16}' || echo 000)"
+  --data '{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"ping"}],"max_completion_tokens":16}' || echo 000)"
 
 if [[ "$code" == "200" ]] && grep -q '"choices"' /tmp/smoke_be.json; then
   echo "PASS  backend direct v1 (200)"; exit 0

@@ -93,8 +93,8 @@
 
     <!-- [Cost] Phase 4/6 budget downgrade. The worker writes active_downgrade.level (0/1/2) into the
          consumer's bundle entry when daily token usage crosses 80%/100%. Rewrite the requested model DOWN
-         the consumer's downgrade_ladder by `level` steps. The ladder may mix gpt + OSS aliases (one cost
-         order), so the target may live in EITHER backend. effectiveModel == requestedDeployment when
+         the consumer's downgrade_ladder by `level` steps. The ladder may mix gpt + OSS aliases, but every
+         target now lives on the canonical AIServices account. effectiveModel == requestedDeployment when
          no downgrade applies. -->
     <set-variable name="effectiveModel" value="@{
         var req = (string)context.Variables["requestedDeployment"];

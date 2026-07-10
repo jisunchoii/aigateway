@@ -12,17 +12,22 @@ apim_sku_name        = "Developer_1"
 # Pick ONE path: greenfield (create) below, or brownfield reuse (commented).
 reuse_foundry = false
 
-# Greenfield: Terraform creates these deployments. Deployment name = real model name.
-openai_deployments = {
-  "gpt-5.4" = {
-    model_name    = "gpt-5.4"
-    model_version = "2026-03-05"
+# Greenfield: Terraform creates these canonical deployments. Deployment name = real model name.
+model_deployments = {
+  "gpt-5.6-sol" = {
+    model_name    = "gpt-5.6-sol"
+    model_format  = "OpenAI"
+    model_version = "2026-07-09"
     sku_name      = "GlobalStandard"
-    capacity      = 10
+    capacity      = 500
   }
-}
-
-foundry_deployments = {
+  "FW-GLM-5.2" = {
+    model_name    = "FW-GLM-5.2"
+    model_format  = "Fireworks"
+    model_version = "1"
+    sku_name      = "DataZoneStandard"
+    capacity      = 500
+  }
   "grok-4.3" = {
     model_name    = "grok-4.3"
     model_format  = "xAI"
@@ -35,20 +40,17 @@ foundry_deployments = {
     model_format  = "DeepSeek"
     model_version = "2026-04-23"
     sku_name      = "GlobalStandard"
-    capacity      = 10
+    capacity      = 500
   }
 }
 
-# Brownfield reuse: set reuse_foundry=true, drop openai_deployments, and declare the
+# Brownfield reuse: set reuse_foundry=true and declare the
 # EXISTING account's deployment names (map key MUST match the real deployment name).
 # existing_foundry_name = "<existing-aiservices-account>"
 # existing_foundry_rg   = "<existing-resource-group>"
-# foundry_deployments = {
-#   "gpt-5.4" = { model_name = "gpt-5.4", model_format = "OpenAI", model_version = "2026-03-05", sku_name = "GlobalStandard", capacity = 10 }
+# model_deployments = {
+#   "gpt-5.6-sol" = { model_name = "gpt-5.6-sol", model_format = "OpenAI", model_version = "2026-07-09", sku_name = "GlobalStandard", capacity = 500 }
 # }
-
-# Models clients may request (must match deployment names). Also drives the Admin UI model list.
-allowed_models = ["gpt-5.4", "grok-4.3", "DeepSeek-V4-Pro"]
 
 # Cost guardrail (observability module)
 monthly_budget_amount = 200

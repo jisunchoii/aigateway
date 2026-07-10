@@ -1,10 +1,11 @@
-# --- /responses API — Responses-API surface for Codex CLI, backed DIRECTLY by the AIServices account. ---
+# --- /responses API — Responses-API surface for Codex CLI, backed by the canonical AIServices account. ---
 #
-# Codex CLI is Responses-only (wire_api = "responses"). The AIServices (Foundry) account exposes the
-# Azure OpenAI-compatible /openai/v1/responses path, and gpt-5.4 / grok-4.3 / DeepSeek-V4-Pro all
-# accept native Responses there — including hosted tools (web_search) and function tools (verified
-# against the live deployments). So /responses is just another wildcard-proxy API pointed at the same
-# backend as /foundry, with the same governance policy and managed-identity auth. No LiteLLM hop.
+# Codex CLI is Responses-only (wire_api = "responses"). The canonical AIServices account exposes the
+# Azure OpenAI-compatible /openai/v1/responses path, and gpt-5.6-sol / FW-GLM-5.2 /
+# DeepSeek-V4-Pro / grok-4.3 all accept native Responses there — including hosted tools
+# (web_search) and function tools (verified against the live deployments). So /responses is just
+# another wildcard-proxy API pointed at the same canonical account as /foundry, with the same
+# governance policy and managed-identity auth. No LiteLLM hop.
 #
 # Routing: Codex config base_url = https://<apim-host>/responses, wire_api = "responses". Codex POSTs
 # to {base_url}/responses, i.e. /responses/responses. APIM strips the "responses" path prefix, the
@@ -12,9 +13,10 @@
 # backend path …/openai/v1/responses — the AIServices account's native Responses route.
 #
 # Declared at root (not in the apim module) alongside the other root wiring; it reuses the apim
-# module's outputs (name, logger_id, gateway_url) and the foundry endpoint. The APIM managed identity
-# already has Cognitive Services OpenAI User on the AIServices account (granted in the apim module),
-# so the managed-identity auth in the policy works with no additional role assignment.
+# module's outputs (name, logger_id, gateway_url) and the canonical account endpoint. The APIM
+# managed identity already has Cognitive Services OpenAI User on the canonical AIServices account
+# (granted in the apim module), so the managed-identity auth in the policy works with no additional
+# role assignment.
 
 resource "azurerm_api_management_api" "responses" {
   name                  = "responses"
@@ -28,7 +30,8 @@ resource "azurerm_api_management_api" "responses" {
   # GA OpenAI/v1 inference base (…/openai/v1). Codex calls POST /responses/responses with the
   # deployment name in the body "model" field; APIM appends the path to this service_url.
   # When the Codex proxy sidecar is enabled, /responses fronts the sidecar (which normalizes Codex
-  # payloads + forwards to the Foundry project route). Otherwise it hits the AIServices account directly.
+  # payloads + forwards to the canonical project route). Otherwise it hits the canonical AIServices
+  # account directly.
   service_url = var.route_via_codexproxy ? "https://${module.control_plane.codexproxy_fqdn}" : module.foundry.endpoint_openai_v1
 
   subscription_key_parameter_names {

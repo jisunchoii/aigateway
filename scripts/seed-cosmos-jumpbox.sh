@@ -53,7 +53,7 @@ date_hdr="$(LC_ALL=C TZ=GMT date +"%a, %d %b %Y %H:%M:%S GMT")"
 read -r -d '' doc <<'JSON' || true
 {
   "id": "global",
-  "allowed_models": ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"],
+  "allowed_models": ["gpt-5.6-sol", "FW-GLM-5.2", "DeepSeek-V4-Pro", "grok-4.3"],
   "tokens_per_minute": 1000,
   "token_quota": 50000,
   "token_quota_period": "Daily"

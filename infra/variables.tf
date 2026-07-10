@@ -81,31 +81,7 @@ variable "budget_start_date" {
   description = "First-of-month UTC start date for the cost budget. Must not be in the past when first applied."
 }
 
-variable "openai_deployments" {
-  type = map(object({
-    model_name    = string
-    model_version = string
-    sku_name      = string
-    capacity      = number
-  }))
-  default = {
-    "gpt-5.4" = {
-      model_name    = "gpt-5.4"
-      model_version = "2026-03-05"
-      sku_name      = "GlobalStandard"
-      capacity      = 10
-    }
-    "gpt-5.4-mini" = {
-      model_name    = "gpt-5.4-mini"
-      model_version = "2026-03-17"
-      sku_name      = "GlobalStandard"
-      capacity      = 10
-    }
-  }
-  description = "Azure OpenAI deployments. Deployment name = real model name (no alias indirection); gpt-5.4-nano removed."
-}
-
-variable "foundry_deployments" {
+variable "model_deployments" {
   type = map(object({
     model_name    = string
     model_format  = string
@@ -113,18 +89,20 @@ variable "foundry_deployments" {
     sku_name      = string
     capacity      = number
   }))
-  # PAYG-first (GlobalStandard). PTU models (FW-Kimi-K2.6 / FW-GLM-5.1) deferred — large reserved
-  # minimums. Kimi-K2.6 (PAYG) also deferred: 0 free quota in koreacentral (a bench deployment in
-  # another RG holds the entire 100-unit limit). Capacities fit available quota (verified live
-  # 2026-06): grok-4.3 has ~490 free; DeepSeek-V4-Pro catalog default is 5000 but only 500 is free,
-  # and for GlobalStandard (PAYG) capacity is a TPM rate ceiling (not reserved cost), so 500 is safe.
   default = {
-    "grok-4.3" = {
-      model_name    = "grok-4.3"
-      model_format  = "xAI"
-      model_version = "1"
+    "gpt-5.6-sol" = {
+      model_name    = "gpt-5.6-sol"
+      model_format  = "OpenAI"
+      model_version = "2026-07-09"
       sku_name      = "GlobalStandard"
-      capacity      = 10
+      capacity      = 500
+    }
+    "FW-GLM-5.2" = {
+      model_name    = "FW-GLM-5.2"
+      model_format  = "Fireworks"
+      model_version = "1"
+      sku_name      = "DataZoneStandard"
+      capacity      = 500
     }
     "DeepSeek-V4-Pro" = {
       model_name    = "DeepSeek-V4-Pro"
@@ -133,14 +111,29 @@ variable "foundry_deployments" {
       sku_name      = "GlobalStandard"
       capacity      = 500
     }
+    "grok-4.3" = {
+      model_name    = "grok-4.3"
+      model_format  = "xAI"
+      model_version = "1"
+      sku_name      = "GlobalStandard"
+      capacity      = 10
+    }
   }
-  description = "Foundry OSS/partner model deployments on the AIServices account (PAYG GlobalStandard). Keys become client-facing aliases."
+  description = "Canonical model deployments. Keys are client-visible deployment names and drive APIM/Admin UI catalogs."
+
+  validation {
+    condition = alltrue([
+      for name, deployment in var.model_deployments :
+      name == deployment.model_name && deployment.capacity > 0
+    ])
+    error_message = "Each deployment key must equal model_name and capacity must be positive."
+  }
 }
 
 variable "reuse_foundry" {
   type        = bool
   default     = false
-  description = "Brownfield: when true, reuse an EXISTING single AIServices (Foundry) account instead of creating one. The account + model deployments are read via a data source (not created); only the Private Endpoint and APIM RBAC are added. When true, the separate Azure OpenAI account is NOT created and gpt traffic is routed to the same AIServices account. The account must already have local_auth disabled and public network access blocked (see GitBook 04)."
+  description = "Brownfield: when true, reuse an existing canonical AIServices account instead of creating one. Terraform still manages the child project and private endpoint, but reads the account from Azure and expects the canonical deployment catalog declared in model_deployments."
 }
 
 variable "existing_foundry_name" {
@@ -161,6 +154,24 @@ variable "existing_foundry_rg" {
     condition     = !var.reuse_foundry || length(var.existing_foundry_rg) > 0
     error_message = "existing_foundry_rg is required when reuse_foundry = true."
   }
+}
+
+variable "foundry_account_name" {
+  type        = string
+  default     = ""
+  description = "Managed canonical account name override. Set to aisproj-c0gvf2 for the live migration."
+}
+
+variable "foundry_project_name" {
+  type        = string
+  default     = "codexproj"
+  description = "Canonical child Foundry project name."
+}
+
+variable "foundry_public_network_access_enabled" {
+  type        = bool
+  default     = false
+  description = "Temporary migration escape hatch. Final and fresh deployments keep this false."
 }
 
 variable "enable_jumpbox" {
@@ -224,16 +235,6 @@ variable "token_quota_period" {
   validation {
     condition     = contains(["Hourly", "Daily", "Weekly", "Monthly", "Yearly"], var.token_quota_period)
     error_message = "token_quota_period must be one of: Hourly, Daily, Weekly, Monthly, Yearly."
-  }
-}
-
-variable "allowed_models" {
-  type        = list(string)
-  default     = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
-  description = "Model deployment names callers are allowed to request (OpenAI + Foundry OSS). A request for any other deployment returns 403."
-  validation {
-    condition     = alltrue([for m in var.allowed_models : m == trimspace(m) && length(m) > 0])
-    error_message = "allowed_models entries must be non-empty and have no leading/trailing whitespace."
   }
 }
 
@@ -311,19 +312,13 @@ variable "admin_group_object_id" {
   description = "Entra ID security group object id whose members are gateway admins (prereq P1). The BFF gates writes on membership."
 }
 
-variable "enable_codexproxy" {
-  type        = bool
-  default     = false
-  description = "Master toggle for the Codex proxy sidecar BACKEND: the project-enabled Foundry account, its deployments, the identity/hop-key/RBAC, and the Container App. When false, none are created. This does NOT flip the /responses route by itself — see route_via_codexproxy."
-}
-
 variable "route_via_codexproxy" {
   type        = bool
   default     = false
-  description = "Phase-2 route flip: when true, APIM /responses points at the sidecar Container App and the policy injects the hop key; when false, /responses stays direct-to-Foundry (managed-identity auth). Kept separate from enable_codexproxy so the sidecar backend can be created and health-checked BEFORE the live route is flipped. Requires enable_codexproxy=true (the sidecar must exist first)."
+  description = "Phase-2 route flip: when true, APIM /responses points at the sidecar Container App and the policy injects the hop key; when false, /responses stays direct to the canonical AIServices account (managed-identity auth). Kept separate so the sidecar backend can be created and health-checked BEFORE the live route is flipped."
   validation {
-    condition     = !var.route_via_codexproxy || var.enable_codexproxy
-    error_message = "route_via_codexproxy=true requires enable_codexproxy=true (the sidecar must be created before /responses can route to it)."
+    condition     = !var.route_via_codexproxy || var.codexproxy_image != ""
+    error_message = "route_via_codexproxy=true requires codexproxy_image."
   }
 }
 
@@ -331,40 +326,6 @@ variable "codexproxy_image" {
   type        = string
   default     = ""
   description = "Full image reference for the Codex proxy sidecar, e.g. acrllmgwxxxx.azurecr.io/codexproxy:latest. Empty disables the Container App."
-}
-
-variable "project_deployments" {
-  type = map(object({
-    model_name    = string
-    model_format  = string
-    model_version = string
-    sku_name      = string
-    capacity      = number
-  }))
-  default = {
-    "FW-GLM-5.2" = {
-      model_name    = "FW-GLM-5.2"
-      model_format  = "Fireworks"
-      model_version = "1"
-      sku_name      = "DataZoneStandard"
-      capacity      = 500
-    }
-    "DeepSeek-V4-Pro" = {
-      model_name    = "DeepSeek-V4-Pro"
-      model_format  = "DeepSeek"
-      model_version = "2026-04-23"
-      sku_name      = "GlobalStandard"
-      capacity      = 500
-    }
-    "grok-4.3" = {
-      model_name    = "grok-4.3"
-      model_format  = "xAI"
-      model_version = "1"
-      sku_name      = "GlobalStandard"
-      capacity      = 10
-    }
-  }
-  description = "Model deployments on the project-enabled account fronted by the Codex proxy sidecar. Includes the sidecar's models (GLM, DeepSeek) plus every downgrade-ladder target that could arrive via APIM downgrade, so a rewritten model always resolves. gpt-5.4/mini stay on the OpenAI path (openai module) and are NOT deployed here — a consumer whose ladder downgrades a sidecar model down to gpt-5.4 would 404 at the sidecar; this plan's scope is sidecar models (GLM/DeepSeek) whose ladders stay within Foundry models (-> grok-4.3)."
 }
 
 variable "rate_tiers" {
