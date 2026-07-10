@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(os.environ.get("PORT", "8789"))
 FOUNDRY_PROJECT_BASE = os.environ.get("FOUNDRY_PROJECT_BASE", "").rstrip("/")
 PROXY_KEY = os.environ.get("PROXY_KEY", "")
-MI_SCOPE = os.environ.get("MI_SCOPE", "https://cognitiveservices.azure.com/.default")
+MI_SCOPE = os.environ.get("MI_SCOPE", "")
 AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "")
 
 
@@ -197,6 +197,14 @@ def _route_for(model):
     }
 
 
+def mi_scope_for(base_url):
+    if MI_SCOPE:
+        return MI_SCOPE
+    if ".services.ai.azure.com/" in (base_url or ""):
+        return "https://ai.azure.com/.default"
+    return "https://cognitiveservices.azure.com/.default"
+
+
 def normalize_request(body):
     """Mutate body in place; return (route, ns_map) or (None, {}) for unknown model.
 
@@ -236,7 +244,7 @@ def _credential():
 
 def get_token(now=None, force=False):
     try:
-        return _credential().get_token(MI_SCOPE).token
+        return _credential().get_token(mi_scope_for(FOUNDRY_PROJECT_BASE)).token
     except Exception as e:
         log("MI token acquisition failed: %s" % e)
         return None
@@ -495,12 +503,16 @@ def selftest():
     print("selftest OK")
 
 
+def make_server(port=PORT):
+    return ThreadingHTTPServer(("0.0.0.0", port), Handler)
+
+
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
         sys.exit(0)
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    log("listening on http://127.0.0.1:%d  (POST .../responses)" % PORT)
+    srv = make_server(PORT)
+    log("listening on http://0.0.0.0:%d  (POST .../responses)" % PORT)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
