@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 MODULE_PATH = Path(__file__).parents[1] / "verify_model_topology_plan.py"
 SPEC = importlib.util.spec_from_file_location("verify_model_topology_plan", MODULE_PATH)
@@ -33,6 +35,29 @@ def test_fresh_plan_rejects_split_openai_module():
     )
     errors = verify.verify_plan(value, "fresh")
     assert any("module.openai" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "module.foundry.azurerm_cognitive_account.foundry[0]",
+        'module.foundry.azurerm_cognitive_deployment.models["legacy"]',
+        "module.foundry.azurerm_private_endpoint.foundry[0]",
+        "module.apim.azurerm_role_assignment.apim_to_openai[0]",
+        "module.apim.azurerm_role_assignment.apim_to_foundry[0]",
+    ],
+)
+def test_fresh_plan_rejects_legacy_fallback_creates(address):
+    value = plan(
+        change("module.foundry.azapi_resource.project_account[0]", ["create"]),
+        change('module.foundry.azurerm_cognitive_deployment.project_models["gpt-5.6-sol"]', ["create"]),
+        change('module.foundry.azurerm_cognitive_deployment.project_models["FW-GLM-5.2"]', ["create"]),
+        change('module.foundry.azurerm_cognitive_deployment.project_models["DeepSeek-V4-Pro"]', ["create"]),
+        change('module.foundry.azurerm_cognitive_deployment.project_models["grok-4.3"]', ["create"]),
+        change(address, ["create"]),
+    )
+    errors = verify.verify_plan(value, "fresh")
+    assert any(address in error for error in errors), errors
 
 
 def test_migration_plan_rejects_fallback_deletion():

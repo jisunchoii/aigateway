@@ -40,8 +40,10 @@ def verify_plan(plan, mode):
     errors = []
     changes = _changes(plan)
     if mode == "fresh":
-        if any(change.get("address", "").startswith("module.openai") for change in changes):
-            errors.append("fresh plan contains the removed module.openai topology")
+        for change in changes:
+            address = change.get("address", "")
+            if "create" in _actions(change) and address.startswith(PROTECTED_FALLBACK_PREFIXES):
+                errors.append(f"fresh plan contains protected fallback create: {address}")
         models = {
             name
             for change in changes
