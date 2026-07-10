@@ -12,13 +12,17 @@ EXPECTED_MODELS = {
     "grok-4.3",
 }
 MODEL_PREFIX = "module.foundry.azurerm_cognitive_deployment.project_models["
-PROTECTED_FALLBACK_PREFIXES = (
+LEGACY_FALLBACK_PREFIXES = (
     "module.openai",
     "module.foundry.azurerm_cognitive_account.foundry",
     "module.foundry.azurerm_cognitive_deployment.models",
     "module.foundry.azurerm_private_endpoint.foundry",
     "module.apim.azurerm_role_assignment.apim_to_openai",
     "module.apim.azurerm_role_assignment.apim_to_foundry",
+)
+PROTECTED_MIGRATION_PREFIXES = LEGACY_FALLBACK_PREFIXES + (
+    "module.apim.azurerm_role_assignment.apim_to_model_openai",
+    "module.apim.azurerm_role_assignment.apim_to_model_foundry",
 )
 
 
@@ -28,6 +32,14 @@ def _changes(plan):
 
 def _actions(change):
     return change.get("change", {}).get("actions") or []
+
+
+def _addresses(change):
+    return [
+        address
+        for address in (change.get("previous_address"), change.get("address"))
+        if address
+    ]
 
 
 def _model_name(address):
@@ -42,7 +54,7 @@ def verify_plan(plan, mode):
     if mode == "fresh":
         for change in changes:
             address = change.get("address", "")
-            if "create" in _actions(change) and address.startswith(PROTECTED_FALLBACK_PREFIXES):
+            if "create" in _actions(change) and address.startswith(LEGACY_FALLBACK_PREFIXES):
                 errors.append(f"fresh plan contains protected fallback create: {address}")
         models = {
             name
@@ -64,8 +76,16 @@ def verify_plan(plan, mode):
         for change in changes:
             address = change.get("address", "")
             actions = _actions(change)
-            if "delete" in actions and address.startswith(PROTECTED_FALLBACK_PREFIXES):
-                errors.append(f"protected fallback would be destroyed: {address}")
+            protected_addresses = [
+                candidate
+                for candidate in _addresses(change)
+                if candidate.startswith(PROTECTED_MIGRATION_PREFIXES)
+            ]
+            if "delete" in actions and protected_addresses:
+                errors.append(
+                    "protected fallback or adopted RBAC would be destroyed: "
+                    + ", ".join(protected_addresses)
+                )
             if address == CANONICAL_ACCOUNT and "delete" in actions:
                 errors.append("canonical account replacement is forbidden")
     else:

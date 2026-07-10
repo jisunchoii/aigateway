@@ -188,9 +188,12 @@ removed {
   }
 }
 
-moved {
+removed {
   from = azurerm_role_assignment.apim_to_foundry
-  to   = azurerm_role_assignment.apim_to_model_foundry
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "azurerm_role_assignment" "apim_to_model_openai" {

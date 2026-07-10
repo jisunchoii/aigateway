@@ -150,7 +150,7 @@ consumer별 일별 예산은 Admin UI Policies 탭에서 설정합니다. 사용
 전환 순서는 Cosmos DB config의 `downgrade_ladder` 배열로 정의합니다.
 
 ```text
-gpt-5.4 -> gpt-5.4-mini -> DeepSeek-V4-Pro
+gpt-5.6-sol -> FW-GLM-5.2 -> DeepSeek-V4-Pro -> grok-4.3
 ```
 
 ### 가격 데이터 갱신
@@ -217,6 +217,36 @@ model_deployments = {
 
 brownfield 재사용 모드(`reuse_foundry=true`)에서는 Terraform이 기존 모델 deployment를 소유하지 않으므로 Microsoft Foundry 포털 또는 `az` CLI에서 직접 capacity를 조정합니다.
 
+### 기존 reuse state의 APIM RBAC 주소 전환
+
+이 절차는 **이전 버전을 `reuse_foundry=true`로 이미 적용했고**, state의 기존 두 APIM 역할 할당 scope가 현재 재사용하는 canonical AIServices account ID와 같은 환경에만 필요합니다. 새 reuse 배포는 새 주소로 역할을 바로 생성하므로 실행하지 않습니다. 현재 live managed 이력처럼 이전 적용이 `reuse_foundry=false`였던 환경에서도 실행하지 마세요. 해당 이력은 기존 fallback 역할을 state에서만 잊고 원격에는 보존한 뒤 canonical account에 새 역할을 생성해야 합니다.
+
+Task 4 코드를 받은 뒤 첫 `terraform plan` 전에 아래 순서로 기존 원격 역할 할당 ID를 새 Terraform 주소에 채택합니다.
+
+```bash
+cd infra
+terraform init
+
+# 두 scope가 모두 재사용 중인 canonical account ID인지 확인합니다.
+terraform state show 'module.apim.azurerm_role_assignment.apim_to_openai'
+terraform state show 'module.apim.azurerm_role_assignment.apim_to_foundry'
+
+# 복구용 state 사본을 남기고 주소만 이동합니다. Azure 역할 할당은 변경하지 않습니다.
+terraform state pull > task4-pre-rbac-address-move.tfstate
+terraform state mv \
+  'module.apim.azurerm_role_assignment.apim_to_openai' \
+  'module.apim.azurerm_role_assignment.apim_to_model_openai'
+terraform state mv \
+  'module.apim.azurerm_role_assignment.apim_to_foundry' \
+  'module.apim.azurerm_role_assignment.apim_to_model_foundry'
+
+terraform plan -out=task4-upgrade.tfplan
+terraform show -json task4-upgrade.tfplan > task4-upgrade-plan.json
+python ../scripts/verify_model_topology_plan.py task4-upgrade-plan.json migration
+```
+
+검증기는 기존/채택된 APIM 역할 할당의 삭제나 교체를 거부합니다. `terraform state show`의 scope가 canonical account와 다르면 위 `state mv`를 실행하지 말고 managed 이력 절차를 따릅니다.
+
 ### 모델 추가·제거
 
 게이트웨이에 모델을 추가하거나 빼려면 Terraform seed와 runtime catalog를 구분해서 갱신합니다.
@@ -231,12 +261,12 @@ Admin UI 모델 목록은 runtime `allowed_models`에서 자동 생성되므로 
 
 ```text
 "models": {
-  "gpt-5.4":         { "prompt": 0.0025,  "completion": 0.015 },
-  "Kimi-K2.6-1":     { "prompt": 0.00095, "completion": 0.004 }
+  "grok-4.3":        { "prompt": 0.00125, "completion": 0.0025 },
+  "DeepSeek-V4-Pro": { "prompt": 0.00174, "completion": 0.00348 }
 }
 ```
 
-per-1k 단가는 모델별 per-1M 가격을 1000으로 나눈 값입니다. 예를 들어 Kimi K2.6은 Microsoft Foundry Models 공식 가격 기준 input $0.95/M, output $4.00/M이므로 per-1k 단가는 prompt 0.00095, completion 0.004입니다.
+per-1k 단가는 모델별 공식 per-1M 가격을 1000으로 나눈 값입니다. canonical catalog의 `gpt-5.6-sol`과 `FW-GLM-5.2`는 공식 단가를 확인한 뒤 같은 map에 추가하며, 그 전까지는 예산 계산에서 `$0`으로 집계됩니다.
 
 ### APIM 공개 모드 변경
 

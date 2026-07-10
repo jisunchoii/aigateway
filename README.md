@@ -12,7 +12,7 @@ Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모
 |---|---|
 | 단일 게이트웨이 | VS Code, GitHub Copilot CLI, REST client가 APIM gateway URL 하나를 사용 |
 | 모델 거버넌스 | consumer별 allowed models, rate tier, token quota, daily budget 관리 |
-| 예산 기반 전환 | 일별 USD 예산 사용량에 따라 `gpt-5.4 -> grok-4.3 -> Kimi-K2.6-1` 같은 downgrade ladder 적용 |
+| 예산 기반 전환 | 일별 USD 예산 사용량에 따라 `gpt-5.6-sol -> FW-GLM-5.2 -> DeepSeek-V4-Pro -> grok-4.3` 같은 downgrade ladder 적용 |
 | 셀프서비스 Admin UI | Entra ID 로그인과 admin group 기반으로 consumer 등록, key 발급, 정책 변경 |
 | 관측성 | App Insights/Log Analytics에 consumer, requested model, effective model, token metric 기록 |
 | Passwordless backend | Foundry/Azure OpenAI 계정은 key auth를 끄고 APIM Managed Identity + RBAC으로 호출 |
@@ -88,6 +88,8 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
 | `model_deployments` | canonical AIServices account에 둘 deployment 이름/모델/sku/capacity |
 | `monthly_budget_amount`, `budget_alert_email` | Azure Cost Management 알림 예산 |
+
+이전 버전을 `reuse_foundry=true`로 이미 적용한 state를 업그레이드한다면 첫 plan 전에 [기존 reuse state의 APIM RBAC 주소 전환](docs/06-operate.md#기존-reuse-state의-apim-rbac-주소-전환)을 수행합니다. `reuse_foundry=false`였던 managed 이력에는 이 state move를 적용하지 않습니다.
 
 ### 3. 게이트웨이 core 배포
 
@@ -210,9 +212,9 @@ VS Code는 **Custom Endpoint** provider를 사용합니다. 예시는 [VS Code B
   "apiType": "chat-completions",
   "models": [
     {
-      "id": "gpt-5.4",
-      "name": "GPT-5.4 via APIM",
-      "url": "https://<apim-host>/vscode/models/deployments/gpt-5.4/chat/completions?api-version=2025-01-01-preview",
+      "id": "gpt-5.6-sol",
+      "name": "GPT-5.6 Sol via APIM",
+      "url": "https://<apim-host>/vscode/models/deployments/gpt-5.6-sol/chat/completions?api-version=2025-01-01-preview",
       "toolCalling": true,
       "vision": true,
       "maxInputTokens": 128000,
@@ -235,8 +237,8 @@ export COPILOT_PROVIDER_BASE_URL=https://<apim-host>
 export COPILOT_PROVIDER_API_KEY="<APIM subscription key>"
 export COPILOT_PROVIDER_AZURE_API_VERSION=2025-01-01-preview
 export COPILOT_PROVIDER_WIRE_API=completions
-export COPILOT_PROVIDER_MODEL_ID=gpt-5.4
-export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4
+export COPILOT_PROVIDER_MODEL_ID=gpt-5.6-sol
+export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.6-sol
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS=128000
 export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS=16000
 ```

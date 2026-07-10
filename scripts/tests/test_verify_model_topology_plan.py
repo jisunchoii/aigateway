@@ -1,10 +1,12 @@
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
 
 
 MODULE_PATH = Path(__file__).parents[1] / "verify_model_topology_plan.py"
+APIM_MODULE_PATH = Path(__file__).parents[2] / "infra" / "modules" / "apim" / "main.tf"
 SPEC = importlib.util.spec_from_file_location("verify_model_topology_plan", MODULE_PATH)
 verify = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(verify)
@@ -14,8 +16,11 @@ def plan(*changes):
     return {"resource_changes": list(changes)}
 
 
-def change(address, actions):
-    return {"address": address, "change": {"actions": actions}}
+def change(address, actions, previous_address=None):
+    value = {"address": address, "change": {"actions": actions}}
+    if previous_address is not None:
+        value["previous_address"] = previous_address
+    return value
 
 
 def test_fresh_plan_accepts_only_canonical_models():
@@ -68,6 +73,31 @@ def test_migration_plan_rejects_fallback_deletion():
     assert any("protected fallback" in error for error in errors)
 
 
+@pytest.mark.parametrize(
+    "address",
+    [
+        "module.apim.azurerm_role_assignment.apim_to_model_openai",
+        "module.apim.azurerm_role_assignment.apim_to_model_foundry",
+    ],
+)
+def test_migration_plan_rejects_canonical_rbac_deletion(address):
+    errors = verify.verify_plan(plan(change(address, ["delete"])), "migration")
+    assert any(address in error for error in errors), errors
+
+
+def test_migration_plan_checks_previous_address_for_moved_fallback():
+    legacy_address = "module.apim.azurerm_role_assignment.apim_to_foundry"
+    value = plan(
+        change(
+            "module.apim.azurerm_role_assignment.future_name",
+            ["delete", "create"],
+            previous_address=legacy_address,
+        ),
+    )
+    errors = verify.verify_plan(value, "migration")
+    assert any(legacy_address in error for error in errors), errors
+
+
 def test_migration_plan_allows_forget_without_destroy():
     value = plan(
         change("module.openai[0].azurerm_cognitive_account.openai[0]", ["forget"]),
@@ -83,3 +113,14 @@ def test_migration_plan_rejects_canonical_account_replacement():
     )
     errors = verify.verify_plan(value, "migration")
     assert any("canonical account replacement" in error for error in errors)
+
+
+def test_apim_rbac_transition_forgets_both_legacy_assignments():
+    source = APIM_MODULE_PATH.read_text(encoding="utf-8")
+    assert re.search(r"(?m)^moved \{", source) is None
+    for legacy_address in (
+        "azurerm_role_assignment.apim_to_openai",
+        "azurerm_role_assignment.apim_to_foundry",
+    ):
+        assert f"from = {legacy_address}" in source
+    assert source.count("destroy = false") >= 2

@@ -182,6 +182,24 @@ run "codexproxy_backend_can_be_preprovisioned" {
 run "codexproxy_route_flip_injects_hop_key" {
   command = plan
 
+  override_module {
+    target          = module.control_plane
+    override_during = plan
+
+    outputs = {
+      codexproxy_fqdn = "codexproxy.internal.example"
+    }
+  }
+
+  override_resource {
+    target          = module.foundry.azapi_resource.project_account[0]
+    override_during = plan
+
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.CognitiveServices/accounts/aisproj-abc123"
+    }
+  }
+
   variables {
     location             = "eastus2"
     owner                = "test@example.com"
@@ -200,5 +218,15 @@ run "codexproxy_route_flip_injects_hop_key" {
       !strcontains(azurerm_api_management_api_policy.responses.xml_content, "authentication-managed-identity resource=\"https://cognitiveservices.azure.com\"")
     )
     error_message = "route_via_codexproxy must switch the /responses policy from direct MI auth to the hop-key sidecar path."
+  }
+
+  assert {
+    condition     = azurerm_api_management_api.responses.service_url == "https://codexproxy.internal.example"
+    error_message = "route_via_codexproxy must point the /responses service URL at the Codex proxy sidecar."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.codexproxy_to_project_account[0].scope == "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.CognitiveServices/accounts/aisproj-abc123"
+    error_message = "The Codex proxy role assignment must stay scoped to the canonical AIServices account."
   }
 }
