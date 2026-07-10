@@ -76,7 +76,7 @@ variable "existing_account_rg" {
 variable "account_name" {
   type        = string
   default     = ""
-  description = "Managed project-enabled AIServices account name. Defaults to ais- followed by the generated random suffix."
+  description = "Managed project-enabled AIServices account name. Defaults to aisproj- followed by the generated random suffix to preserve the project-enabled custom subdomain pattern."
 }
 
 variable "project_name" {
@@ -106,9 +106,16 @@ data "azurerm_cognitive_account" "existing" {
 }
 
 locals {
-  managed_account_name = var.account_name != "" ? var.account_name : "ais-${var.suffix}"
-  account_id           = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].id : azapi_resource.project_account[0].id
-  account_name         = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].name : local.managed_account_name
+  managed_account_name     = var.account_name != "" ? var.account_name : "aisproj-${var.suffix}"
+  reused_endpoint          = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].endpoint : null
+  reused_endpoint_host     = var.reuse_existing ? trimsuffix(trimprefix(trimprefix(local.reused_endpoint, "https://"), "http://"), "/") : null
+  account_custom_subdomain = var.reuse_existing ? split(".", local.reused_endpoint_host)[0] : local.managed_account_name
+  account_id               = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].id : azapi_resource.project_account[0].id
+  account_name             = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].name : local.managed_account_name
+  account_endpoint         = var.reuse_existing ? local.reused_endpoint : "https://${local.managed_account_name}.cognitiveservices.azure.com/"
+  account_openai_host      = "https://${local.account_custom_subdomain}.openai.azure.com"
+  account_openai_v1        = "${local.account_openai_host}/openai/v1"
+  project_responses_base   = "https://${local.account_custom_subdomain}.services.ai.azure.com/api/projects/${var.project_name}/openai/v1"
 }
 
 removed {
@@ -232,17 +239,17 @@ output "name" {
 }
 
 output "endpoint" {
-  value       = "https://${local.account_name}.cognitiveservices.azure.com/"
+  value       = local.account_endpoint
   description = "Canonical AIServices control endpoint."
 }
 
 output "endpoint_openai_v1" {
-  value       = "https://${local.account_name}.openai.azure.com/openai/v1"
+  value       = local.account_openai_v1
   description = "Canonical OpenAI/v1 inference base."
 }
 
 output "endpoint_openai_host" {
-  value       = "https://${local.account_name}.openai.azure.com"
+  value       = local.account_openai_host
   description = "Canonical OpenAI host."
 }
 
@@ -257,6 +264,6 @@ output "project_account_id" {
 }
 
 output "project_responses_base" {
-  value       = "https://${local.account_name}.services.ai.azure.com/api/projects/${var.project_name}/openai/v1"
+  value       = local.project_responses_base
   description = "Canonical project OpenAI/v1 base used by the Codex proxy."
 }
