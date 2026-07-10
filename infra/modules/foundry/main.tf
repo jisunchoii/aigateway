@@ -102,6 +102,16 @@ data "azurerm_cognitive_account" "existing" {
       condition     = self.local_auth_enabled == false
       error_message = "Reused AIServices account has key auth enabled. Disable it before deploy: az resource update --ids <account-id> --set properties.disableLocalAuth=true properties.publicNetworkAccess=Disabled (see GitBook 04)."
     }
+
+    postcondition {
+      condition     = self.project_management_enabled == true
+      error_message = "Reused AIServices account must already have project management enabled before this module can attach the canonical child project."
+    }
+
+    postcondition {
+      condition     = self.public_network_access_enabled == false
+      error_message = "Reused AIServices account must already have public network access disabled before this module can attach the private-only gateway topology."
+    }
   }
 }
 

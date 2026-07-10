@@ -570,6 +570,11 @@ output "admin_ui_fqdn" {
   value       = one(azurerm_container_app.admin_ui[*].ingress[0].fqdn)
 }
 
+output "alias_models_json_input" {
+  description = "Canonical model catalog JSON passed into the Admin UI."
+  value       = var.alias_models_json
+}
+
 output "codexproxy_fqdn" {
   description = "Internal FQDN of the Codex proxy Container App (null until codexproxy_image is set). APIM /responses service_url."
   value       = one(azurerm_container_app.codexproxy[*].ingress[0].fqdn)

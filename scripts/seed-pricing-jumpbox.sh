@@ -7,6 +7,7 @@
 #   grok-4.3         in $1.25/out $2.5   -> prompt 0.00125 / completion 0.0025
 #   DeepSeek-V4-Pro  in $1.74/out $3.48  -> prompt 0.00174 / completion 0.00348
 #
+# As of 2026-07-10, Azure Retail Prices exposes no GPT-5.6 meter.
 # Canonical models without an operator-entered price (for example gpt-5.6-sol or FW-GLM-5.2)
 # count as $0 in budget evaluation until this document is updated with an official per-1K rate.
 # Do not guess those prices here; add them only after confirming the published rate card.

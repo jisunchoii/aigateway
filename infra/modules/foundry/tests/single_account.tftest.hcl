@@ -16,10 +16,12 @@ override_data {
   override_during = plan
 
   values = {
-    id                 = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing-eus2/providers/Microsoft.CognitiveServices/accounts/foundry-account-live"
-    name               = "foundry-account-live"
-    endpoint           = "https://custom-subdomain.cognitiveservices.azure.com/"
-    local_auth_enabled = false
+    id                            = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing-eus2/providers/Microsoft.CognitiveServices/accounts/foundry-account-live"
+    name                          = "foundry-account-live"
+    endpoint                      = "https://custom-subdomain.cognitiveservices.azure.com/"
+    local_auth_enabled            = false
+    project_management_enabled    = true
+    public_network_access_enabled = false
   }
 }
 
@@ -266,4 +268,50 @@ run "reuse_existing_account_uses_custom_subdomain" {
     condition     = output.project_responses_base == "https://custom-subdomain.services.ai.azure.com/api/projects/reusedproj/openai/v1"
     error_message = "Reuse mode must derive the Responses base from the endpoint custom subdomain."
   }
+}
+
+run "reuse_existing_account_requires_final_invariants" {
+  command = plan
+
+  variables {
+    name_suffix         = "aigw-test-eus2"
+    suffix              = "abc123"
+    resource_group_name = "rg-aigw-test-eus2"
+    location            = "eastus2"
+    tags                = { env = "test" }
+    pe_subnet_id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/snet-pe"
+    dns_zone_ids = [
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.openai.azure.com",
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.cognitiveservices.azure.com",
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.services.ai.azure.com",
+    ]
+    reuse_existing        = true
+    existing_account_name = "foundry-account-live"
+    existing_account_rg   = "rg-existing-eus2"
+    deployments = {
+      "gpt-5.6-sol" = {
+        model_name    = "gpt-5.6-sol"
+        model_format  = "OpenAI"
+        model_version = "2026-07-09"
+        sku_name      = "GlobalStandard"
+        capacity      = 500
+      }
+    }
+  }
+
+  override_data {
+    target          = data.azurerm_cognitive_account.existing[0]
+    override_during = plan
+
+    values = {
+      id                            = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing-eus2/providers/Microsoft.CognitiveServices/accounts/foundry-account-live"
+      name                          = "foundry-account-live"
+      endpoint                      = "https://custom-subdomain.cognitiveservices.azure.com/"
+      local_auth_enabled            = false
+      project_management_enabled    = false
+      public_network_access_enabled = true
+    }
+  }
+
+  expect_failures = [data.azurerm_cognitive_account.existing[0]]
 }

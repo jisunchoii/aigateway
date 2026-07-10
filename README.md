@@ -86,8 +86,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 | `location` | 배포 리전 |
 | `apim_public` | VS Code/Copilot CLI 같은 외부 도구에서 APIM을 호출해야 하면 `true` |
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
-| `openai_deployments` / `foundry_deployments` | 모델 deployment 이름과 capacity |
-| `allowed_models` | gateway 전체 허용 모델 목록 |
+| `model_deployments` | canonical AIServices account에 둘 deployment 이름/모델/sku/capacity |
 | `monthly_budget_amount`, `budget_alert_email` | Azure Cost Management 알림 예산 |
 
 ### 3. 게이트웨이 core 배포
@@ -167,6 +166,7 @@ admin_ui_fqdn="$(terraform output -raw admin_ui_fqdn)"
 ### 7. Pricing seed와 config-sync
 
 모델 가격은 Cosmos `pricing` 문서가 source of truth입니다. Admin UI 가격 표시와 budget 계산에 사용합니다.
+`global` 문서의 `allowed_models`/quota 계열 값도 config-sync worker가 APIM named value로 반영하는 런타임 소유 데이터입니다. Terraform은 초기 seed만 만들고 이후 값은 의도적으로 되돌리지 않으므로, 운영 중 catalog를 바꾸려면 Cosmos 문서를 갱신한 뒤 config-sync를 실행/대기해야 합니다.
 
 ```bash
 cosmos_endpoint="$(terraform output -raw config_store_endpoint)"
@@ -179,6 +179,8 @@ config_sync_job_name="$(terraform output -raw config_sync_job_name)"
 # 즉시 반영
 az containerapp job start -g "$resource_group_name" -n "$config_sync_job_name"
 ```
+
+2026-07-10 기준 Azure Retail Prices에는 GPT-5.6 meter가 없어서 `gpt-5.6-sol` 공식 단가를 seed할 수 없습니다. 가격이 아직 없는 canonical 모델은 운영자가 공식 per-1K rate를 넣기 전까지 budget 계산에서 `$0`으로 집계됩니다.
 
 운영 중 Admin UI에서 consumer 정책을 저장하면 BFF가 config-sync job을 best-effort로 즉시 시작합니다. 실패하더라도 worker cron(`config_sync_cron`, 기본 5분)이 보완합니다.
 

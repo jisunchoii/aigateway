@@ -133,7 +133,7 @@ variable "model_deployments" {
 variable "reuse_foundry" {
   type        = bool
   default     = false
-  description = "Brownfield: when true, reuse an existing canonical AIServices account instead of creating one. Terraform still manages the child project and private endpoint, but reads the account from Azure and expects the canonical deployment catalog declared in model_deployments."
+  description = "Brownfield: when true, reuse an existing canonical AIServices account instead of creating one. Terraform still manages the child project and private endpoint, but reads the account from Azure and expects the canonical deployment catalog declared in model_deployments. The reused account must already have local auth disabled, project management enabled, and public network access disabled."
 }
 
 variable "existing_foundry_name" {

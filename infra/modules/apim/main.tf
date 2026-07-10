@@ -512,6 +512,11 @@ output "private_ip" {
   value       = try(azurerm_api_management.apim.private_ip_addresses[0], null)
 }
 
+output "allowed_models_seed_value" {
+  description = "Create-time allowed-models named value seed derived from the canonical Terraform catalog."
+  value       = azurerm_api_management_named_value.allowed_models.value
+}
+
 resource "azurerm_api_management_named_value" "allowed_models" {
   name                = "allowed-models"
   api_management_name = azurerm_api_management.apim.name
@@ -520,9 +525,10 @@ resource "azurerm_api_management_named_value" "allowed_models" {
   value               = join(",", local.allowed_models)
 
   lifecycle {
-    # The Phase 3a config-sync worker is the runtime owner of this value (it writes it from
-    # the Cosmos config doc). Terraform sets the initial value on create but must not revert
-    # the worker's updates on subsequent applies.
+    # The Phase 3a config-sync worker is the runtime owner of this value (it publishes Cosmos
+    # id=global.allowed_models, including updates made via scripts/seed-cosmos-jumpbox.sh).
+    # Terraform seeds the create-time default only; later applies must not clobber Admin UI /
+    # Cosmos-driven runtime catalog changes after config-sync propagates them into APIM.
     ignore_changes = [value]
   }
 }
