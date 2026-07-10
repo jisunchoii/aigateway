@@ -133,13 +133,13 @@ variable "model_deployments" {
 variable "reuse_foundry" {
   type        = bool
   default     = false
-  description = "Brownfield: when true, reuse an existing canonical AIServices account instead of creating one. Terraform still manages the child project and private endpoint, but reads the account from Azure and expects the canonical deployment catalog declared in model_deployments. The reused account must already have local auth disabled, project management enabled, and public network access disabled."
+  description = "External-final brownfield only: when true, read an existing canonical AIServices account instead of managing it. Preflight/import any existing canonical project, gateway private endpoint, and APIM role assignments. Sidecar-era state that already owns project_account/project/project_models must set this false and preserve that managed account by exact name."
 }
 
 variable "existing_foundry_name" {
   type        = string
   default     = ""
-  description = "Name of the existing AIServices (Foundry) cognitive account to reuse. Required when reuse_foundry = true. Must be in the same subscription."
+  description = "Exact name of the external already-final AIServices account selected for reuse. Required when reuse_foundry = true; verify its full resource ID rather than matching by name alone."
   validation {
     condition     = !var.reuse_foundry || length(var.existing_foundry_name) > 0
     error_message = "existing_foundry_name is required when reuse_foundry = true."
@@ -149,7 +149,7 @@ variable "existing_foundry_name" {
 variable "existing_foundry_rg" {
   type        = string
   default     = ""
-  description = "Resource group of the existing AIServices account (may differ from the gateway RG; same subscription). Required when reuse_foundry = true."
+  description = "Exact resource group of the external already-final AIServices account. Required when reuse_foundry = true and limited to the same subscription."
   validation {
     condition     = !var.reuse_foundry || length(var.existing_foundry_rg) > 0
     error_message = "existing_foundry_rg is required when reuse_foundry = true."
@@ -159,7 +159,7 @@ variable "existing_foundry_rg" {
 variable "foundry_account_name" {
   type        = string
   default     = ""
-  description = "Managed canonical account name override. Set to aisproj-c0gvf2 for the live migration."
+  description = "Managed canonical account name override. For managed live or sidecar-era state, set this to the exact existing project_account name captured from Terraform state so the preserved address remains in place."
 }
 
 variable "foundry_project_name" {
@@ -172,6 +172,18 @@ variable "foundry_public_network_access_enabled" {
   type        = bool
   default     = false
   description = "Temporary migration escape hatch. Final and fresh deployments keep this false."
+}
+
+variable "legacy_gpt_compat_enabled" {
+  type        = bool
+  default     = false
+  description = "Migration-only APIM compatibility shim. When true, gpt-5.4, gpt-5.4-mini, and gpt-5.6-sol are authorization-equivalent and any selected family member is dispatched as gpt-5.6-sol after budget downgrade selection. Keep false for fresh/final deployments."
+}
+
+variable "admin_ui_legacy_gpt_aliases_enabled" {
+  type        = bool
+  default     = false
+  description = "Migration-only Admin UI catalog staging. When true, add gpt-5.4 and gpt-5.4-mini to the canonical deployment-derived aliases so stale consumer documents remain editable. Keep false for fresh/final deployments."
 }
 
 variable "enable_jumpbox" {

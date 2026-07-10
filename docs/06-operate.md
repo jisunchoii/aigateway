@@ -115,7 +115,19 @@ az containerapp job start \
 |---|---|
 | `x-ai-gateway-requested-model` | 클라이언트가 요청한 원래 모델 |
 | `x-ai-gateway-effective-model` | 실제로 호출된 모델 |
-| `x-ai-gateway-downgrade-level` | `0` 전환 없음, `1` 80% 임계, `2` 100% 임계 |
+| `x-ai-gateway-downgrade-level` | `0` budget 전환 없음(compat alias rewrite 가능), `1` 80% 임계, `2` 100% 임계 |
+
+### GPT-5.6 live migration flags
+
+두 compatibility 변수는 fresh/final 기능이 아니라 live cutover 전용입니다.
+
+| 단계 | `legacy_gpt_compat_enabled` | `admin_ui_legacy_gpt_aliases_enabled` | 작업 |
+|---|---:|---:|---|
+| Task 7 | `true` | `true` | canonical route 전환 전에 적용. Legacy GPT 요청과 stale allowlist를 `gpt-5.6-sol`로 호환하고 Admin UI에서 기존 문서를 편집 가능하게 유지 |
+| Task 8 | `true` | `false` | Cosmos global/consumer 문서와 client를 migration하고 config-sync 실행 후 Admin UI legacy alias만 제거. Straggler policy 호환은 유지 |
+| Task 9 | `false` | `false` | legacy requested-model telemetry가 0인지 확인한 뒤 PNA lockdown과 함께 policy 호환 제거 |
+
+Compatibility mode에서도 config-sync가 APIM runtime allowed-model named value를 소유합니다. Terraform은 이를 덮어쓰지 않으며, policy가 GPT-family allowlist equivalence를 적용한 뒤 budget downgrade target을 선택하고 최종 GPT-family target만 `gpt-5.6-sol`로 canonicalize합니다. 응답/metric의 requested model은 원 요청을, effective model은 실제 backend deployment를 유지합니다.
 
 ### Application Insights 쿼리
 
@@ -217,35 +229,15 @@ model_deployments = {
 
 brownfield 재사용 모드(`reuse_foundry=true`)에서는 Terraform이 기존 모델 deployment를 소유하지 않으므로 Microsoft Foundry 포털 또는 `az` CLI에서 직접 capacity를 조정합니다.
 
-### 기존 reuse state의 APIM RBAC 주소 전환
+### 기존 Foundry state 업그레이드
 
-이 절차는 **이전 버전을 `reuse_foundry=true`로 이미 적용했고**, state의 기존 두 APIM 역할 할당 scope가 현재 재사용하는 canonical AIServices account ID와 같은 환경에만 필요합니다. 새 reuse 배포는 새 주소로 역할을 바로 생성하므로 실행하지 않습니다. 현재 live managed 이력처럼 이전 적용이 `reuse_foundry=false`였던 환경에서도 실행하지 마세요. 해당 이력은 기존 fallback 역할을 state에서만 잊고 원격에는 보존한 뒤 canonical account에 새 역할을 생성해야 합니다.
+기존 state는 [모델 백엔드 기존 계정 재사용 — 기존 state 분류](04-reuse-foundry.md#기존-state-분류)에 따라 분류합니다.
 
-Task 4 코드를 받은 뒤 첫 `terraform plan` 전에 아래 순서로 기존 원격 역할 할당 ID를 새 Terraform 주소에 채택합니다.
+- 현재 `reuse_foundry=false` managed 이력은 그대로 유지합니다.
+- Sidecar-era `reuse_foundry=true` state가 `project_account`/`project`/`project_models`를 소유하면 exact account name을 캡처하고 `reuse_foundry=false`로 전환합니다.
+- State에 managed project account가 없는 external-final 계정만 `reuse_foundry=true`를 유지하며, 기존 project/PE/APIM 역할은 exact resource ID 검증 후 import합니다.
 
-```bash
-cd infra
-terraform init
-
-# 두 scope가 모두 재사용 중인 canonical account ID인지 확인합니다.
-terraform state show 'module.apim.azurerm_role_assignment.apim_to_openai'
-terraform state show 'module.apim.azurerm_role_assignment.apim_to_foundry'
-
-# 복구용 state 사본을 남기고 주소만 이동합니다. Azure 역할 할당은 변경하지 않습니다.
-terraform state pull > task4-pre-rbac-address-move.tfstate
-terraform state mv \
-  'module.apim.azurerm_role_assignment.apim_to_openai' \
-  'module.apim.azurerm_role_assignment.apim_to_model_openai'
-terraform state mv \
-  'module.apim.azurerm_role_assignment.apim_to_foundry' \
-  'module.apim.azurerm_role_assignment.apim_to_model_foundry'
-
-terraform plan -out=task4-upgrade.tfplan
-terraform show -json task4-upgrade.tfplan > task4-upgrade-plan.json
-python ../scripts/verify_model_topology_plan.py task4-upgrade-plan.json migration
-```
-
-검증기는 기존/채택된 APIM 역할 할당의 삭제나 교체를 거부합니다. `terraform state show`의 scope가 canonical account와 다르면 위 `state mv`를 실행하지 말고 managed 이력 절차를 따릅니다.
+기존 `apim_to_openai`/`apim_to_foundry` 역할은 sidecar-era rollback fallback일 수 있으므로 새 canonical 역할 주소로 일반화된 `terraform state mv`를 수행하지 않습니다. Saved plan과 migration verifier가 canonical 리소스 delete/replacement, fallback delete, Kimi delete를 모두 거부하는지 확인한 뒤 apply합니다.
 
 ### 모델 추가·제거
 

@@ -5,6 +5,15 @@ from pathlib import Path
 
 
 CANONICAL_ACCOUNT = "module.foundry.azapi_resource.project_account[0]"
+CANONICAL_PROJECT = "module.foundry.azapi_resource.project[0]"
+CANONICAL_PRIVATE_ENDPOINT = "module.foundry.azurerm_private_endpoint.project_account"
+CANONICAL_APIM_OPENAI_ROLE = (
+    "module.apim.azurerm_role_assignment.apim_to_model_openai"
+)
+CANONICAL_APIM_FOUNDRY_ROLE = (
+    "module.apim.azurerm_role_assignment.apim_to_model_foundry"
+)
+CANONICAL_PROXY_ROLE = "azurerm_role_assignment.codexproxy_to_project_account[0]"
 EXPECTED_MODELS = {
     "gpt-5.6-sol",
     "FW-GLM-5.2",
@@ -12,6 +21,21 @@ EXPECTED_MODELS = {
     "grok-4.3",
 }
 MODEL_PREFIX = "module.foundry.azurerm_cognitive_deployment.project_models["
+CANONICAL_REQUIRED_CREATES = (
+    CANONICAL_ACCOUNT,
+    CANONICAL_PROJECT,
+    CANONICAL_PRIVATE_ENDPOINT,
+    CANONICAL_APIM_OPENAI_ROLE,
+    CANONICAL_APIM_FOUNDRY_ROLE,
+)
+CANONICAL_EXACT_MIGRATION_ADDRESSES = {
+    CANONICAL_ACCOUNT,
+    CANONICAL_PROJECT,
+    CANONICAL_PRIVATE_ENDPOINT,
+    CANONICAL_APIM_OPENAI_ROLE,
+    CANONICAL_APIM_FOUNDRY_ROLE,
+    CANONICAL_PROXY_ROLE,
+}
 LEGACY_FALLBACK_PREFIXES = (
     "module.openai",
     "module.foundry.azurerm_cognitive_account.foundry",
@@ -19,10 +43,6 @@ LEGACY_FALLBACK_PREFIXES = (
     "module.foundry.azurerm_private_endpoint.foundry",
     "module.apim.azurerm_role_assignment.apim_to_openai",
     "module.apim.azurerm_role_assignment.apim_to_foundry",
-)
-PROTECTED_MIGRATION_PREFIXES = LEGACY_FALLBACK_PREFIXES + (
-    "module.apim.azurerm_role_assignment.apim_to_model_openai",
-    "module.apim.azurerm_role_assignment.apim_to_model_foundry",
 )
 
 
@@ -42,14 +62,103 @@ def _addresses(change):
     ]
 
 
-def _mentions_exact_address(change, address):
-    return any(candidate == address for candidate in _addresses(change))
+def _delete_like(change):
+    return "delete" in _actions(change)
 
 
-def _model_name(address):
-    if not address.startswith(MODEL_PREFIX):
-        return None
-    return address.split('["', 1)[1].rsplit('"]', 1)[0]
+def _created(change):
+    return "create" in _actions(change)
+
+
+def _normalized_azure_type(value):
+    if not isinstance(value, str):
+        return ""
+    return value.split("@", 1)[0].rstrip("/").lower()
+
+
+def _before_after_values(change, key):
+    values = []
+    details = change.get("change") or {}
+    for phase in ("after", "before"):
+        phase_value = details.get(phase)
+        if isinstance(phase_value, dict):
+            value = phase_value.get(key)
+            if isinstance(value, str):
+                values.append(value)
+    return values
+
+
+def _is_cognitive_account(change):
+    resource_type = change.get("type")
+    if resource_type == "azurerm_cognitive_account":
+        return True
+    if resource_type != "azapi_resource":
+        return False
+    return any(
+        _normalized_azure_type(value) == "microsoft.cognitiveservices/accounts"
+        for value in _before_after_values(change, "type")
+    )
+
+
+def _is_cognitive_project(change):
+    if change.get("type") != "azapi_resource":
+        return False
+    return any(
+        _normalized_azure_type(value)
+        == "microsoft.cognitiveservices/accounts/projects"
+        for value in _before_after_values(change, "type")
+    )
+
+
+def _is_cognitive_deployment(change):
+    return change.get("type") == "azurerm_cognitive_deployment"
+
+
+def _deployment_name(change):
+    names = _before_after_values(change, "name")
+    return names[0] if names else None
+
+
+def canonical_deployment_address(model):
+    return f'{MODEL_PREFIX}"{model}"]'
+
+
+def _nested_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, nested_value in value.items():
+            yield from _nested_strings(key)
+            yield from _nested_strings(nested_value)
+    elif isinstance(value, (list, tuple)):
+        for nested_value in value:
+            yield from _nested_strings(nested_value)
+
+
+def _mentions_kimi(change):
+    values = list(_addresses(change))
+    details = change.get("change") or {}
+    values.extend(_nested_strings(details.get("before")))
+    values.extend(_nested_strings(details.get("after")))
+    return any("kimi" in value.lower() for value in values)
+
+
+def _fresh_required_change(changes, address):
+    matches = [
+        change
+        for change in changes
+        if change.get("address") == address and _created(change)
+    ]
+    if len(matches) != 1:
+        return False
+    change = matches[0]
+    if address == CANONICAL_ACCOUNT:
+        return _is_cognitive_account(change)
+    if address == CANONICAL_PROJECT:
+        return _is_cognitive_project(change)
+    if address == CANONICAL_PRIVATE_ENDPOINT:
+        return change.get("type") == "azurerm_private_endpoint"
+    return change.get("type") == "azurerm_role_assignment"
 
 
 def verify_plan(plan, mode):
@@ -58,40 +167,123 @@ def verify_plan(plan, mode):
     if mode == "fresh":
         for change in changes:
             address = change.get("address", "")
-            if "create" in _actions(change) and address.startswith(LEGACY_FALLBACK_PREFIXES):
-                errors.append(f"fresh plan contains protected fallback create: {address}")
-        models = {
-            name
+            addresses = _addresses(change)
+            fallback_addresses = [
+                candidate
+                for candidate in addresses
+                if candidate.startswith(LEGACY_FALLBACK_PREFIXES)
+            ]
+            if _created(change) and fallback_addresses:
+                errors.append(
+                    "fresh plan contains protected fallback create: "
+                    + ", ".join(fallback_addresses)
+                )
+
+            noncanonical_account_addresses = [
+                candidate
+                for candidate in addresses
+                if candidate != CANONICAL_ACCOUNT
+            ]
+            if _created(change) and _is_cognitive_account(
+                change
+            ) and noncanonical_account_addresses:
+                errors.append(
+                    "fresh plan creates additional Cognitive Services account: "
+                    + ", ".join(noncanonical_account_addresses)
+                )
+
+        for address in CANONICAL_REQUIRED_CREATES:
+            if not _fresh_required_change(changes, address):
+                errors.append(
+                    "fresh plan does not create required canonical resource: "
+                    f"{address}"
+                )
+
+        deployment_creates = [
+            change
             for change in changes
-            if (name := _model_name(change.get("address", ""))) is not None
-            and "create" in _actions(change)
-        }
-        if models != EXPECTED_MODELS:
+            if _created(change) and _is_cognitive_deployment(change)
+        ]
+        valid_deployments = set()
+        for change in deployment_creates:
+            address = change.get("address", "")
+            addresses = _addresses(change)
+            name = _deployment_name(change)
+            expected_address = (
+                canonical_deployment_address(name)
+                if name in EXPECTED_MODELS
+                else None
+            )
+            if (
+                expected_address is not None
+                and address == expected_address
+                and all(candidate == expected_address for candidate in addresses)
+            ):
+                valid_deployments.add(name)
+            else:
+                errors.append(
+                    "fresh plan creates additional or noncanonical cognitive "
+                    f"deployment: {', '.join(addresses)} name={name!r}"
+                )
+
+        if valid_deployments != EXPECTED_MODELS or len(deployment_creates) != len(
+            EXPECTED_MODELS
+        ):
             errors.append(
                 "fresh plan model set mismatch: "
-                f"expected={sorted(EXPECTED_MODELS)} actual={sorted(models)}"
+                f"expected={sorted(EXPECTED_MODELS)} "
+                f"actual={sorted(valid_deployments)}"
             )
-        if not any(
-            change.get("address") == CANONICAL_ACCOUNT and "create" in _actions(change)
-            for change in changes
-        ):
-            errors.append("fresh plan does not create the canonical project-enabled account")
     elif mode == "migration":
         for change in changes:
-            address = change.get("address", "")
-            actions = _actions(change)
-            protected_addresses = [
+            if not _delete_like(change):
+                continue
+
+            addresses = _addresses(change)
+            fallback_addresses = [
                 candidate
-                for candidate in _addresses(change)
-                if candidate.startswith(PROTECTED_MIGRATION_PREFIXES)
+                for candidate in addresses
+                if candidate.startswith(LEGACY_FALLBACK_PREFIXES)
             ]
-            if "delete" in actions and protected_addresses:
+            if fallback_addresses:
                 errors.append(
-                    "protected fallback or adopted RBAC would be destroyed: "
-                    + ", ".join(protected_addresses)
+                    "protected fallback would be destroyed by delete-like action: "
+                    + ", ".join(fallback_addresses)
                 )
-            if "delete" in actions and _mentions_exact_address(change, CANONICAL_ACCOUNT):
-                errors.append("canonical account replacement is forbidden")
+
+            canonical_addresses = [
+                candidate
+                for candidate in addresses
+                if candidate in CANONICAL_EXACT_MIGRATION_ADDRESSES
+                or candidate.startswith(MODEL_PREFIX)
+            ]
+            deployment_name = (
+                _deployment_name(change)
+                if _is_cognitive_deployment(change)
+                else None
+            )
+            if deployment_name in EXPECTED_MODELS and not canonical_addresses:
+                canonical_addresses.append(
+                    f"cognitive deployment named {deployment_name!r}"
+                )
+
+            if CANONICAL_ACCOUNT in canonical_addresses:
+                errors.append(
+                    "canonical account replacement or deletion is forbidden: "
+                    f"{CANONICAL_ACCOUNT}"
+                )
+                canonical_addresses.remove(CANONICAL_ACCOUNT)
+            if canonical_addresses:
+                errors.append(
+                    "canonical resource delete/replacement is forbidden: "
+                    + ", ".join(canonical_addresses)
+                )
+
+            if _mentions_kimi(change):
+                errors.append(
+                    "Kimi-related delete/replacement is forbidden: "
+                    + ", ".join(addresses)
+                )
     else:
         errors.append(f"unsupported mode: {mode}")
     return errors

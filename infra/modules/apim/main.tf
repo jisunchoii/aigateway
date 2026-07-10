@@ -154,8 +154,44 @@ variable "entra_team_claim" {
   description = "JWT claim used to derive consumerId."
 }
 
+variable "legacy_gpt_compat_enabled" {
+  type        = bool
+  default     = false
+  description = "Migration-only GPT-family authorization and canonical backend rewrite shim."
+}
+
 locals {
   allowed_models = var.allowed_model_names
+  openai_policy_xml = templatefile(var.policy_template_path, {
+    client_auth_mode          = var.client_auth_mode
+    entra_tenant_id           = var.entra_tenant_id
+    entra_api_audience        = var.entra_api_audience
+    entra_team_claim          = var.entra_team_claim
+    rate_tiers                = var.rate_tiers
+    model_tokens_per_minute   = var.model_tokens_per_minute
+    model_openai_v1_base      = var.model_openai_v1_base
+    legacy_gpt_compat_enabled = var.legacy_gpt_compat_enabled
+  })
+  vscode_policy_xml = templatefile(var.policy_template_path, {
+    client_auth_mode          = "subscription-key"
+    entra_tenant_id           = var.entra_tenant_id
+    entra_api_audience        = var.entra_api_audience
+    entra_team_claim          = var.entra_team_claim
+    rate_tiers                = var.rate_tiers
+    model_tokens_per_minute   = var.model_tokens_per_minute
+    model_openai_v1_base      = var.model_openai_v1_base
+    legacy_gpt_compat_enabled = var.legacy_gpt_compat_enabled
+  })
+  foundry_policy_xml = templatefile(var.foundry_policy_template_path, {
+    client_auth_mode          = var.client_auth_mode
+    entra_tenant_id           = var.entra_tenant_id
+    entra_api_audience        = var.entra_api_audience
+    entra_team_claim          = var.entra_team_claim
+    rate_tiers                = var.rate_tiers
+    model_tokens_per_minute   = var.model_tokens_per_minute
+    model_openai_v1_base      = var.model_openai_v1_base
+    legacy_gpt_compat_enabled = var.legacy_gpt_compat_enabled
+  })
 }
 
 resource "azurerm_api_management" "apim" {
@@ -246,15 +282,7 @@ resource "azurerm_api_management_api_policy" "openai" {
   api_name            = azurerm_api_management_api.openai.name
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
-  xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode        = var.client_auth_mode
-    entra_tenant_id         = var.entra_tenant_id
-    entra_api_audience      = var.entra_api_audience
-    entra_team_claim        = var.entra_team_claim
-    rate_tiers              = var.rate_tiers
-    model_tokens_per_minute = var.model_tokens_per_minute
-    model_openai_v1_base    = var.model_openai_v1_base
-  })
+  xml_content         = local.openai_policy_xml
 
   depends_on = [
     azurerm_role_assignment.apim_to_model_openai,
@@ -304,15 +332,7 @@ resource "azurerm_api_management_api_policy" "vscode_openai" {
   api_name            = azurerm_api_management_api.vscode_openai.name
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
-  xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode        = "subscription-key"
-    entra_tenant_id         = var.entra_tenant_id
-    entra_api_audience      = var.entra_api_audience
-    entra_team_claim        = var.entra_team_claim
-    rate_tiers              = var.rate_tiers
-    model_tokens_per_minute = var.model_tokens_per_minute
-    model_openai_v1_base    = var.model_openai_v1_base
-  })
+  xml_content         = local.vscode_policy_xml
 
   depends_on = [
     azurerm_role_assignment.apim_to_model_openai,
@@ -425,15 +445,7 @@ resource "azurerm_api_management_api_policy" "foundry" {
   api_name            = azurerm_api_management_api.foundry.name
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
-  xml_content = templatefile(var.foundry_policy_template_path, {
-    client_auth_mode        = var.client_auth_mode
-    entra_tenant_id         = var.entra_tenant_id
-    entra_api_audience      = var.entra_api_audience
-    entra_team_claim        = var.entra_team_claim
-    rate_tiers              = var.rate_tiers
-    model_tokens_per_minute = var.model_tokens_per_minute
-    model_openai_v1_base    = var.model_openai_v1_base
-  })
+  xml_content         = local.foundry_policy_xml
 
   depends_on = [
     azurerm_role_assignment.apim_to_model_openai,
@@ -532,6 +544,15 @@ output "model_role_assignments" {
 output "allowed_models_seed_value" {
   description = "Create-time allowed-models named value seed derived from the canonical Terraform catalog."
   value       = azurerm_api_management_named_value.allowed_models.value
+}
+
+output "rendered_policy_xml" {
+  description = "Rendered APIM policy XML used by root contract tests and migration review."
+  value = {
+    openai  = local.openai_policy_xml
+    vscode  = local.vscode_policy_xml
+    foundry = local.foundry_policy_xml
+  }
 }
 
 resource "azurerm_api_management_named_value" "allowed_models" {

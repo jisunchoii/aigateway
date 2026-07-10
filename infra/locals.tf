@@ -34,6 +34,15 @@ locals {
 
   allowed_models = sort(keys(var.model_deployments))
 
+  legacy_gpt_aliases = [
+    "gpt-5.4",
+    "gpt-5.4-mini",
+  ]
+  admin_ui_models = var.admin_ui_legacy_gpt_aliases_enabled ? sort(distinct(concat(
+    local.allowed_models,
+    local.legacy_gpt_aliases,
+  ))) : local.allowed_models
+
   model_tokens_per_minute = {
     for model, deployment in var.model_deployments :
     model => deployment.capacity * 1000

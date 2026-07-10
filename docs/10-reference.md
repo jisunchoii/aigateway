@@ -57,6 +57,8 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | `model_deployments` | `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` | canonical AIServices deployment map. map key가 곧 APIM/Admin UI 모델 이름 |
 | `foundry_project_name` | `codexproj` | canonical child project 이름 |
 | `foundry_public_network_access_enabled` | `false` | `false`면 private-only canonical account로 유지 |
+| `legacy_gpt_compat_enabled` | `false` | migration 중 GPT-family allowlist equivalence와 `gpt-5.6-sol` backend rewrite를 활성화. fresh/final은 `false` |
+| `admin_ui_legacy_gpt_aliases_enabled` | `false` | migration 중 Admin UI에 `gpt-5.4`/`gpt-5.4-mini`를 임시 노출. fresh/final은 `false` |
 | `openai_api_version` | `2025-01-01-preview` | 클라이언트가 보내는 Azure OpenAI API version |
 | `openai_openapi_spec_url` | Azure REST API spec URL | APIM OpenAPI import에 사용하는 spec URL |
 
@@ -64,12 +66,12 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `reuse_foundry` | `false` | `true`면 기존 AIServices 계정을 data source로 읽고 gateway 연결만 추가 |
-| `existing_foundry_name` | `""` | 재사용할 AIServices 계정 이름. `reuse_foundry=true`면 필수 |
+| `reuse_foundry` | `false` | State에 managed project account가 없는 external-final 계정 재사용 전용 |
+| `existing_foundry_name` | `""` | 재사용할 external AIServices exact account name. `reuse_foundry=true`면 필수 |
 | `existing_foundry_rg` | `""` | 기존 AIServices 계정의 resource group. `reuse_foundry=true`면 필수 |
 
 {% hint style="info" %}
-`reuse_foundry=true`에서는 기존 계정과 모델 deployment를 Terraform이 생성하거나 삭제하지 않습니다. 연결에 필요한 Private Endpoint와 APIM managed identity RBAC만 gateway 쪽에서 추가하며, 첫 plan 전에 기존 계정이 project management enabled / local auth disabled / public access disabled 상태인지 검사합니다.
+Sidecar-era state가 `project_account`/`project`/`project_models`를 이미 소유하면 external reuse가 아닙니다. Exact account name을 state에서 캡처하고 `reuse_foundry=false`를 사용합니다. External-final reuse에서는 기존 project/PE/APIM 역할의 exact resource ID와 account/APIM principal/role 일치를 검증한 뒤 import합니다. 자세한 분류는 [기존 계정 재사용](04-reuse-foundry.md#기존-state-분류)을 따릅니다.
 {% endhint %}
 
 ### 클라이언트 인증
@@ -228,7 +230,7 @@ x-ai-gateway-effective-model: FW-GLM-5.2
 x-ai-gateway-downgrade-level: 1
 ```
 
-`downgrade-level`이 `0`이면 전환 없음, `1`이면 80% 임계값, `2`이면 100% 임계값에 도달한 상태입니다.
+일반적으로 `downgrade-level`이 `0`이면 budget 전환 없음, `1`이면 80% 임계값, `2`이면 100% 임계값입니다. 단, migration 중 `legacy_gpt_compat_enabled=true`이면 level `0`에서도 requested legacy GPT alias가 effective `gpt-5.6-sol`로 canonicalize될 수 있으므로 requested/effective 헤더를 함께 확인합니다.
 
 ### APIM 첫 apply 지연
 

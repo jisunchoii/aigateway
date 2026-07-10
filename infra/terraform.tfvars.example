@@ -13,6 +13,14 @@ apim_sku_name        = "Developer_1"
 reuse_foundry = false
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
+legacy_gpt_compat_enabled             = false
+admin_ui_legacy_gpt_aliases_enabled   = false
+
+# Staged live migration only:
+# Task 7: legacy_gpt_compat_enabled=true, admin_ui_legacy_gpt_aliases_enabled=true
+# Task 8: keep legacy_gpt_compat_enabled=true, set admin_ui_legacy_gpt_aliases_enabled=false
+# Task 9: after legacy-request telemetry reaches zero, set legacy_gpt_compat_enabled=false
+#         together with foundry_public_network_access_enabled=false.
 
 # Greenfield: Terraform creates these canonical deployments. Deployment name = real model name.
 model_deployments = {
@@ -46,9 +54,12 @@ model_deployments = {
   }
 }
 
-# Brownfield reuse: set reuse_foundry=true and point to the EXISTING account.
-# Keep this single canonical model_deployments block, but edit it so each map key/value
-# exactly matches the real deployment name/version/SKU already present in that account.
+# External-final brownfield only: set reuse_foundry=true and point to the exact EXISTING
+# account resource. Preflight/import an existing codexproj, gateway PE, and APIM roles.
+# Verify account ID, APIM principal ID, role, and resource ID; never infer a match by name.
+# Sidecar-era state that already owns project_account/project/project_models must instead
+# keep reuse_foundry=false and set foundry_account_name to the exact state-owned account name.
+# Keep this canonical model_deployments block aligned with the selected account catalog.
 # existing_foundry_name = "<existing-aiservices-account>"
 # existing_foundry_rg   = "<existing-resource-group>"
 

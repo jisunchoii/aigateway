@@ -125,6 +125,7 @@ module "apim" {
   entra_tenant_id               = var.entra_tenant_id
   entra_api_audience            = var.entra_api_audience
   entra_team_claim              = var.entra_team_claim
+  legacy_gpt_compat_enabled     = var.legacy_gpt_compat_enabled
 }
 
 module "config_store" {
@@ -189,11 +190,10 @@ module "control_plane" {
   admin_group_object_id = var.admin_group_object_id
   cosmos_map_container  = module.config_store.map_container_name
   rate_tiers_json       = jsonencode(var.rate_tiers)
-  # Deployment names ARE the real model names (no alias indirection): build the Admin UI
-  # model-id -> display-label map dynamically from allowed_models so a new tfvars model shows in
-  # the Models UI automatically (label = id; modelLabel.ts hides labels equal to the id). Prices are
-  # operator-owned (Cosmos `pricing` doc, scripts/seed-pricing-jumpbox.sh), not derived here.
-  alias_models_json          = jsonencode({ for model in local.allowed_models : model => model })
+  # The final catalog follows canonical deployments. During the staged GPT migration only, the
+  # explicit Admin UI compatibility flag unions the two legacy aliases so stale documents remain
+  # editable; config-sync still owns APIM runtime named values.
+  alias_models_json          = jsonencode({ for model in local.admin_ui_models : model => model })
   log_analytics_workspace_id = module.observability.law_customer_id
   codexproxy_image           = var.codexproxy_image
   codexproxy_identity_id     = module.identity.codexproxy_id

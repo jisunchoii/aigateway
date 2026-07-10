@@ -35,6 +35,64 @@ description: 모델 백엔드 기존 계정 재사용 — 기존 AIServices(Foun
 
 재사용 모드(`reuse_foundry=true`)에서는 별도 Azure OpenAI 계정을 만들지 않습니다. canonical 네 모델(`gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`)을 포함한 `/openai`·`/vscode/models`·`/foundry` 요청은 기존 AIServices 계정의 canonical OpenAI/v1 account path(`https://<account>.openai.azure.com/openai/v1`)로 라우팅됩니다. 반면 `/responses`는 Codex proxy sidecar를 거쳐 같은 계정 아래 canonical project `codexproj`의 Responses path(`/api/projects/codexproj/openai/v1/responses`)를 호출합니다.
 
+## 기존 state 분류
+
+업그레이드 apply 전에 remote state를 아래 세 경로 중 하나로 **명시적으로 분류**합니다. 이름이 비슷하다는 이유만으로 리소스를 같은 것으로 간주하지 않습니다.
+
+### 현재 managed 이력 (`reuse_foundry=false`)
+
+현재 live 이력처럼 아래 주소를 이미 소유한다면 안전한 managed 경로입니다.
+
+```text
+module.foundry.azapi_resource.project_account[0]
+module.foundry.azapi_resource.project[0]
+module.foundry.azurerm_cognitive_deployment.project_models[...]
+```
+
+`reuse_foundry=false`를 유지하고 `foundry_account_name`을 state의 exact account name으로 설정합니다. 이 주소를 다른 리소스로 이동하거나 external reuse로 전환하지 않습니다.
+
+### Sidecar-era reuse 이력에 managed project account가 있는 경우
+
+이전 버전을 `reuse_foundry=true`로 적용했더라도 위 `project_account`/`project`/`project_models` 주소가 state에 있으면 그 project-enabled account가 canonical 계정입니다. 먼저 exact ID와 name을 캡처합니다.
+
+```bash
+cd infra
+terraform state show 'module.foundry.azapi_resource.project_account[0]'
+terraform state show 'module.foundry.azapi_resource.project[0]'
+terraform state list | grep 'module.foundry.azurerm_cognitive_deployment.project_models'
+```
+
+그 다음:
+
+```text
+reuse_foundry        = false
+foundry_account_name = "<state의 project_account exact name>"
+```
+
+기존 `module.apim.azurerm_role_assignment.apim_to_openai`와 `apim_to_foundry`는 이전 reused regular account를 가리키는 rollback fallback입니다. **새 canonical 역할 주소로 `terraform state mv`하지 않습니다.** 제거 블록이 이 역할을 remote에서 삭제하지 않고 state에서만 forget하도록 둡니다.
+
+`reuse_foundry=true`를 그대로 두면 Terraform이 managed project account/deployment를 제거하고 project parent를 교체하려는 plan을 만들 수 있습니다. hardened migration verifier가 이를 의도적으로 차단하므로, verifier를 우회하지 말고 위 managed 전환을 사용합니다.
+
+### State에 managed project account가 없는 external-final 재사용
+
+이미 최종 형태인 외부 AIServices 계정을 선택하고 state에 managed `project_account`가 없을 때만 `reuse_foundry=true`를 사용합니다. account full resource ID와 name을 확인한 뒤, 이미 존재하는 다음 리소스는 apply 전에 exact ID로 import합니다.
+
+```text
+module.foundry.azapi_resource.project[0]
+module.foundry.azurerm_private_endpoint.project_account
+module.apim.azurerm_role_assignment.apim_to_model_openai
+module.apim.azurerm_role_assignment.apim_to_model_foundry
+```
+
+기존 리소스가 없다면 Terraform이 생성할 수 있습니다. 기존 리소스가 있다면 account ID, `codexproj` parent ID, gateway PE target ID, APIM principal ID, role definition, role-assignment resource ID가 모두 일치하는지 확인한 뒤에만 import합니다.
+
+```bash
+terraform import 'module.foundry.azapi_resource.project[0]' '<exact-project-resource-id>'
+terraform import 'module.foundry.azurerm_private_endpoint.project_account' '<exact-private-endpoint-resource-id>'
+terraform import 'module.apim.azurerm_role_assignment.apim_to_model_openai' '<exact-openai-role-assignment-resource-id>'
+terraform import 'module.apim.azurerm_role_assignment.apim_to_model_foundry' '<exact-foundry-role-assignment-resource-id>'
+```
+
 ## 3. 배포 전 기존 계정 보안 설정
 
 gateway는 APIM managed identity와 RBAC로 backend를 호출합니다. 따라서 Terraform apply 전에 기존 계정이 이미 **project management enabled**, **API key 인증 비활성화**, **공용 네트워크 접근 차단** 상태여야 합니다.
@@ -90,7 +148,7 @@ az resource show --ids <aiservices-account-id> \
 
 ## 4. tfvars 입력값 결정
 
-여기서는 값만 결정합니다. 실제 `infra/terraform.tfvars` 파일 생성과 입력은 [APIM 게이트웨이 배포](03-deploy/case-apim-core-first.md#4-tfvars-핵심값) 단계에서 합니다. 기존 계정의 실제 deployment 이름을 확인한 뒤 아래 형태로 옮겨 적습니다.
+여기서는 **external-final 재사용 경로**의 값만 결정합니다. 실제 `infra/terraform.tfvars` 파일 생성과 입력은 [APIM 게이트웨이 배포](03-deploy/case-apim-core-first.md#4-tfvars-핵심값) 단계에서 합니다. Sidecar-era managed project account 경로는 앞 절처럼 `reuse_foundry=false`와 exact `foundry_account_name`을 사용합니다.
 
 ```
 reuse_foundry         = true
@@ -146,30 +204,29 @@ model_deployments = {
 
 ## 5. Plan 검증
 
-이 페이지에서 state backend를 먼저 만들지는 않습니다. 기존 계정 보안 설정과 `terraform.tfvars` 입력을 끝낸 뒤, 선택한 배포 runbook의 backend bootstrap 단계를 진행하고 첫 `terraform plan`에서 기존 계정/모델이 생성 또는 변경 대상이 아닌지 확인합니다.
+이 페이지에서 state backend를 먼저 만들지는 않습니다. 기존 계정 보안 설정과 `terraform.tfvars` 입력을 끝낸 뒤, 선택한 배포 runbook의 backend bootstrap 단계를 진행하고 **saved plan**을 생성합니다.
 
 같은 워킹카피에서 backend 리소스 그룹이나 storage account를 삭제한 뒤 다시 bootstrap했다면, 로컬 `.terraform` 디렉터리에 이전 backend 설정이 남아 있을 수 있습니다. 이 경우 첫 초기화는 `terraform init -reconfigure`로 실행합니다.
 
 ```bash
 cd infra
 terraform init
-terraform plan
+terraform plan -out=reuse-upgrade.tfplan
+terraform show -json reuse-upgrade.tfplan > reuse-upgrade-plan.json
+python ../scripts/verify_model_topology_plan.py reuse-upgrade-plan.json migration
 ```
-
-{% hint style="warning" %}
-이전 버전을 이미 `reuse_foundry=true`로 적용한 state를 업그레이드한다면 첫 plan 전에 [기존 reuse state의 APIM RBAC 주소 전환](06-operate.md#기존-reuse-state의-apim-rbac-주소-전환)을 먼저 수행하세요. 새 brownfield 배포나 `reuse_foundry=false`였던 managed 이력에는 이 state move를 적용하지 않습니다.
-{% endhint %}
 
 | 확인 항목                             | 기대값 |
 | --------------------------------- | --- |
-| `azurerm_cognitive_account` 생성    | 0   |
-| `azurerm_cognitive_deployment` 생성 | 0   |
-| Foundry Private Endpoint          | 생성됨 |
-| APIM managed identity RBAC        | 생성됨 |
+| External-final account/deployment 생성 | 0 |
+| Sidecar-era canonical deployments | existing 항목은 in-place/no-op; 새 canonical 항목만 create |
+| Existing project/PE/RBAC          | exact import 후 in-place/no-op, 없으면 생성 |
+| Sidecar-era canonical account/project/deployments | in-place update 또는 no-op |
+| Legacy fallback resources         | `forget`만 허용 |
 | destroy 대상                        | 0   |
 
 {% hint style="success" %}
-plan 결과가 “기존 계정/모델 생성 0, Private Endpoint + RBAC만 추가”이면 재사용 경로가 올바르게 설정된 것입니다.
+verifier가 `model topology plan OK`를 출력하고 canonical account/project/deployment/PE/RBAC에 delete 또는 replacement가 없을 때만 apply합니다.
 {% endhint %}
 
 {% hint style="warning" %}

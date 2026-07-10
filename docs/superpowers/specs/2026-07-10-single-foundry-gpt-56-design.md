@@ -110,12 +110,28 @@ than creating a regular account plus an optional project account.
   private DNS zones.
 - Create the child project unconditionally for managed greenfield deployments.
 - Use one deployment map for OpenAI and partner models.
-- In brownfield reuse mode, require a project-enabled AIServices account and use the configured
-  project name.
+- Reserve brownfield reuse mode for an external already-final project-enabled AIServices account.
+  Preflight and import any existing child project, gateway private endpoint, and APIM role
+  assignments by exact resource ID before apply.
 
 The former regular account and its deployments are removed from Terraform state without
 destroying them during the topology refactor. They are deleted explicitly only after cutover
 verification. This prevents a single Terraform apply from deleting the fallback backend.
+
+Historical state is classified before planning:
+
+- the current live `reuse_foundry=false` path already owns the canonical project account, project,
+  and project deployments at their preserved addresses and remains unchanged;
+- a sidecar-era `reuse_foundry=true` state that also owns those managed project resources must
+  capture the exact project-account ID/name, set `reuse_foundry=false`, and set
+  `foundry_account_name` to that exact name; and
+- only a state with no managed project account may retain `reuse_foundry=true` for an external
+  already-final account.
+
+Legacy APIM role assignments are not moved to the new canonical addresses during the sidecar-era
+upgrade. They point to the old reused regular account and remain rollback fallbacks until cleanup.
+Leaving `reuse_foundry=true` on that history would delete managed project resources and replace the
+project parent, so the migration verifier intentionally rejects it.
 
 ### Remove the separate OpenAI module
 
@@ -134,12 +150,14 @@ Replace `openai_deployments`, `foundry_deployments`, and `project_deployments` w
 The following values derive from that map:
 
 - APIM global allowed models;
-- Admin UI `ALIAS_MODELS_JSON`;
+- Admin UI `ALIAS_MODELS_JSON` (canonical-only by default, with an explicit migration-only union
+  of the two legacy GPT aliases);
 - per-model token limits; and
 - documented client model identifiers.
 
 There is no independent global `allowed_models` input. Per-consumer restrictions remain in
-Cosmos configuration, but Terraform cannot advertise a model that it did not deploy.
+Cosmos configuration. Outside the explicit migration-only Admin UI alias union, Terraform cannot
+advertise a model that it did not deploy.
 
 ### APIM and identities
 
@@ -156,6 +174,15 @@ The APIM module accepts one model account ID and one OpenAI/v1 base URL.
   `https://aisproj-c0gvf2.services.ai.azure.com/api/projects/codexproj/openai/v1`.
 - Preserve reasoning fields for `gpt-5.6-sol` and GLM while retaining the existing per-model
   normalization for backends that reject those fields.
+- Add `legacy_gpt_compat_enabled`, default `false`. When enabled, all three policy families treat
+  `gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.6-sol` as authorization-equivalent, select any budget
+  downgrade first, then canonicalize a selected GPT-family member to `gpt-5.6-sol` before token
+  limits and backend dispatch.
+- Add `admin_ui_legacy_gpt_aliases_enabled`, default `false`. When enabled, the Admin UI catalog is
+  the canonical four plus `gpt-5.4` and `gpt-5.4-mini`; it does not change config-sync ownership of
+  APIM runtime named values.
+- Preserve the originally requested model and the final effective model in metrics, traces, and
+  response headers, including compatibility rewrites with downgrade level zero.
 
 The sidecar image remains an explicit input because ACR must exist before the image can be
 built. A first deployment nevertheless creates the final one-account model topology. The
@@ -167,17 +194,20 @@ then apply the image and route values.
 ### OpenAI-compatible and VS Code requests
 
 1. Client sends the requested deployment name to `/openai` or `/vscode/models`.
-2. APIM authenticates the caller and checks the requested model against the deployment-derived
-   catalog.
-3. APIM applies downgrade and rate-limit policy.
-4. APIM rewrites the request to the canonical OpenAI/v1 endpoint and authenticates with its
+2. APIM authenticates the caller and checks the requested model against the effective allowlist.
+   GPT-family equivalence applies only while migration compatibility is enabled.
+3. APIM selects the budget downgrade, then canonicalizes a selected GPT-family member to
+   `gpt-5.6-sol` when compatibility is enabled.
+4. APIM applies the final effective model's token limit, rewrites the request to the canonical
+   OpenAI/v1 endpoint, and authenticates with its
    managed identity.
 5. The response and token metrics retain requested and effective model dimensions.
 
 ### Codex Responses requests
 
 1. Codex sends a Responses request to `/responses`.
-2. APIM performs the same governance checks and injects the internal hop credential.
+2. APIM performs the same authorization, downgrade-selection, compatibility canonicalization, and
+   token-limit sequence, then injects the internal hop credential.
 3. The Codex proxy validates the hop credential and normalizes the payload without changing the
    selected model.
 4. The proxy authenticates with managed identity and sends the request to the canonical project
@@ -188,20 +218,21 @@ then apply the image and route values.
 
 The migration is deliberately additive before it is destructive:
 
-1. Re-audit the live catalog and quota.
-2. Add `gpt-5.6-sol` to `aisproj-c0gvf2`.
-3. Add a private endpoint and DNS records for `aisproj-c0gvf2`.
-4. Grant APIM the two inference roles on `aisproj-c0gvf2`.
-5. Verify the project endpoint from the VNet before disabling public access.
-6. Switch `/openai`, `/foundry`, and `/vscode/models` to `aisproj-c0gvf2`.
-7. Update APIM allowed models and the Admin UI catalog from the unified map.
-8. Verify all four deployments through their supported APIM surfaces.
-9. Update VS Code BYOK to `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, and `grok-4.3`.
-10. Disable public access on the canonical account and re-run the same tests.
-11. Reconcile the private remote Terraform state.
-12. Delete the obsolete regular AIServices and OpenAI accounts and their private endpoints.
+1. Re-audit the live catalog, quota, and remote-state history classification.
+2. Set both migration flags to `true` before the canonical APIM route cutover.
+3. Add `gpt-5.6-sol`, private networking, canonical RBAC, routes, and the staged Admin UI union on
+   `aisproj-c0gvf2`; verify old GPT callers and new GPT-5.6 callers.
+4. Migrate Cosmos global/consumer documents and clients, run config-sync, then set only
+   `admin_ui_legacy_gpt_aliases_enabled=false` and apply. Keep policy compatibility enabled.
+5. Verify all four deployments, governance behavior, and requested/effective telemetry.
+6. Confirm telemetry contains no legacy GPT requests.
+7. Set `legacy_gpt_compat_enabled=false` together with
+   `foundry_public_network_access_enabled=false`, apply the saved verified plan, and re-run every
+   smoke test.
+8. Reconcile the private remote Terraform state.
+9. Delete the obsolete regular AIServices and OpenAI accounts and their private endpoints.
 
-No obsolete account or deployment is deleted before step 10 succeeds. Kimi resources are never
+No obsolete account or deployment is deleted before step 7 succeeds. Kimi resources are never
 included in deletion commands.
 
 ## Failure handling and rollback
@@ -224,6 +255,12 @@ included in deletion commands.
 - Terraform tests or equivalent plan assertions prove that a default deployment contains one
   AIServices account, one project, no OpenAI account, and exactly the four canonical model
   deployments.
+- Rendered-policy assertions prove compatibility defaults off, GPT-family authorization only when
+  enabled, downgrade-before-canonicalization ordering, canonical dispatch, and requested/effective
+  observability across OpenAI, Foundry, and Responses policies.
+- Plan-verifier tests cover arbitrary extra accounts/deployments, canonical project/deployment/PE/
+  RBAC delete or replacement through either address field, nested Kimi references, safe updates,
+  and forget-only legacy resources.
 - Plan inspection proves that the first migration apply does not destroy the two fallback model
   accounts.
 - Codex proxy unit tests and self-test remain green.

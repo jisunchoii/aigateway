@@ -58,7 +58,7 @@ variable "deployments" {
 variable "reuse_existing" {
   type        = bool
   default     = false
-  description = "When true, read an existing project-enabled AIServices account via data source instead of creating it; do not create model deployments. The project and PE are still managed against the referenced account."
+  description = "External-final brownfield only. Read an existing project-enabled AIServices account and skip deployment management; the project and PE remain Terraform-managed and existing matching resources must be imported before apply."
 }
 
 variable "existing_account_name" {

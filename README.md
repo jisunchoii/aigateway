@@ -88,9 +88,11 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 | `apim_public` | VS Code/Copilot CLI 같은 외부 도구에서 APIM을 호출해야 하면 `true` |
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
 | `model_deployments` | canonical AIServices account에 둘 deployment 이름/모델/sku/capacity |
+| `legacy_gpt_compat_enabled` | live migration 중 legacy GPT 요청/allowlist를 `gpt-5.6-sol`로 호환할지. 기본/final은 `false` |
+| `admin_ui_legacy_gpt_aliases_enabled` | live migration 중 Admin UI에 legacy GPT alias를 임시 노출할지. 기본/final은 `false` |
 | `monthly_budget_amount`, `budget_alert_email` | Azure Cost Management 알림 예산 |
 
-이전 버전을 `reuse_foundry=true`로 이미 적용한 state를 업그레이드한다면 첫 plan 전에 [기존 reuse state의 APIM RBAC 주소 전환](docs/06-operate.md#기존-reuse-state의-apim-rbac-주소-전환)을 수행합니다. `reuse_foundry=false`였던 managed 이력에는 이 state move를 적용하지 않습니다.
+기존 state 업그레이드는 먼저 [모델 백엔드 기존 계정 재사용](docs/04-reuse-foundry.md)의 이력 분류를 따릅니다. 현재 `reuse_foundry=false` managed 이력은 그대로 유지합니다. Sidecar-era `reuse_foundry=true` state가 `project_account`를 이미 소유한다면 그 계정을 exact name으로 managed canonical 계정으로 승격하고 `reuse_foundry=false`로 바꿉니다. 기존 APIM 역할 할당은 rollback fallback이므로 새 주소로 `state mv`하지 않습니다.
 
 ### 3. 게이트웨이 core 배포
 

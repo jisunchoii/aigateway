@@ -83,6 +83,8 @@ budget_start_date     = "2026-07-01T00:00:00Z"   # 과거 날짜 금지(첫 appl
 reuse_foundry = false
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
+legacy_gpt_compat_enabled             = false
+admin_ui_legacy_gpt_aliases_enabled   = false
 
 model_deployments = {
   "gpt-5.6-sol" = {
@@ -116,7 +118,7 @@ model_deployments = {
 }
 ```
 
-기존 AIServices 계정을 재사용하는 경우에는 `reuse_foundry=true`로 바꾸고, 실제 계정 이름과 실제 deployment 이름을 넣습니다. 이 경로에서는 `model_deployments`에 선언한 canonical 네 deployment가 **이미 기존 계정에 존재**해야 하며, 이전 reuse state를 업그레이드한다면 [기존 reuse state의 APIM RBAC 주소 전환](../06-operate.md#기존-reuse-state의-apim-rbac-주소-전환)을 먼저 수행합니다.
+`reuse_foundry=true`는 state에 managed `project_account`가 없는 **external-final 계정**에만 사용합니다. 이 경로에서는 canonical deployment가 기존 계정에 이미 있어야 하고, 기존 `codexproj`/gateway PE/APIM 역할은 exact account ID·principal ID·role·resource ID를 확인한 뒤 import합니다. Sidecar-era state가 `project_account`/`project`/`project_models`를 이미 소유하면 [기존 state 분류](../04-reuse-foundry.md#기존-state-분류)에 따라 `reuse_foundry=false`와 exact `foundry_account_name`을 사용하며 APIM 역할을 `state mv`하지 않습니다.
 
 ```
 reuse_foundry         = true
@@ -173,6 +175,8 @@ enable_jumpbox = false
 | `owner`, `cost_center`, `apim_publisher_*`, `budget_alert_email` | 기본값이 없어 파일에 넣어야 하는 공통 값         |
 | `reuse_foundry`                                                  | 모델 백엔드 신규 생성/기존 계정 재사용 선택       |
 | `model_deployments`                                              | canonical 네 모델 또는 운영자가 승인한 동일 schema deployment 정의 |
+| `legacy_gpt_compat_enabled`                                      | live migration 중 GPT-family policy 호환. fresh/final은 `false` |
+| `admin_ui_legacy_gpt_aliases_enabled`                            | live migration 중 Admin UI legacy alias 노출. fresh/final은 `false` |
 | `worker_image`                                                   | 비워 두면 config-sync worker 미배포    |
 | `admin_ui_image`                                                 | 비워 두면 Admin UI 미배포              |
 
@@ -207,7 +211,7 @@ terraform plan
 terraform apply
 ```
 
-`reuse_foundry=true`이면 이 plan에서 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인합니다. 기존 계정 재사용 경로의 확인 항목은 [모델 백엔드 기존 계정 재사용](../04-reuse-foundry.md#5-plan-검증)을 따릅니다.
+External-final 계정에 `reuse_foundry=true`를 사용하는 경우 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인하고, [기존 state 분류와 plan 검증](../04-reuse-foundry.md#기존-state-분류)을 따릅니다.
 
 APIM VNet 주입이 포함된 첫 apply는 약 45분 걸릴 수 있습니다. 완료 후 gateway URL을 확인합니다.
 

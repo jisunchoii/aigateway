@@ -52,19 +52,24 @@ resource "azurerm_api_management_api_operation" "responses_proxy" {
   description         = "Catch-all proxy to the AIServices native Responses endpoint."
 }
 
+locals {
+  responses_policy_xml = templatefile("${path.root}/../policies/responses-pipeline.xml.tftpl", {
+    client_auth_mode          = var.client_auth_mode
+    entra_tenant_id           = var.entra_tenant_id
+    entra_api_audience        = var.entra_api_audience
+    entra_team_claim          = var.entra_team_claim
+    rate_tiers                = var.rate_tiers
+    model_tokens_per_minute   = local.model_tokens_per_minute
+    codexproxy_enabled        = var.route_via_codexproxy
+    legacy_gpt_compat_enabled = var.legacy_gpt_compat_enabled
+  })
+}
+
 resource "azurerm_api_management_api_policy" "responses" {
   api_name            = azurerm_api_management_api.responses.name
   api_management_name = module.apim.name
   resource_group_name = azurerm_resource_group.rg.name
-  xml_content = templatefile("${path.root}/../policies/responses-pipeline.xml.tftpl", {
-    client_auth_mode        = var.client_auth_mode
-    entra_tenant_id         = var.entra_tenant_id
-    entra_api_audience      = var.entra_api_audience
-    entra_team_claim        = var.entra_team_claim
-    rate_tiers              = var.rate_tiers
-    model_tokens_per_minute = local.model_tokens_per_minute
-    codexproxy_enabled      = var.route_via_codexproxy
-  })
+  xml_content         = local.responses_policy_xml
 
   depends_on = [
     azurerm_api_management_api_operation.responses_proxy,

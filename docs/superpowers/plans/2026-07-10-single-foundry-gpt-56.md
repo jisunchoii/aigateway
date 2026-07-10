@@ -17,6 +17,12 @@
 - APIM gets both `Cognitive Services OpenAI User` and `Cognitive Services User` on the canonical account.
 - The Codex proxy remains only for Responses payload normalization and calls the same canonical project.
 - APIM allowed models and Admin UI `ALIAS_MODELS_JSON` derive from the unified deployment map.
+- `legacy_gpt_compat_enabled` and `admin_ui_legacy_gpt_aliases_enabled` default to `false`; they
+  exist only for the staged Task 7-9 migration.
+- Current live state is the managed `reuse_foundry=false` history and must retain the existing
+  canonical project account/project/deployment addresses. Sidecar-era reuse history with those
+  managed addresses is converted to this same path by exact account name, never by moving old APIM
+  fallback roles.
 - No obsolete account, deployment, private endpoint, or role assignment is destroyed in the first migration apply.
 - Never apply the ignored local `infra/terraform.tfstate` to live resources; live changes use the private remote backend from the VNet jumpbox.
 - Kimi resources are outside this gateway topology and must never appear in a deletion command.
@@ -1094,7 +1100,12 @@ model definitions from Task 4, no `openai_deployments`, no second project map, a
 ```hcl
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
+legacy_gpt_compat_enabled             = false
+admin_ui_legacy_gpt_aliases_enabled   = false
 ```
+
+Document the live-only transitions: Task 7 `true/true`, Task 8 `true/false`, Task 9
+`false/false` with private-network lockdown.
 
 Document the sidecar bootstrap:
 
@@ -1251,6 +1262,23 @@ git commit -am "fix(infra): harden single-account migration"
 - Consumes: the validated commit and current live tfvars values.
 - Produces: a migration apply where old account resources are only forgotten, never destroyed.
 
+**State-history preflight (before Step 1):**
+
+- Confirm the current live state still has `reuse_foundry=false` semantics and owns
+  `module.foundry.azapi_resource.project_account[0]`,
+  `module.foundry.azapi_resource.project[0]`, and
+  `module.foundry.azurerm_cognitive_deployment.project_models[...]`.
+- Capture the canonical account's exact state ID/name and keep `reuse_foundry=false`; set
+  `foundry_account_name` to that exact name.
+- If this runbook is ever used against sidecar-era `reuse_foundry=true` history with the same
+  managed project resources, perform the same conversion to `reuse_foundry=false`. Do not move old
+  APIM roles because they point to the reused regular-account rollback backend.
+- If no managed project account exists and an external already-final account is intentionally
+  reused, preflight/import any existing `codexproj`, gateway PE, and APIM roles only after exact
+  account ID, APIM principal ID, role, and resource-ID verification.
+- Leaving `reuse_foundry=true` on sidecar-era managed history is a stop condition: the hardened
+  verifier must reject the resulting canonical account/project/deployment destruction.
+
 - [ ] **Step 1: Re-audit live catalog and quota**
 
 Run:
@@ -1283,9 +1311,12 @@ Expected: ACR build succeeds and reports a digest.
 Preserve all unrelated and secret values. Replace only topology fields with:
 
 ```hcl
+reuse_foundry                         = false
 foundry_account_name                  = "aisproj-c0gvf2"
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = true
+legacy_gpt_compat_enabled             = true
+admin_ui_legacy_gpt_aliases_enabled   = true
 
 model_deployments = {
   "gpt-5.6-sol"       = { model_name = "gpt-5.6-sol", model_format = "OpenAI", model_version = "2026-07-09", sku_name = "GlobalStandard", capacity = 500 }
@@ -1296,6 +1327,10 @@ model_deployments = {
 
 route_via_codexproxy = true
 ```
+
+Both compatibility flags must be enabled in this saved Task 7 plan **before** APIM routes move to
+the canonical account. This lets legacy GPT callers reach `gpt-5.6-sol` and lets new GPT-5.6
+callers pass authorization while config-sync-owned named values still contain old GPT aliases.
 
 Set `codexproxy_image` to the exact value produced from the build variable:
 
@@ -1360,6 +1395,8 @@ The plan must:
 - create `pe-foundry-aigw-dev-eus2`;
 - create two APIM role assignments on `aisproj-c0gvf2`;
 - update APIM routes/catalog and the sidecar image;
+- render GPT-family authorization/canonicalization in OpenAI, Foundry, and Responses policies;
+- stage Admin UI aliases for the canonical four plus `gpt-5.4` and `gpt-5.4-mini`;
 - show `forget` for old accounts/PEs/role assignments;
 - show no canonical account replacement;
 - show no `delete` for old model accounts or Kimi.
@@ -1382,7 +1419,10 @@ Confirm:
 - `pe-foundry-aigw-dev-eus2` is Approved and has a private IP;
 - APIM and sidecar identities have their canonical roles;
 - `ais-aigw-dev-eus2` and `oai-aigw-dev-eus2` still exist;
-- canonical public access is still Enabled for this phase.
+- canonical public access is still Enabled for this phase;
+- a legacy GPT request is served by `gpt-5.6-sol` with requested/effective headers, and a
+  `gpt-5.6-sol` request is authorized even if the runtime allowlist still contains only a legacy
+  GPT-family member.
 
 ---
 
@@ -1393,7 +1433,8 @@ Confirm:
 - Modify live: Cosmos `global` and `consumer:*` documents
 
 **Interfaces:**
-- Produces: all four models callable through the canonical account before public access is disabled.
+- Produces: all four models callable through the canonical account, a canonical-only Admin UI
+  catalog, and policy compatibility still enabled for stragglers before public access is disabled.
 
 - [ ] **Step 1: Update Cosmos global model catalog**
 
@@ -1420,12 +1461,25 @@ For every `consumer_config` document:
 
 Run the config-sync job and wait for APIM named-value propagation.
 
-- [ ] **Step 3: Verify APIM catalog and Admin UI environment**
+- [ ] **Step 3: Remove only the Admin UI legacy aliases**
+
+Change and apply:
+
+```hcl
+legacy_gpt_compat_enabled             = true
+admin_ui_legacy_gpt_aliases_enabled   = false
+```
+
+Create a saved plan, render JSON, run the migration verifier, and apply that exact plan. Do not
+disable policy compatibility in Task 8.
+
+- [ ] **Step 4: Verify APIM catalog and Admin UI environment**
 
 Confirm APIM `allowed-models` and Admin UI `ALIAS_MODELS_JSON` contain exactly the four canonical
-models. Confirm the active Admin UI revision is Healthy.
+models. Confirm the active Admin UI revision is Healthy and all three policy families still render
+GPT-family compatibility.
 
-- [ ] **Step 4: Smoke-test all APIM surfaces**
+- [ ] **Step 5: Smoke-test all APIM surfaces**
 
 Using the current APIM subscription key without printing it:
 
@@ -1433,6 +1487,8 @@ Using the current APIM subscription key without printing it:
 - `FW-GLM-5.2`: `/foundry`, `/vscode/models`, `/responses`;
 - `DeepSeek-V4-Pro`: `/foundry`, `/vscode/models`, `/responses`;
 - `grok-4.3`: `/foundry`, `/vscode/models`, `/responses`.
+- one `gpt-5.4` and one `gpt-5.4-mini` straggler request: HTTP `200`, effective
+  `gpt-5.6-sol`, and requested/effective headers present.
 
 Expected: HTTP `200` for each supported path.
 
@@ -1440,7 +1496,7 @@ If any canonical route fails, restore the saved API `serviceUrl` and policy XML 
 before changing Terraform again. The old accounts, private endpoints, and role assignments are
 still present specifically for this rollback.
 
-- [ ] **Step 5: Verify governance**
+- [ ] **Step 6: Verify governance**
 
 Confirm:
 
@@ -1448,9 +1504,10 @@ Confirm:
 - direct sidecar access without hop auth returns `401`;
 - one controlled rate-limit test returns `429`;
 - a configured downgrade returns HTTP `200` with requested/effective/level headers;
-- Application Insights receives token metrics with canonical deployment names.
+- Application Insights preserves the requested alias dimension and records the canonical backend
+  in the effective-model dimension.
 
-- [ ] **Step 6: Update VS Code BYOK**
+- [ ] **Step 7: Update VS Code BYOK**
 
 Preserve the current APIM key and unrelated providers. Replace the custom provider's model list
 with:
@@ -1473,17 +1530,25 @@ Validate the JSON and invoke each exact configured URL once.
 **Interfaces:**
 - Produces: final one-account private topology and reconciled remote state.
 
-- [ ] **Step 1: Set the final private-network value**
+- [ ] **Step 1: Confirm legacy GPT request telemetry is empty**
 
-Change only:
+Use the requested-model metric/trace dimension to confirm no `gpt-5.4` or `gpt-5.4-mini` requests
+occurred during the agreed observation window. Do not disable compatibility while either alias is
+still present.
+
+- [ ] **Step 2: Set the final compatibility and private-network values**
+
+Change together:
 
 ```hcl
 foundry_public_network_access_enabled = false
+legacy_gpt_compat_enabled             = false
+admin_ui_legacy_gpt_aliases_enabled   = false
 ```
 
 Stage the updated tfvars on the jumpbox.
 
-- [ ] **Step 2: Plan and apply private lockdown**
+- [ ] **Step 3: Plan and apply compatibility removal plus private lockdown**
 
 ```bash
 terraform plan -input=false -out=lockdown.tfplan
@@ -1492,14 +1557,16 @@ python3 ../scripts/verify_model_topology_plan.py lockdown-plan.json migration
 terraform apply -input=false lockdown.tfplan
 ```
 
-Expected: the canonical account updates to public access Disabled; no account replacement or
-fallback deletion appears.
+Expected: the canonical account updates to public access Disabled, rendered policies contain no
+legacy aliases, and no account/project/deployment/PE/RBAC replacement or fallback deletion appears.
 
-- [ ] **Step 3: Re-run every Task 8 smoke test**
+- [ ] **Step 4: Re-run every Task 8 canonical smoke test**
 
-Expected: all requests still return the same successful/governance results through private DNS.
+Expected: all canonical requests still return the same successful/governance results through
+private DNS. Legacy GPT aliases now return `403` and the requested/effective telemetry remains
+correct for canonical and budget-downgraded requests.
 
-- [ ] **Step 4: Verify final Terraform state before manual deletion**
+- [ ] **Step 5: Verify final Terraform state before manual deletion**
 
 Run:
 
@@ -1509,7 +1576,7 @@ terraform state list | grep -E 'module\.openai|azurerm_cognitive_account\.foundr
 
 Expected: no legacy addresses remain in remote state.
 
-- [ ] **Step 5: Delete exact obsolete gateway resources**
+- [ ] **Step 6: Delete exact obsolete gateway resources**
 
 Delete only these live resources:
 
@@ -1521,7 +1588,7 @@ Delete only these live resources:
 Before every delete, resolve and print the exact resource ID and assert it belongs to
 `rg-aigw-dev-eus2`. Do not use wildcard deletion and do not reference any Kimi resource.
 
-- [ ] **Step 6: Verify final topology**
+- [ ] **Step 7: Verify final topology**
 
 Confirm the resource group contains exactly one Cognitive Services model account,
 `aisproj-c0gvf2`, with:
@@ -1534,13 +1601,13 @@ Confirm the resource group contains exactly one Cognitive Services model account
 
 Re-run one request per model.
 
-- [ ] **Step 7: Remove temporary jumpbox access and workspace**
+- [ ] **Step 8: Remove temporary jumpbox access and workspace**
 
 Delete only the three temporary role assignments created in Task 7 and remove
 `/root/single-foundry-migration`. Leave permanent jumpbox seed permissions and the Terraform
 backend private endpoint/DNS unchanged.
 
-- [ ] **Step 8: Record completion**
+- [ ] **Step 9: Record completion**
 
 Update `.superpowers/sdd/progress.md` with:
 
@@ -1552,7 +1619,7 @@ Update `.superpowers/sdd/progress.md` with:
 - exact removed account names;
 - explicit confirmation that Kimi was untouched.
 
-- [ ] **Step 9: Commit the progress ledger**
+- [ ] **Step 10: Commit the progress ledger**
 
 ```powershell
 git add .superpowers\sdd\progress.md

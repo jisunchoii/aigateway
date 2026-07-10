@@ -49,6 +49,7 @@ run "default_model_topology" {
     apim_publisher_email = "test@example.com"
     budget_alert_email   = "test@example.com"
     budget_start_date    = "2026-07-01T00:00:00Z"
+    foundry_account_name = "aisproj-test"
   }
 
   assert {
@@ -145,6 +146,41 @@ run "default_model_topology" {
     )
     error_message = "The default /responses policy must stay direct-to-AIServices until route_via_codexproxy is enabled."
   }
+
+  assert {
+    condition = (
+      !var.legacy_gpt_compat_enabled &&
+      !var.admin_ui_legacy_gpt_aliases_enabled
+    )
+    error_message = "Fresh/final defaults must keep both migration-only GPT compatibility flags disabled."
+  }
+
+  assert {
+    condition = toset(keys(jsondecode(module.control_plane.alias_models_json_input))) == toset([
+      "gpt-5.6-sol",
+      "FW-GLM-5.2",
+      "DeepSeek-V4-Pro",
+      "grok-4.3",
+    ])
+    error_message = "The default Admin UI catalog must stay canonical-only."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        module.apim.rendered_policy_xml["openai"],
+        module.apim.rendered_policy_xml["vscode"],
+        module.apim.rendered_policy_xml["foundry"],
+        local.responses_policy_xml,
+        ] : (
+        !strcontains(policy, "gpt-5.4") &&
+        strcontains(policy, "name=\"requestedModelAllowed\"") &&
+        strcontains(policy, "if (allowed.Contains(requested)) { return true; }") &&
+        strcontains(policy, "return false;")
+      )
+    ])
+    error_message = "Compatibility-off policies must use exact allowlist authorization and contain no legacy GPT aliases."
+  }
 }
 
 run "catalog_interfaces_follow_allowed_models" {
@@ -168,6 +204,142 @@ run "catalog_interfaces_follow_allowed_models" {
   assert {
     condition     = module.control_plane.alias_models_json_input == jsonencode({ for model in local.allowed_models : model => model })
     error_message = "The Admin UI must receive the same canonical catalog that Terraform seeds into APIM."
+  }
+}
+
+run "legacy_gpt_compatibility_with_staged_admin_aliases" {
+  command = plan
+
+  variables {
+    location                            = "eastus2"
+    owner                               = "test@example.com"
+    cost_center                         = "TEST"
+    apim_publisher_name                 = "Test"
+    apim_publisher_email                = "test@example.com"
+    budget_alert_email                  = "test@example.com"
+    budget_start_date                   = "2026-07-01T00:00:00Z"
+    foundry_account_name                = "aisproj-test"
+    legacy_gpt_compat_enabled           = true
+    admin_ui_legacy_gpt_aliases_enabled = true
+  }
+
+  assert {
+    condition = toset(keys(jsondecode(module.control_plane.alias_models_json_input))) == toset([
+      "gpt-5.6-sol",
+      "gpt-5.4",
+      "gpt-5.4-mini",
+      "FW-GLM-5.2",
+      "DeepSeek-V4-Pro",
+      "grok-4.3",
+    ])
+    error_message = "Task 7 staging must expose the canonical catalog plus both editable legacy GPT aliases."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        module.apim.rendered_policy_xml["openai"],
+        module.apim.rendered_policy_xml["vscode"],
+        module.apim.rendered_policy_xml["foundry"],
+        local.responses_policy_xml,
+        ] : (
+        strcontains(policy, "gpt-5.4") &&
+        strcontains(policy, "gpt-5.4-mini") &&
+        strcontains(policy, "gpt-5.6-sol") &&
+        strcontains(policy, "name=\"requestedModelAllowed\"") &&
+        strcontains(policy, "gptFamily.Contains(requested)") &&
+        strcontains(policy, "allowed.Any(model => gptFamily.Contains(model))") &&
+        strcontains(policy, "return \"gpt-5.6-sol\";")
+      )
+    ])
+    error_message = "Compatibility-on policies must authorize GPT-family equivalents and canonicalize them to gpt-5.6-sol."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        module.apim.rendered_policy_xml["openai"],
+        module.apim.rendered_policy_xml["vscode"],
+        ] : (
+        length(split("name=\"requestedModelAllowed\"", policy)[0]) < length(split("name=\"downgradeSelectedDeployment\"", policy)[0]) &&
+        length(split("name=\"downgradeSelectedDeployment\"", policy)[0]) < length(split("name=\"effectiveDeployment\"", policy)[0]) &&
+        length(split("name=\"effectiveDeployment\"", policy)[0]) < length(split("<set-backend-service", policy)[0]) &&
+        length(split("name=\"effectiveDeployment\"", policy)[0]) < length(split("<llm-token-limit", policy)[0]) &&
+        strcontains(policy, "body[\"model\"] = (string)context.Variables[\"effectiveDeployment\"]")
+      )
+    ])
+    error_message = "OpenAI/VS Code policies must authorize, select downgrade, canonicalize, then dispatch/token-limit in that order."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        module.apim.rendered_policy_xml["foundry"],
+        local.responses_policy_xml,
+        ] : (
+        length(split("name=\"requestedModelAllowed\"", policy)[0]) < length(split("name=\"downgradeSelectedModel\"", policy)[0]) &&
+        length(split("name=\"downgradeSelectedModel\"", policy)[0]) < length(split("name=\"effectiveModel\"", policy)[0]) &&
+        length(split("name=\"effectiveModel\"", policy)[0]) < length(split("body[\"model\"] = (string)context.Variables[\"effectiveModel\"]", policy)[0]) &&
+        length(split("name=\"effectiveModel\"", policy)[0]) < length(split("<llm-token-limit", policy)[0]) &&
+        strcontains(policy, "body[\"model\"] = (string)context.Variables[\"effectiveModel\"]")
+      )
+    ])
+    error_message = "Foundry/Responses policies must authorize, select downgrade, canonicalize, then dispatch/token-limit in that order."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        module.apim.rendered_policy_xml["openai"],
+        module.apim.rendered_policy_xml["vscode"],
+        module.apim.rendered_policy_xml["foundry"],
+        local.responses_policy_xml,
+        ] : (
+        strcontains(policy, "name=\"deployment\" value=\"@((string)context.Variables[\"requestedDeployment\"])\"") &&
+        strcontains(policy, "name=\"effectiveModel\"") &&
+        strcontains(policy, "x-ai-gateway-requested-model") &&
+        strcontains(policy, "x-ai-gateway-effective-model")
+      )
+    ])
+    error_message = "Compatibility rewrites must preserve requested/effective model observability."
+  }
+}
+
+run "policy_compatibility_survives_admin_alias_removal" {
+  command = plan
+
+  variables {
+    location                  = "eastus2"
+    owner                     = "test@example.com"
+    cost_center               = "TEST"
+    apim_publisher_name       = "Test"
+    apim_publisher_email      = "test@example.com"
+    budget_alert_email        = "test@example.com"
+    budget_start_date         = "2026-07-01T00:00:00Z"
+    foundry_account_name      = "aisproj-test"
+    legacy_gpt_compat_enabled = true
+  }
+
+  assert {
+    condition = toset(keys(jsondecode(module.control_plane.alias_models_json_input))) == toset([
+      "gpt-5.6-sol",
+      "FW-GLM-5.2",
+      "DeepSeek-V4-Pro",
+      "grok-4.3",
+    ])
+    error_message = "Task 8 must be able to remove Admin UI legacy aliases while policy compatibility remains enabled."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        module.apim.rendered_policy_xml["openai"],
+        module.apim.rendered_policy_xml["vscode"],
+        module.apim.rendered_policy_xml["foundry"],
+        local.responses_policy_xml,
+      ] : strcontains(policy, "gptFamily.Contains(requested)")
+    ])
+    error_message = "Task 8 Admin UI cleanup must not disable policy compatibility for stragglers."
   }
 }
 

@@ -65,6 +65,8 @@ description: "모델 백엔드 신규 생성 — Terraform이 project-enabled AI
 reuse_foundry = false
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
+legacy_gpt_compat_enabled             = false
+admin_ui_legacy_gpt_aliases_enabled   = false
 
 model_deployments = {
   "gpt-5.6-sol" = {
@@ -103,6 +105,8 @@ model_deployments = {
 | `reuse_foundry` | `false`면 신규 backend 계정과 모델 배포를 생성 |
 | `foundry_project_name` | canonical child project 이름 (`codexproj`) |
 | `foundry_public_network_access_enabled` | `false`면 private-only account로 배포 |
+| `legacy_gpt_compat_enabled` | fresh/final에서는 `false` |
+| `admin_ui_legacy_gpt_aliases_enabled` | fresh/final에서는 `false` |
 | `model_deployments` | canonical 네 deployment 정의. map key가 곧 APIM/Admin UI 모델 이름 |
 
 ## 5. APIM 배포와의 관계

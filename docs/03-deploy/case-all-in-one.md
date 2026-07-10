@@ -72,6 +72,8 @@ admin_ui_public       = true
 reuse_foundry = false
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
+legacy_gpt_compat_enabled             = false
+admin_ui_legacy_gpt_aliases_enabled   = false
 model_deployments = {
   "gpt-5.6-sol" = {
     model_name    = "gpt-5.6-sol"
@@ -147,7 +149,7 @@ terraform plan
 terraform apply
 ```
 
-`reuse_foundry=true`이면 이 plan에서 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인합니다. 기존 계정 재사용 경로의 확인 항목은 [모델 백엔드 기존 계정 재사용](../04-reuse-foundry.md#5-plan-검증)을 따릅니다.
+External-final 계정을 `reuse_foundry=true`로 선택한 별도 배포라면 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인하고, [기존 state 분류와 plan 검증](../04-reuse-foundry.md#기존-state-분류)을 따릅니다.
 
 1차 apply는 APIM VNet 주입 때문에 약 45분 걸릴 수 있습니다. 완료 후 주요 출력값을 확인합니다.
 
