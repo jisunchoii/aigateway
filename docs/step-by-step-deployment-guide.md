@@ -1,5 +1,7 @@
 # 단계별 배포 가이드 (Step-by-Step Deployment Guide)
 
+> **Legacy runbook notice (historical reference):** 이 문서는 단일 문서 형식의 예전 배포 가이드를 보존한 것입니다. 현재 canonical 배포 절차와 값은 [`03-deploy.md`](03-deploy.md) 및 하위 runbook을 우선하세요. 아래의 split-topology 용어(`openai_deployments`, `foundry_deployments` 등)는 historical 설명으로 남아 있을 수 있습니다.
+
 이 문서는 `aigateway`(Azure APIM 기반 AI 게이트웨이)를 **사용자 본인의 Azure 환경**에 처음부터
 끝까지 배포하기 위한 단계별 가이드입니다. 두 가지 배포 경로를 다룹니다.
 

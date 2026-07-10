@@ -1,10 +1,10 @@
 ---
-description: "모델 백엔드 신규 생성 — Terraform이 Azure OpenAI/AIServices 계정과 모델 배포를 새로 만드는 경로"
+description: "모델 백엔드 신규 생성 — Terraform이 project-enabled AIServices account/project와 canonical 모델 배포를 새로 만드는 경로"
 ---
 
 # 모델 백엔드 신규 생성
 
-이 페이지는 Terraform이 **Azure OpenAI/AIServices 계정과 모델 배포를 새로 만드는 greenfield 경로**를 설명합니다. 모델 백엔드는 APIM과 따로 나중에 붙는 리소스가 아니라, [APIM 게이트웨이 배포](case-apim-core-first.md) 또는 [All-in-one 배포](case-all-in-one.md)의 첫 `terraform apply`에서 함께 생성됩니다.
+이 페이지는 Terraform이 **project-enabled AIServices account/project와 canonical 모델 배포를 새로 만드는 greenfield 경로**를 설명합니다. 모델 백엔드는 APIM과 따로 나중에 붙는 리소스가 아니라, [APIM 게이트웨이 배포](case-apim-core-first.md) 또는 [All-in-one 배포](case-all-in-one.md)의 첫 `terraform apply`에서 함께 생성됩니다.
 
 ## 1. 선택 기준
 
@@ -23,11 +23,11 @@ description: "모델 백엔드 신규 생성 — Terraform이 Azure OpenAI/AISer
 
 | 리소스 | 설명 |
 |---|---|
-| Azure OpenAI 계정 | gpt 계열 모델 배포용 |
-| AIServices 계정 | Foundry partner/OSS 모델 배포용 |
-| 모델 배포 | `openai_deployments`, `foundry_deployments` 기준 생성 |
-| Private Endpoint | APIM VNet에서 각 backend 계정으로 private 연결 |
-| RBAC | APIM managed identity에 backend 호출 권한 부여 |
+| AIServices 계정 | `allowProjectManagement=true`가 켜진 canonical account |
+| Foundry project | `codexproj` child project |
+| 모델 배포 | `model_deployments` 기준으로 `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` 생성 |
+| Private Endpoint | APIM VNet에서 canonical account로 private 연결 |
+| RBAC | APIM managed identity에 canonical account 호출 권한 부여 |
 
 {% hint style="info" %}
 신규 backend 계정은 public access와 key auth를 끄고, APIM managed identity + RBAC 경로로만 호출합니다.
@@ -40,14 +40,16 @@ description: "모델 백엔드 신규 생성 — Terraform이 Azure OpenAI/AISer
 | Region | `location` 값이 APIM, Azure OpenAI, AIServices를 모두 지원하는지 확인 |
 | 모델 quota | `az cognitiveservices usage list -l <region> -o table` 및 공식 quota 문서 확인 |
 | Partner 모델 약관 | Azure Marketplace 구독 권한과 약관 동의 필요 여부 확인 |
-| 배포 이름 | 클라이언트가 사용할 모델 이름과 `allowed_models` 값을 일치 |
+| 배포 이름 | 클라이언트가 사용할 모델 이름과 `model_deployments` key를 일치 |
 
 
 | 확인할 내용 | 공식 문서 |
 |---|---|
+| GPT-5.6 canonical deployment 세부 정보 | [Foundry Models sold by Azure — GPT-5.6](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56) |
+| Responses 지원 모델 확인 | [Responses API supported models](https://learn.microsoft.com/azure/foundry/openai/how-to/responses#supported-models) |
+| Private Endpoint / DNS 요구사항 | [Configure private link for Azure AI Foundry resources](https://learn.microsoft.com/azure/foundry/how-to/configure-private-link) |
+| APIM managed identity backend 인증 | [Authenticate with managed identity](https://learn.microsoft.com/azure/api-management/api-management-authenticate-authorize-ai-apis#authenticate-with-managed-identity) |
 | Partner/community 모델의 Azure Marketplace 구독·약관 동의 | [Deploy Microsoft Foundry Models](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/deploy-foundry-models), [Models from partners and community](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-from-partners) |
-| Foundry 모델별 TPM/RPM/concurrent request quota | [Microsoft Foundry Models quotas and limits](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/quotas-limits) |
-| Azure OpenAI 모델별 TPM/RPM quota | [Azure OpenAI in Microsoft Foundry Models quotas and limits](https://learn.microsoft.com/en-us/azure/foundry/openai/quotas-limits) |
 
 공식 문서는 Foundry Models의 rate limit을 모델별 **TPM(tokens per minute)**, **RPM(requests per minute)**, **concurrent requests**로 나눠 제시합니다. 일부 모델은 TPM이 `not applicable`이거나 RPM/capacity 단위로 표시되므로, Terraform `capacity` 값을 정하기 전에 해당 모델의 최신 quota 표를 확인해야 합니다.
 
@@ -61,29 +63,23 @@ description: "모델 백엔드 신규 생성 — Terraform이 Azure OpenAI/AISer
 
 ``` 
 reuse_foundry = false
+foundry_project_name                  = "codexproj"
+foundry_public_network_access_enabled = false
 
-openai_deployments = {
-  "gpt-5.4" = {
-    model_name    = "gpt-5.4"
-    model_version = "2026-03-05"
+model_deployments = {
+  "gpt-5.6-sol" = {
+    model_name    = "gpt-5.6-sol"
+    model_format  = "OpenAI"
+    model_version = "2026-07-09"
     sku_name      = "GlobalStandard"
     capacity      = 500
   }
-  "gpt-5.4-mini" = {
-    model_name    = "gpt-5.4-mini"
-    model_version = "2026-03-17"
-    sku_name      = "GlobalStandard"
-    capacity      = 500
-  }
-}
-
-foundry_deployments = {
-  "grok-4.3" = {
-    model_name    = "grok-4.3"
-    model_format  = "xAI"
+  "FW-GLM-5.2" = {
+    model_name    = "FW-GLM-5.2"
+    model_format  = "Fireworks"
     model_version = "1"
-    sku_name      = "GlobalStandard"
-    capacity      = 400
+    sku_name      = "DataZoneStandard"
+    capacity      = 500
   }
   "DeepSeek-V4-Pro" = {
     model_name    = "DeepSeek-V4-Pro"
@@ -92,17 +88,22 @@ foundry_deployments = {
     sku_name      = "GlobalStandard"
     capacity      = 500
   }
+  "grok-4.3" = {
+    model_name    = "grok-4.3"
+    model_format  = "xAI"
+    model_version = "1"
+    sku_name      = "GlobalStandard"
+    capacity      = 10
+  }
 }
-
-allowed_models = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
 ```
 
 | 변수 | 의미 |
 |---|---|
 | `reuse_foundry` | `false`면 신규 backend 계정과 모델 배포를 생성 |
-| `openai_deployments` | gpt 계열 Azure OpenAI deployment 정의 |
-| `foundry_deployments` | Foundry partner/OSS deployment 정의 |
-| `allowed_models` | APIM 정책과 Admin UI에서 허용할 모델 목록 |
+| `foundry_project_name` | canonical child project 이름 (`codexproj`) |
+| `foundry_public_network_access_enabled` | `false`면 private-only account로 배포 |
+| `model_deployments` | canonical 네 deployment 정의. map key가 곧 APIM/Admin UI 모델 이름 |
 
 ## 5. APIM 배포와의 관계
 

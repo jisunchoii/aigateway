@@ -1,6 +1,6 @@
 # Azure AI Gateway
 
-Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모델을 하나의 거버넌스 엔드포인트 뒤에 두는 예제/데모용 AI Gateway입니다.
+Azure API Management(APIM)을 중심으로 하나의 project-enabled AIServices account/project 뒤에 `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`를 거는 예제/데모용 AI Gateway입니다.
 
 클라이언트는 APIM만 호출하고, APIM은 정책으로 consumer 식별, 모델 허용 목록, 토큰 제한, 예산 기반 모델 전환, 메트릭 기록을 처리한 뒤 Private Endpoint와 Managed Identity로 백엔드 AIServices 계정을 호출합니다.
 
@@ -12,7 +12,7 @@ Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모
 |---|---|
 | 단일 게이트웨이 | VS Code, GitHub Copilot CLI, REST client가 APIM gateway URL 하나를 사용 |
 | 모델 거버넌스 | consumer별 allowed models, rate tier, token quota, daily budget 관리 |
-| 예산 기반 전환 | 일별 USD 예산 사용량에 따라 `gpt-5.6-sol -> FW-GLM-5.2 -> DeepSeek-V4-Pro -> grok-4.3` 같은 downgrade ladder 적용 |
+| 예산 기반 전환 | 일별 USD 예산 사용량에 따라 `gpt-5.6-sol -> DeepSeek-V4-Pro -> grok-4.3` 같은 downgrade ladder 적용 |
 | 셀프서비스 Admin UI | Entra ID 로그인과 admin group 기반으로 consumer 등록, key 발급, 정책 변경 |
 | 관측성 | App Insights/Log Analytics에 consumer, requested model, effective model, token metric 기록 |
 | Passwordless backend | Foundry/Azure OpenAI 계정은 key auth를 끄고 APIM Managed Identity + RBAC으로 호출 |
@@ -23,6 +23,7 @@ Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모
 |---|---|---|---|
 | GitHub Copilot CLI | `/openai/deployments/<model>/chat/completions` | `api-key` | CLI는 `COPILOT_PROVIDER_TYPE=azure` 사용 |
 | VS Code BYOK | `/vscode/models/deployments/<model>/chat/completions` | `Ocp-Apim-Subscription-Key` | VS Code provider는 **Custom Endpoint** 사용 |
+| Codex CLI | `/responses` | `Ocp-Apim-Subscription-Key` | `/responses`만 Codex proxy sidecar가 Responses payload를 정규화한 뒤 같은 `codexproj` backend로 전달 |
 | OpenCode | `/openai/deployments/<model>/chat/completions` 또는 `/foundry/chat/completions` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | custom OpenAI-compatible provider를 APIM 경로별로 분리 |
 | 직접 API 호출 | `/openai` 또는 `/foundry` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | 앱/스크립트 검증용 |
 
@@ -32,7 +33,7 @@ Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모
 
 | 경로 | 설명 |
 |---|---|
-| `infra/` | Terraform 루트. 네트워크, APIM, Foundry/OpenAI 연결, Cosmos DB, Key Vault, Log Analytics, ACR, Container Apps, jumpbox |
+| `infra/` | Terraform 루트. 네트워크, APIM, single AIServices account/project 연결, Cosmos DB, Key Vault, Log Analytics, ACR, Container Apps, jumpbox |
 | `policies/` | Terraform이 렌더링하는 APIM policy template |
 | `app/admin-ui/` | React SPA + FastAPI BFF. 하나의 Admin UI 컨테이너 이미지로 배포 |
 | `app/config-sync-worker/` | Cosmos consumer config와 pricing 정보를 읽어 APIM named value/active downgrade를 동기화하는 Container Apps Job |
@@ -52,7 +53,7 @@ Azure API Management(APIM)을 중심으로 Azure OpenAI와 Microsoft Foundry 모
 
 ## 배포 개요
 
-자세한 절차는 [GitBook 배포](docs/03-deploy.md)을 기준으로 합니다. README는 흐름만 요약합니다. 기존 단일 문서 형식의 상세 runbook이 필요하면 [단계별 배포 가이드](docs/step-by-step-deployment-guide.md)도 참고할 수 있습니다.
+자세한 절차는 [GitBook 배포](docs/03-deploy.md)을 기준으로 합니다. README는 흐름만 요약합니다. 기존 단일 문서 형식의 **legacy** runbook이 필요하면 [단계별 배포 가이드](docs/step-by-step-deployment-guide.md)를 참고하되, 현재 canonical 값과 경로는 GitBook 문서를 우선하세요.
 
 ### 1. Terraform state backend 준비
 
@@ -168,7 +169,7 @@ admin_ui_fqdn="$(terraform output -raw admin_ui_fqdn)"
 ### 7. Pricing seed와 config-sync
 
 모델 가격은 Cosmos `pricing` 문서가 source of truth입니다. Admin UI 가격 표시와 budget 계산에 사용합니다.
-`global` 문서의 `allowed_models`/quota 계열 값도 config-sync worker가 APIM named value로 반영하는 런타임 소유 데이터입니다. Terraform은 초기 seed만 만들고 이후 값은 의도적으로 되돌리지 않으므로, 운영 중 catalog를 바꾸려면 Cosmos 문서를 갱신한 뒤 config-sync를 실행/대기해야 합니다.
+`global` 문서의 `allowed_models`/quota 계열 값은 config-sync worker가 APIM named value로 반영하는 **런타임 소유 데이터**입니다. 반대로 Admin UI의 모델 목록(`ALIAS_MODELS_JSON`)은 Terraform이 `model_deployments`에서 만들어 BFF 환경 변수로 주입합니다. 운영 중 catalog를 바꾸려면 **Terraform `model_deployments` 갱신 + `terraform apply`** 로 Admin UI catalog를 바꾸고, **Cosmos `global` 문서 갱신 + config-sync 실행/대기** 로 APIM runtime catalog를 바꿔야 합니다.
 
 ```bash
 cosmos_endpoint="$(terraform output -raw config_store_endpoint)"
@@ -217,8 +218,8 @@ VS Code는 **Custom Endpoint** provider를 사용합니다. 예시는 [VS Code B
       "url": "https://<apim-host>/vscode/models/deployments/gpt-5.6-sol/chat/completions?api-version=2025-01-01-preview",
       "toolCalling": true,
       "vision": true,
-      "maxInputTokens": 128000,
-      "maxOutputTokens": 16000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
       "requestHeaders": {
         "Ocp-Apim-Subscription-Key": "<APIM subscription key>"
       }

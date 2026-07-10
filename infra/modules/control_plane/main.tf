@@ -151,7 +151,7 @@ variable "rate_tiers_json" {
 
 variable "alias_models_json" {
   type        = string
-  description = "JSON of the deployment name -> display label map (jsonencode of the canonical deployment catalog), surfaced to the BFF via ALIAS_MODELS_JSON so the Models UI shows every available model."
+  description = "JSON of the deployment name -> display label map (jsonencode of the canonical deployment catalog), surfaced to the BFF via ALIAS_MODELS_JSON. Terraform owns this Admin UI catalog; config-sync only updates APIM runtime named values."
 }
 
 variable "log_analytics_workspace_id" {
@@ -466,6 +466,9 @@ resource "azurerm_container_app" "admin_ui" {
         name  = "RATE_TIERS_JSON"
         value = var.rate_tiers_json
       }
+      # Terraform supplies the Admin UI model picker catalog through ALIAS_MODELS_JSON. The
+      # config-sync worker updates APIM runtime named values from Cosmos, but it does not rewrite
+      # this BFF env var.
       env {
         name  = "ALIAS_MODELS_JSON"
         value = var.alias_models_json
@@ -475,7 +478,8 @@ resource "azurerm_container_app" "admin_ui" {
         value = var.log_analytics_workspace_id
       }
       # The config-sync job the BFF starts on a budget change (instant re-eval). Empty when the
-      # worker isn't deployed — JobStarter no-ops on an empty name.
+      # worker isn't deployed — JobStarter no-ops on an empty name. The job only republishes
+      # Cosmos-owned APIM runtime values; it does not change the Admin UI alias catalog.
       env {
         name  = "CONFIG_SYNC_JOB_NAME"
         value = local.worker_enabled ? "job-config-sync-${var.name_suffix}" : ""

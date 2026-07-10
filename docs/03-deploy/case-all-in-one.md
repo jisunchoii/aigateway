@@ -11,7 +11,7 @@ description: "All-in-one 배포 — 신규 환경에 APIM, 모델 백엔드, Adm
 {% hint style="success" %}
 **이 경로가 맞는 경우**
 
-- 새 Azure OpenAI/AIServices 계정과 모델 deployment를 만들 수 있다.
+- 새 project-enabled AIServices account/project와 모델 deployment를 만들 수 있다.
 - Admin UI와 config-sync worker까지 한 흐름으로 준비하고 싶다.
 - 기존 운영 Foundry 계정을 보존해야 하는 제약이 없다.
 - 데모, 랩, PoC처럼 전체 스택을 빠르게 띄우는 환경이다.
@@ -70,15 +70,48 @@ apim_public           = true
 admin_ui_public       = true
 
 reuse_foundry = false
-allowed_models = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
+foundry_project_name                  = "codexproj"
+foundry_public_network_access_enabled = false
+model_deployments = {
+  "gpt-5.6-sol" = {
+    model_name    = "gpt-5.6-sol"
+    model_format  = "OpenAI"
+    model_version = "2026-07-09"
+    sku_name      = "GlobalStandard"
+    capacity      = 500
+  }
+  "FW-GLM-5.2" = {
+    model_name    = "FW-GLM-5.2"
+    model_format  = "Fireworks"
+    model_version = "1"
+    sku_name      = "DataZoneStandard"
+    capacity      = 500
+  }
+  "DeepSeek-V4-Pro" = {
+    model_name    = "DeepSeek-V4-Pro"
+    model_format  = "DeepSeek"
+    model_version = "2026-04-23"
+    sku_name      = "GlobalStandard"
+    capacity      = 500
+  }
+  "grok-4.3" = {
+    model_name    = "grok-4.3"
+    model_format  = "xAI"
+    model_version = "1"
+    sku_name      = "GlobalStandard"
+    capacity      = 10
+  }
+}
 
 monthly_budget_amount = 200
 budget_alert_email    = "<email>"
 budget_start_date     = "2026-07-01"   # 과거 날짜 금지(첫 apply 시점 기준 당월 1일)
 
 # 1차 apply에서는 ACR이 아직 없으므로 비워 둠
-worker_image   = ""
-admin_ui_image = ""
+worker_image         = ""
+admin_ui_image       = ""
+codexproxy_image     = ""
+route_via_codexproxy = false
 ```
 
 > Container Apps 환경의 `internal_load_balancer_enabled`(= `!admin_ui_public`)는 생성 후 변경할 수 없습니다. 환경은 1차 apply에서 무조건 만들어지므로, Admin UI를 public으로 쓸 계획이면 `admin_ui_public`을 **1차 tfvars에서** `true`로 두어야 2차 apply 때 환경이 통째로 재생성되는 낭비를 피할 수 있습니다. internal(VNet 전용)로 운영할 계획이면 생략하거나 `false`로 둡니다.
@@ -127,7 +160,7 @@ terraform output resource_group_name
 
 ## 6. 이미지 빌드
 
-ACR이 준비되면 `infra/` 디렉터리에서 Admin UI와 config-sync worker 이미지를 빌드합니다.
+ACR이 준비되면 `infra/` 디렉터리에서 Admin UI, config-sync worker, Codex proxy 이미지를 빌드합니다.
 
 ```bash
 reg="$(terraform output -raw registry_name)"
@@ -135,6 +168,7 @@ acr="$(terraform output -raw registry_login_server)"
 
 az acr build --registry "$reg" --image config-sync-worker:latest ../app/config-sync-worker
 az acr build --registry "$reg" --image admin-ui:latest ../app/admin-ui
+az acr build --registry "$reg" --image codexproxy:latest ../app/codex-proxy
 ```
 
 ## 7. Entra ID 객체 준비
@@ -168,6 +202,8 @@ spa_client_id         = "<spa app id>"
 ``` 
 worker_image          = "<registry_login_server>/config-sync-worker:latest"
 admin_ui_image        = "<registry_login_server>/admin-ui:latest"
+codexproxy_image      = "<registry_login_server>/codexproxy:latest"
+route_via_codexproxy  = true
 admin_ui_public       = true   # Step 4에서 이미 설정했다면 값 유지(변경 금지 — 재생성 유발)
 entra_tenant_id       = "<tenant guid>"   # 누락 시 Admin UI 로그인이 AADSTS900023(tenant 'undefined')로 실패
 admin_group_object_id = "<entra security group object id>"
@@ -232,6 +268,7 @@ Seed 작업은 VNet 내부에서 실행되어야 합니다. `enable_jumpbox=true
 | 확인 항목 | 기대 결과 |
 |---|---|
 | APIM gateway | `/openai`, `/vscode/models`, `/foundry` 호출 성공 |
+| Codex CLI 경로 | `/responses`가 Codex proxy를 거쳐 응답 정규화 후 정상 동작 |
 | Admin UI | `https://<admin_ui_fqdn>`에서 Entra 로그인 표시 |
 | Admin 그룹 | 그룹 멤버만 consumer/key/policy 쓰기 가능 |
 | config-sync worker | Cosmos 설정이 APIM named value로 반영 |

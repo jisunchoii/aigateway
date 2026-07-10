@@ -54,7 +54,7 @@ consumer별로 직접 호출할 수 있는 모델을 제한합니다.
 ```json
 {
   "consumer": "vscode",
-  "allowed_models": ["gpt-5.4", "gpt-5.4-mini", "grok-4.3"]
+  "allowed_models": ["gpt-5.6-sol", "DeepSeek-V4-Pro", "grok-4.3"]
 }
 ```
 
@@ -83,7 +83,7 @@ Rate limit은 consumer별 토큰 사용 속도와 총량을 제어합니다. API
 
 | 레이어 | 설정 | 의미 |
 |---|---|---|
-| 모델 deployment | `openai_deployments[*].capacity`, `foundry_deployments[*].capacity` | Azure 모델 배포의 backend 처리 한도. Terraform이 `azurerm_cognitive_deployment.sku.capacity`로 설정 |
+| 모델 deployment | `model_deployments[*].capacity` | Azure 모델 배포의 backend 처리 한도. Terraform이 `azurerm_cognitive_deployment.sku.capacity`로 설정 |
 | APIM default limit | `tokens_per_minute`, `token_quota`, `token_quota_period` | consumer에 tier가 없을 때 쓰는 fallback. 모델별 capacity가 있으면 TPM은 `capacity * 1000`으로 계산 |
 | APIM tier limit | `rate_tiers.small/medium/large` | consumer에 `tier`가 있으면 이 값이 우선 적용됨 |
 
@@ -124,15 +124,19 @@ Budget switch는 consumer의 일일 USD 예산 사용률에 따라 더 저렴한
 예시:
 
 ```text
-downgrade_ladder = gpt-5.4 → gpt-5.4-mini → grok-4.3
+downgrade_ladder = gpt-5.6-sol → DeepSeek-V4-Pro → grok-4.3
 ```
 
 | 요청 모델 | level 0 | level 1 | level 2 |
 |---|---|---|---|
-| `gpt-5.4` | `gpt-5.4` | `gpt-5.4-mini` | `grok-4.3` |
-| `gpt-5.4-mini` | `gpt-5.4-mini` | `grok-4.3` | `grok-4.3` |
+| `gpt-5.6-sol` | `gpt-5.6-sol` | `DeepSeek-V4-Pro` | `grok-4.3` |
+| `DeepSeek-V4-Pro` | `DeepSeek-V4-Pro` | `grok-4.3` | `grok-4.3` |
 
 `active_downgrade`는 Admin UI가 직접 쓰는 값이 아니라 config-sync worker가 Log Analytics 사용량과 pricing 문서를 기반으로 계산합니다.
+
+{% hint style="info" %}
+Admin UI가 보여주는 모델 목록은 Terraform이 `model_deployments`에서 만든 `ALIAS_MODELS_JSON`으로 고정되고, config-sync는 Cosmos `allowed_models`를 APIM runtime named value로만 동기화합니다. 새 canonical 모델을 추가할 때는 Terraform과 Cosmos/runtime 갱신을 둘 다 수행하세요.
+{% endhint %}
 
 ## 전환 확인
 

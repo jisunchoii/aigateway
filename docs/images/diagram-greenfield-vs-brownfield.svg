@@ -49,8 +49,8 @@
 
   <rect class="greenBox" x="410" y="520" width="245" height="85"/>
   <text class="text" x="532.5" y="546">모델 배포 생성</text>
-  <text class="small" x="532.5" y="571">openai_deployments</text>
-  <text class="small" x="532.5" y="590">foundry_deployments</text>
+  <text class="small" x="532.5" y="571">model_deployments</text>
+  <text class="small" x="532.5" y="590">codexproj + 4 canonical models</text>
 
   <rect class="greenBox" x="125" y="635" width="530" height="78"/>
   <text class="text" x="390" y="660">Private Endpoint + APIM MI RBAC 생성</text>

@@ -24,7 +24,7 @@
   <text class="code" x="170" y="265">$ export COPILOT_PROVIDER_BASE_URL=https://&lt;apim-host&gt;</text>
   <text class="code" x="170" y="305">$ export COPILOT_PROVIDER_API_KEY=********</text>
   <text class="code" x="170" y="345">$ export COPILOT_PROVIDER_AZURE_API_VERSION=2025-01-01-preview</text>
-  <text class="code" x="170" y="385">$ export COPILOT_PROVIDER_MODEL_ID=gpt-5.4</text>
+  <text class="code" x="170" y="385">$ export COPILOT_PROVIDER_MODEL_ID=gpt-5.6-sol</text>
   <text class="code yellow" x="170" y="450"># base URL에는 /openai를 붙이지 않음</text>
   <rect class="dash" x="110" y="115" width="1200" height="585"/>
   <text class="code center" x="700" y="706">실제 터미널 스크린샷으로 교체하세요</text>

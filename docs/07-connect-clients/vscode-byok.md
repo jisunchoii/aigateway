@@ -4,7 +4,7 @@ description: VS Code BYOK — chatLanguageModels.json으로 APIM custom endpoint
 
 # VS Code BYOK
 
-VS Code의 custom language model 설정에 APIM 게이트웨이를 등록합니다. VS Code는 `requestHeaders`로 `Ocp-Apim-Subscription-Key`를 보낼 수 있으므로 `/vscode/models` 경로를 사용합니다. 이 경로는 gpt 계열뿐 아니라 grok·DeepSeek·Kimi 같은 OSS 모델도 같은 방식으로 사용합니다.
+VS Code의 custom language model 설정에 APIM 게이트웨이를 등록합니다. VS Code는 `requestHeaders`로 `Ocp-Apim-Subscription-Key`를 보낼 수 있으므로 `/vscode/models` 경로를 사용합니다. 이 경로는 canonical 네 모델(`gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`)을 같은 방식으로 사용합니다.
 
 ## 1. 선택 기준
 
@@ -51,9 +51,9 @@ VS Code의 `chatLanguageModels.json`에 모델을 등록합니다. 저장하면 
     "apiType": "chat-completions",
     "models": [
       {
-        "id": "gpt-5.4",
-        "name": "GPT-5.4 via APIM",
-        "url": "https://<apim-host>/vscode/models/deployments/gpt-5.4/chat/completions?api-version=2025-01-01-preview",
+        "id": "gpt-5.6-sol",
+        "name": "GPT-5.6 Sol via APIM",
+        "url": "https://<apim-host>/vscode/models/deployments/gpt-5.6-sol/chat/completions?api-version=2025-01-01-preview",
         "apiType": "chat-completions",
         "toolCalling": true,
         "vision": true,
@@ -63,16 +63,16 @@ VS Code의 `chatLanguageModels.json`에 모델을 등록합니다. 저장하면 
           "apply-patch",
           "code-rewrite"
         ],
-        "maxInputTokens": 128000,
-        "maxOutputTokens": 16000,
+        "maxInputTokens": 922000,
+        "maxOutputTokens": 128000,
         "requestHeaders": {
           "Ocp-Apim-Subscription-Key": "<APIM subscription key>"
         }
       },
       {
-        "id": "grok-4.3",
-        "name": "Grok 4.3 via APIM",
-        "url": "https://<apim-host>/vscode/models/deployments/grok-4.3/chat/completions?api-version=2025-01-01-preview",
+        "id": "FW-GLM-5.2",
+        "name": "GLM 5.2 via APIM",
+        "url": "https://<apim-host>/vscode/models/deployments/FW-GLM-5.2/chat/completions?api-version=2025-01-01-preview",
         "apiType": "chat-completions",
         "toolCalling": true,
         "vision": true,
@@ -108,9 +108,9 @@ VS Code의 `chatLanguageModels.json`에 모델을 등록합니다. 저장하면 
         }
       },
       {
-        "id": "Kimi-K2.6-1",
-        "name": "Kimi K2.6 via APIM",
-        "url": "https://<apim-host>/vscode/models/deployments/Kimi-K2.6-1/chat/completions?api-version=2025-01-01-preview",
+        "id": "grok-4.3",
+        "name": "Grok 4.3 via APIM",
+        "url": "https://<apim-host>/vscode/models/deployments/grok-4.3/chat/completions?api-version=2025-01-01-preview",
         "apiType": "chat-completions",
         "toolCalling": true,
         "vision": true,
@@ -148,7 +148,7 @@ VS Code의 `chatLanguageModels.json`에 모델을 등록합니다. 저장하면 
 
 VS Code에서 등록한 모델이 모델 목록에 보이는지 확인합니다. 간단한 프롬프트를 보내 HTTP 200 응답이 오면 연결이 완료된 것입니다.
 
-이 경로의 tool calling은 gateway에서 path-route로 처리되며, `chatLanguageModels.json`의 `toolCalling` 값을 `true`로 둡니다. tool calling은 gpt-4o·gpt-5.4 같은 함수 호출 지원 모델에서만 켜고, 컨텍스트 윈도우는 128k 이상을 권장합니다.
+이 경로의 tool calling은 gateway에서 path-route로 처리되며, `chatLanguageModels.json`의 `toolCalling` 값을 `true`로 둡니다. `gpt-5.6-sol`의 `maxInputTokens: 922000`, `maxOutputTokens: 128000` 값은 Microsoft Learn의 [GPT-5.6 capability table](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56)를 기준으로 맞춥니다.
 
 | Custom Endpoint 모델 선택                                                                                   | subagent 호출 확인                                                                                 |
 | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -170,3 +170,4 @@ VS Code에서 등록한 모델이 모델 목록에 보이는지 확인합니다.
 
 * [VS Code — Language Model API](https://code.visualstudio.com/docs/copilot/language-models)
 * [Azure API Management — Subscriptions](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)
+* [Responses API supported models](https://learn.microsoft.com/azure/foundry/openai/how-to/responses#supported-models)

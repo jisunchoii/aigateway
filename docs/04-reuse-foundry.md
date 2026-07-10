@@ -39,6 +39,12 @@ description: 모델 백엔드 기존 계정 재사용 — 기존 AIServices(Foun
 
 gateway는 APIM managed identity와 RBAC로 backend를 호출합니다. 따라서 Terraform apply 전에 기존 계정이 이미 **project management enabled**, **API key 인증 비활성화**, **공용 네트워크 접근 차단** 상태여야 합니다.
 
+관련 공식 문서:
+
+* [Foundry Models sold by Azure — GPT-5.6](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56)
+* [Configure private link for Azure AI Foundry resources](https://learn.microsoft.com/azure/foundry/how-to/configure-private-link)
+* [Authenticate with managed identity](https://learn.microsoft.com/azure/api-management/api-management-authenticate-authorize-ai-apis#authenticate-with-managed-identity)
+
 | 설정                    | 기대값        | 이유                       |
 | --------------------- | ---------- | ------------------------ |
 | `allowProjectManagement` | `true`   | canonical child project를 같은 계정 아래에 생성 |
@@ -90,6 +96,7 @@ az resource show --ids <aiservices-account-id> \
 reuse_foundry         = true
 existing_foundry_name = "ais-customer-prod"
 existing_foundry_rg   = "rg-customer-ai"
+foundry_project_name  = "codexproj"
 
 model_deployments = {
   "gpt-5.6-sol" = {
@@ -128,6 +135,7 @@ model_deployments = {
 | `reuse_foundry`         | `true`면 기존 계정 재사용 모드 활성화      |
 | `existing_foundry_name` | 재사용할 AIServices 계정 이름         |
 | `existing_foundry_rg`   | 기존 계정이 있는 리소스 그룹              |
+| `foundry_project_name`  | canonical child project 이름 (`codexproj`) |
 | `model_deployments`     | 기존 계정에 이미 존재하는 canonical deployment 선언 |
 
 {% hint style="danger" %}

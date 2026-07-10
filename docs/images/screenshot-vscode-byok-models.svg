@@ -30,14 +30,14 @@
   <rect class="editor" x="325" y="155" width="620" height="470"/>
   <text class="white" x="355" y="195">chatLanguageModels.json</text>
   <text class="code" x="355" y="240">{</text>
-  <text class="code key" x="380" y="270">"id"</text><text class="code" x="420" y="270">: </text><text class="code str" x="438" y="270">"gpt-5.4"</text><text class="code" x="510" y="270">,</text>
-  <text class="code key" x="380" y="300">"url"</text><text class="code" x="425" y="300">: </text><text class="code str" x="443" y="300">"https://&lt;apim-host&gt;/vscode/openai/..."</text>
+  <text class="code key" x="380" y="270">"id"</text><text class="code" x="420" y="270">: </text><text class="code str" x="438" y="270">"gpt-5.6-sol"</text><text class="code" x="545" y="270">,</text>
+  <text class="code key" x="380" y="300">"url"</text><text class="code" x="425" y="300">: </text><text class="code str" x="443" y="300">"https://&lt;apim-host&gt;/vscode/models/..."</text>
   <text class="code key" x="380" y="330">"requestHeaders"</text><text class="code" x="505" y="330">: {</text>
   <text class="code str" x="405" y="360">"Ocp-Apim-Subscription-Key"</text><text class="code" x="635" y="360">: </text><text class="code str" x="653" y="360">"&lt;key&gt;"</text>
   <text class="code" x="380" y="390">}</text>
   <rect class="panel" x="980" y="155" width="280" height="470"/>
   <text class="white" x="1010" y="195">Model picker</text>
-  <text class="muted" x="1010" y="245">GPT-5.4 via APIM</text>
+  <text class="muted" x="1010" y="245">GPT-5.6 Sol via APIM</text>
   <text class="muted" x="1010" y="285">GPT-5.4 Mini via APIM</text>
   <text class="muted" x="1010" y="325">Grok 4.3 via APIM</text>
   <text class="muted" x="1010" y="365">DeepSeek V4 Pro via APIM</text>

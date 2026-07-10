@@ -55,6 +55,8 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `model_deployments` | `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` | canonical AIServices deployment map. map key가 곧 APIM/Admin UI 모델 이름 |
+| `foundry_project_name` | `codexproj` | canonical child project 이름 |
+| `foundry_public_network_access_enabled` | `false` | `false`면 private-only canonical account로 유지 |
 | `openai_api_version` | `2025-01-01-preview` | 클라이언트가 보내는 Azure OpenAI API version |
 | `openai_openapi_spec_url` | Azure REST API spec URL | APIM OpenAPI import에 사용하는 spec URL |
 
@@ -91,6 +93,8 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | `config_sync_cron` | `*/5 * * * *` | config-sync Container Apps Job cron |
 | `admin_ui_image` | `""` | Admin UI image. 비어 있으면 Admin UI 미배포 |
 | `admin_ui_public` | `false` | `true`면 Admin UI public FQDN 노출 |
+| `codexproxy_image` | `""` | Codex proxy image. 비어 있으면 `/responses` sidecar 미배포 |
+| `route_via_codexproxy` | `false` | `true`면 `/responses`를 Codex proxy로 전환 |
 | `bff_api_audience` | `""` | Admin UI BFF JWT audience |
 | `spa_client_id` | `""` | SPA app registration client ID |
 | `admin_group_object_id` | `""` | Admin UI 쓰기 권한을 가진 Entra security group object ID |
@@ -184,7 +188,7 @@ az containerapp job start -g "$rg" -n "$job"
 
 ### 403 Forbidden
 
-요청한 모델이 consumer의 허용 모델 목록(`allowed_models`)에 없거나, `model_deployments`의 key와 실제 deployment 이름이 일치하지 않을 때 발생합니다.
+요청한 모델이 consumer의 허용 모델 목록(`allowed_models`)에 없거나, `model_deployments`의 key와 실제 deployment 이름이 일치하지 않을 때 발생합니다. 새 모델을 추가하는 경우에는 **Terraform `model_deployments` + Admin UI `ALIAS_MODELS_JSON`** 경로와 **Cosmos `global.allowed_models` + config-sync** 경로가 모두 최신인지 확인해야 합니다.
 
 ```text
 model_deployments = {
@@ -198,9 +202,9 @@ model_deployments = {
 확인 순서:
 
 1. 클라이언트가 보낸 `model` 값 확인
-2. Admin UI 또는 Cosmos `global.allowed_models`에 해당 값 포함 여부 확인
+2. consumer allowed models와 Cosmos `global.allowed_models`에 해당 값 포함 여부 확인
 3. `model_deployments`의 key와 실제 deployment 이름 일치 여부 확인
-4. 변경 후 `terraform apply` 또는 config-sync worker 실행
+4. catalog 변경이었다면 `terraform apply`로 Admin UI alias map 갱신 후, config-sync worker로 APIM runtime catalog 반영
 
 ### 429 Too Many Requests
 

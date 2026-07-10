@@ -38,8 +38,8 @@ export COPILOT_PROVIDER_BASE_URL=https://<apim-host>
 export COPILOT_PROVIDER_API_KEY="<APIM subscription key>"
 export COPILOT_PROVIDER_AZURE_API_VERSION=2025-01-01-preview
 export COPILOT_PROVIDER_WIRE_API=completions
-export COPILOT_PROVIDER_MODEL_ID=gpt-5.4
-export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4
+export COPILOT_PROVIDER_MODEL_ID=gpt-5.6-sol
+export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.6-sol
 ```
 
 {% hint style="warning" %}
@@ -71,11 +71,11 @@ Copilot CLI가 보내는 API key는 APIM subscription key입니다. `/openai` �
 
 ## 5. 모델 변경
 
-다른 모델을 사용하려면 두 값을 함께 바꿉니다.
+Copilot CLI의 canonical gateway 경로는 `gpt-5.6-sol`입니다. 다른 canonical 모델은 [OpenCode](opencode.md)나 [직접 API 호출](direct-api.md) 경로를 사용하세요. 동일 값을 다시 지정하려면 두 값을 함께 맞춥니다.
 
 ```bash
-export COPILOT_PROVIDER_MODEL_ID=gpt-5.4-mini
-export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.4-mini
+export COPILOT_PROVIDER_MODEL_ID=gpt-5.6-sol
+export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.6-sol
 ```
 
 Admin UI에서 해당 consumer의 allowed models에 선택한 모델이 포함되어 있어야 합니다.

@@ -11,6 +11,8 @@ apim_sku_name        = "Developer_1"
 # ── Model backend ──────────────────────────────────────────────────────────
 # Pick ONE path: greenfield (create) below, or brownfield reuse (commented).
 reuse_foundry = false
+foundry_project_name                  = "codexproj"
+foundry_public_network_access_enabled = false
 
 # Greenfield: Terraform creates these canonical deployments. Deployment name = real model name.
 model_deployments = {
@@ -28,19 +30,19 @@ model_deployments = {
     sku_name      = "DataZoneStandard"
     capacity      = 500
   }
-  "grok-4.3" = {
-    model_name    = "grok-4.3"
-    model_format  = "xAI"
-    model_version = "1"
-    sku_name      = "GlobalStandard"
-    capacity      = 10
-  }
   "DeepSeek-V4-Pro" = {
     model_name    = "DeepSeek-V4-Pro"
     model_format  = "DeepSeek"
     model_version = "2026-04-23"
     sku_name      = "GlobalStandard"
     capacity      = 500
+  }
+  "grok-4.3" = {
+    model_name    = "grok-4.3"
+    model_format  = "xAI"
+    model_version = "1"
+    sku_name      = "GlobalStandard"
+    capacity      = 10
   }
 }
 
@@ -51,6 +53,15 @@ model_deployments = {
 # model_deployments = {
 #   "gpt-5.6-sol" = { model_name = "gpt-5.6-sol", model_format = "OpenAI", model_version = "2026-07-09", sku_name = "GlobalStandard", capacity = 500 }
 # }
+
+# /responses sidecar bootstrap
+# First apply: leave empty so ACR can be created.
+codexproxy_image      = ""
+route_via_codexproxy  = false
+
+# Second apply after `az acr build`:
+# codexproxy_image      = "acraigwabc123.azurecr.io/codexproxy:0123456"
+# route_via_codexproxy  = true
 
 # Cost guardrail (observability module)
 monthly_budget_amount = 200

@@ -24,7 +24,7 @@
   <text class="code blue" x="170" y="285">Copilot CLI → APIM /openai → private model backend</text>
   <text class="code" x="170" y="345">git rebase reapplies commits from one branch onto another base...</text>
   <text class="code" x="170" y="405">Status: 200 OK</text>
-  <text class="code" x="170" y="445">Model: gpt-5.4</text>
+  <text class="code" x="170" y="445">Model: gpt-5.6-sol</text>
   <rect class="dash" x="110" y="115" width="1200" height="585"/>
   <text class="code center" x="700" y="706">실제 Copilot CLI 실행 스크린샷으로 교체하세요</text>
 </svg>

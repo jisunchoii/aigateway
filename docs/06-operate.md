@@ -66,7 +66,7 @@ Admin UI의 **Policies** 탭에서 consumer별 운영 정책을 조정합니다.
 
 ### 변경 반영
 
-Admin UI에서 저장한 설정은 Cosmos DB config 문서에 기록되고, config-sync worker가 APIM Named Value로 동기화합니다.
+Admin UI에서 저장한 설정은 Cosmos DB config 문서에 기록되고, config-sync worker가 **APIM runtime Named Value**로 동기화합니다. Admin UI의 모델 목록 자체는 Terraform이 `model_deployments`에서 생성한 `ALIAS_MODELS_JSON` BFF 환경 변수로 공급되며, config-sync가 이 alias map을 갱신하지는 않습니다.
 
 | 단계 | 동작 |
 |---|---|
@@ -150,7 +150,7 @@ consumer별 일별 예산은 Admin UI Policies 탭에서 설정합니다. 사용
 전환 순서는 Cosmos DB config의 `downgrade_ladder` 배열로 정의합니다.
 
 ```text
-gpt-5.6-sol -> FW-GLM-5.2 -> DeepSeek-V4-Pro -> grok-4.3
+gpt-5.6-sol -> DeepSeek-V4-Pro -> grok-4.3
 ```
 
 ### 가격 데이터 갱신
@@ -253,11 +253,11 @@ python ../scripts/verify_model_topology_plan.py task4-upgrade-plan.json migratio
 
 | 위치 | 무엇 | 효과 |
 |---|---|---|
-| `infra/terraform.tfvars`의 `model_deployments` | fresh/final canonical deployment 정의와 Terraform-side catalog seed | `terraform apply` 후 canonical account deployment와 Terraform interface 값이 갱신됨 |
-| Cosmos `global` 문서 (`scripts/seed-cosmos-jumpbox.sh` 예시) | 운영 중 APIM global named value catalog (`allowed_models`, quota 등) | config-sync 실행 후 APIM runtime catalog와 Admin UI model map이 갱신됨. Terraform은 이후 이 값을 되돌리지 않음 |
+| `infra/terraform.tfvars`의 `model_deployments` | fresh/final canonical deployment 정의와 Terraform-side Admin UI catalog seed (`ALIAS_MODELS_JSON`) | `terraform apply` 후 canonical account deployment와 Admin UI model picker가 갱신됨 |
+| Cosmos `global` 문서 (`scripts/seed-cosmos-jumpbox.sh` 예시) | 운영 중 APIM global named value catalog (`allowed_models`, quota 등) | config-sync 실행 후 APIM runtime catalog가 갱신됨. Terraform은 이후 이 값을 되돌리지 않음 |
 | `scripts/seed-pricing-jumpbox.sh`의 `models` 맵 | 모델별 per-1k 단가 | 시드 재실행 후 Admin UI 단가 표시와 budget 비용 계산 반영 |
 
-Admin UI 모델 목록은 runtime `allowed_models`에서 자동 생성되므로 별도 코드 수정은 필요 없습니다. 단, 가격은 운영자 소유 Cosmos `pricing` 문서라 시드를 갱신하지 않으면 신규 모델은 단가가 표시되지 않고 budget 비용이 0으로 잡힙니다.
+정리하면 **Admin UI 모델 목록은 Terraform/BFF env**, **APIM runtime 허용 카탈로그는 Cosmos + config-sync**가 소유합니다. 새 canonical 모델을 운영에 올릴 때는 두 경로를 모두 갱신해야 합니다. 단, 가격은 운영자 소유 Cosmos `pricing` 문서라 시드를 갱신하지 않으면 신규 모델은 단가가 표시되지 않고 budget 비용이 0으로 잡힙니다.
 
 ```text
 "models": {
