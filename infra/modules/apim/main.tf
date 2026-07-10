@@ -515,6 +515,20 @@ output "private_ip" {
   value       = try(azurerm_api_management.apim.private_ip_addresses[0], null)
 }
 
+output "model_role_assignments" {
+  description = "Canonical AIServices RBAC granted to the APIM managed identity."
+  value = {
+    openai = {
+      scope                = azurerm_role_assignment.apim_to_model_openai.scope
+      role_definition_name = azurerm_role_assignment.apim_to_model_openai.role_definition_name
+    }
+    foundry = {
+      scope                = azurerm_role_assignment.apim_to_model_foundry.scope
+      role_definition_name = azurerm_role_assignment.apim_to_model_foundry.role_definition_name
+    }
+  }
+}
+
 output "allowed_models_seed_value" {
   description = "Create-time allowed-models named value seed derived from the canonical Terraform catalog."
   value       = azurerm_api_management_named_value.allowed_models.value

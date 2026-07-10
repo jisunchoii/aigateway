@@ -115,6 +115,18 @@ def test_migration_plan_rejects_canonical_account_replacement():
     assert any("canonical account replacement" in error for error in errors)
 
 
+def test_migration_plan_rejects_moved_canonical_account_replacement():
+    value = plan(
+        change(
+            "module.foundry.azapi_resource.project_account_replacement[0]",
+            ["delete", "create"],
+            previous_address="module.foundry.azapi_resource.project_account[0]",
+        ),
+    )
+    errors = verify.verify_plan(value, "migration")
+    assert any("canonical account replacement" in error for error in errors), errors
+
+
 def test_apim_rbac_transition_forgets_both_legacy_assignments():
     source = APIM_MODULE_PATH.read_text(encoding="utf-8")
     assert re.search(r"(?m)^moved \{", source) is None

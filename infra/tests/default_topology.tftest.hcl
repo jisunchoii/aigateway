@@ -29,6 +29,15 @@ override_data {
   }
 }
 
+override_resource {
+  target          = module.foundry.azapi_resource.project_account[0]
+  override_during = plan
+
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.CognitiveServices/accounts/aisproj-abc123"
+  }
+}
+
 run "default_model_topology" {
   command = plan
 
@@ -102,6 +111,22 @@ run "default_model_topology" {
   assert {
     condition     = module.apim.allowed_models_seed_value == join(",", local.allowed_models)
     error_message = "Terraform must seed APIM allowed-models from the canonical deployment catalog."
+  }
+
+  assert {
+    condition = (
+      module.apim.model_role_assignments.openai.scope == module.foundry.id &&
+      module.apim.model_role_assignments.openai.role_definition_name == "Cognitive Services OpenAI User"
+    )
+    error_message = "APIM must grant the canonical account Cognitive Services OpenAI User at module.foundry.id."
+  }
+
+  assert {
+    condition = (
+      module.apim.model_role_assignments.foundry.scope == module.foundry.id &&
+      module.apim.model_role_assignments.foundry.role_definition_name == "Cognitive Services User"
+    )
+    error_message = "APIM must grant the canonical account Cognitive Services User at module.foundry.id."
   }
 
   assert {

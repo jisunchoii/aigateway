@@ -42,6 +42,10 @@ def _addresses(change):
     ]
 
 
+def _mentions_exact_address(change, address):
+    return any(candidate == address for candidate in _addresses(change))
+
+
 def _model_name(address):
     if not address.startswith(MODEL_PREFIX):
         return None
@@ -86,7 +90,7 @@ def verify_plan(plan, mode):
                     "protected fallback or adopted RBAC would be destroyed: "
                     + ", ".join(protected_addresses)
                 )
-            if address == CANONICAL_ACCOUNT and "delete" in actions:
+            if "delete" in actions and _mentions_exact_address(change, CANONICAL_ACCOUNT):
                 errors.append("canonical account replacement is forbidden")
     else:
         errors.append(f"unsupported mode: {mode}")
