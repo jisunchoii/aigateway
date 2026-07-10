@@ -88,8 +88,18 @@ run "greenfield_single_account_defaults" {
   }
 
   assert {
+    condition     = azapi_resource.project_account[0].body.properties.allowProjectManagement == true
+    error_message = "Managed accounts must allow project management."
+  }
+
+  assert {
     condition     = azapi_resource.project_account[0].body.properties.networkAcls.defaultAction == "Deny"
     error_message = "Fresh deployments must deny public network ACLs by default."
+  }
+
+  assert {
+    condition     = azapi_resource.project_account[0].body.properties.publicNetworkAccess == "Disabled"
+    error_message = "Managed accounts must disable public network access."
   }
 
   assert {
