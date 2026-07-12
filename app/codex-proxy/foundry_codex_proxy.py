@@ -76,12 +76,19 @@ def _apply_patch_function_tool():
 
 # --- request normalization (Codex -> backend) ---
 
-def _normalize_tools(tools):
-    """Return (normalized_tools, name->namespace map for flattened namespace tools)."""
+def _normalize_tools(tools, model):
+    """Return (normalized_tools, name->namespace map, has_web_search).
+
+    Gates hosted tools against HOSTED_TOOL_SUPPORT for `model`: a hosted tool the model
+    can't run is stripped (with a log) instead of 400'ing the whole request. Codex tool
+    shapes (local_shell/custom/namespace) are converted/flattened as before.
+    """
     if not isinstance(tools, list):
-        return tools, {}
+        return tools, {}, False
+    supported = HOSTED_TOOL_SUPPORT.get(model, frozenset())
     out = []
     ns_map = {}
+    has_web_search = False
     for t in tools:
         ttype = t.get("type") if isinstance(t, dict) else None
         if ttype == "local_shell":
@@ -102,24 +109,41 @@ def _normalize_tools(tools):
                 if nm and ns:
                     ns_map[nm] = ns
                 out.append(nt)
+        elif ttype in _HOSTED_TOOL_TYPES:
+            # GATE: keep only hosted tools this model actually runs; strip the rest so the
+            # request still succeeds (backend would 400 the whole call otherwise).
+            if ttype in supported:
+                if ttype in ("web_search", "web_search_preview"):
+                    has_web_search = True
+                out.append(t)
+            else:
+                log("stripped unsupported hosted tool '%s' for model %s" % (ttype, model))
+        elif ttype == "function":
+            out.append(t)                            # client-executed function: always passes
         else:
-            out.append(t)                            # function / web_search / ... pass through
-    return out, ns_map
+            # Unknown/future tool type: strip. The backend 400s ("invalid_value") on types it
+            # doesn't know, which would break the whole run; dropping keeps Codex alive.
+            log("stripped unknown tool type '%s' for model %s" % (ttype, model))
+    return out, ns_map, has_web_search
 
 
-def _normalize_input(items):
+def _normalize_input(items, *, preserve_reasoning=False):
     """Round-trip typed tool items in the history so multi-turn loops keep working."""
     if not isinstance(items, list):
         return items
     out = []
     for it in items:
         itype = it.get("type") if isinstance(it, dict) else None
-        if itype in ("reasoning", "web_search_call"):
+        if itype == "reasoning" and not preserve_reasoning:
             # Backend rejects these item types echoed back in input history (verified
             # 400 "does not match expected schema"). reasoning: item type refused even
             # after stripping encrypted_content. web_search_call: refused in input; it's
             # only a marker (results already sit in the following assistant message), so
             # dropping is safe. This is the "web_search then multi-agent -> 400" cause.
+            continue
+        if itype == "web_search_call":
+            # web_search_call is only a marker; results already sit in the following
+            # assistant message, and the backend rejects this item type in input.
             continue
         if itype == "local_shell_call":
             action = it.get("action") or {}
@@ -168,11 +192,22 @@ def _normalize_reasoning(body, route):
             del body["reasoning"]
 
 
-def _normalize_include(body):
+WEB_SEARCH_SOURCES_INCLUDE = "web_search_call.action.sources"
+
+
+def _normalize_include(body, *, add_web_search_sources=False):
     inc = body.get("include")
-    if isinstance(inc, list):
-        # REMOVE gpt o-series-only metadata (no agent capability; backend 400s on it).
-        body["include"] = [x for x in inc if x != "reasoning.encrypted_content"]
+    inc = list(inc) if isinstance(inc, list) else []
+    # REMOVE gpt o-series-only metadata (no agent capability; backend 400s on it).
+    inc = [x for x in inc if x != "reasoning.encrypted_content"]
+    if add_web_search_sources and WEB_SEARCH_SOURCES_INCLUDE not in inc:
+        # INJECT: without this, GLM/DeepSeek/grok return web_search_call.action.sources empty
+        # (results ride only on message annotations). Codex reads results off the
+        # web_search_call item, sees it empty, and re-searches forever / hallucinates. Verified
+        # on all three non-gpt models: adding this populates sources and stops the loop.
+        inc.append(WEB_SEARCH_SOURCES_INCLUDE)
+    if inc or "include" in body:
+        body["include"] = inc
 
 
 def _normalize_text(body):
@@ -187,6 +222,32 @@ def _normalize_text(body):
 REASONING_MODES = {
     "FW-GLM-5.2": "required",
     "gpt-5.6-sol": "passthrough",
+}
+
+# Server-side hosted tools whose EXECUTION lives in the Foundry backend, not the client.
+# Codex auto-attaches some of these (web_search) every turn, so an unsupported one must be
+# stripped (not 400'd) or every run breaks. The backend already rejects unsupported hosted
+# tools per-model (400 "not supported with <model>" / invalid_value / repeated 500), but a
+# 400 kills the WHOLE request incl. shell/apply_patch. So the sidecar strips the hosted tools
+# a model can't run and lets the rest (function/shell/apply_patch/namespace) through.
+# local_shell/custom/namespace are Codex tool SHAPES handled separately below, not hosted tools.
+_HOSTED_TOOL_TYPES = frozenset({
+    "web_search", "web_search_preview", "code_interpreter", "file_search",
+    "image_generation", "mcp", "computer", "computer_use_preview", "tool_search",
+})
+
+# Per-model set of hosted tools verified to WORK (probe_hosted_tools.py; SSOT).
+# "work" = HTTP 200, or a config-only 400 (missing vector store / imagegen header / dead MCP
+# server) which means the type is accepted and only runtime args are absent. NOT working =
+# 400 "not supported with <model>", invalid_value, or a repeatable 500 (grok+code_interpreter).
+# A model absent from this map has ALL hosted tools stripped (function/shell still run, so
+# Codex keeps working). Re-run the probe when models, api-version, or region change.
+HOSTED_TOOL_SUPPORT = {
+    "FW-GLM-5.2":      {"web_search", "code_interpreter", "file_search", "image_generation", "mcp"},
+    "DeepSeek-V4-Pro": {"web_search", "code_interpreter", "file_search", "image_generation", "mcp"},
+    "grok-4.3":        {"web_search", "file_search", "image_generation", "mcp"},  # code_interpreter: repeatable 500
+    "gpt-5.6-sol":     {"web_search", "code_interpreter", "file_search", "image_generation",
+                        "mcp", "computer_use_preview"},  # recorded for completeness; gpt bypasses the sidecar
 }
 
 
@@ -213,16 +274,21 @@ def normalize_request(body):
     ns_map maps flattened tool name -> namespace, used to restore `namespace` on the
     response stream and history so Codex's executor recognizes sub-agent calls.
     """
-    route = _route_for(body.get("model"))
+    model = body.get("model")
+    route = _route_for(model)
     if route is None:
         return None, {}
     ns_map = {}
+    has_web_search = False
     if "tools" in body:
-        body["tools"], ns_map = _normalize_tools(body["tools"])
+        body["tools"], ns_map, has_web_search = _normalize_tools(body["tools"], model)
     if "input" in body:
-        body["input"] = _normalize_input(body["input"])
+        body["input"] = _normalize_input(
+            body["input"],
+            preserve_reasoning=route["reasoning_mode"] == "passthrough",
+        )
     _normalize_text(body)
-    _normalize_include(body)
+    _normalize_include(body, add_web_search_sources=has_web_search)
     _normalize_reasoning(body, route)
     return route, ns_map
 
@@ -486,7 +552,7 @@ def selftest():
     assert r1["reasoning_mode"] == "passthrough"
     assert b1["reasoning"] == {"effort": "high", "summary": "auto"}
 
-    # DeepSeek/Kimi: reasoning.effort stripped, object preserved
+    # DeepSeek/grok: reasoning.effort stripped, object preserved
     b2 = {"model": "DeepSeek-V4-Pro", "reasoning": {"effort": "high", "summary": "auto"}}
     r2, _ = normalize_request(b2)
     assert r2 is not None
@@ -497,6 +563,42 @@ def selftest():
     b3 = {"model": "DeepSeek-V4-Pro", "reasoning": None}
     normalize_request(b3)
     assert "reasoning" not in b3
+
+    # hosted-tool gate: GLM keeps web_search (+ its sources include injected), strips
+    # computer_use (model can't run it) and an unknown future type; shell/function survive.
+    bg = {"model": "FW-GLM-5.2", "tools": [
+        {"type": "web_search"},
+        {"type": "computer_use_preview", "environment": "browser"},
+        {"type": "totally_made_up_tool_v9"},
+        {"type": "local_shell"},
+        {"type": "function", "name": "keep_me", "parameters": {"type": "object"}},
+    ]}
+    normalize_request(bg)
+    assert [t.get("type") for t in bg["tools"]] == ["web_search", "function", "function"]
+    assert [t.get("name") for t in bg["tools"] if t["type"] == "function"] == ["shell", "keep_me"]
+    assert bg["include"] == ["web_search_call.action.sources"]  # injected so Codex sees results
+
+    # grok strips code_interpreter (repeatable 500) but keeps web_search + file_search
+    bgr = {"model": "grok-4.3", "tools": [
+        {"type": "code_interpreter", "container": {"type": "auto"}},
+        {"type": "web_search"},
+        {"type": "file_search", "vector_store_ids": ["vs_x"]},
+    ]}
+    normalize_request(bgr)
+    assert [t["type"] for t in bgr["tools"]] == ["web_search", "file_search"]
+
+    # unknown model (not in HOSTED_TOOL_SUPPORT): ALL hosted tools stripped, function survives
+    bu = {"model": "Some-New-Model", "tools": [
+        {"type": "web_search"},
+        {"type": "function", "name": "shell_command", "parameters": {"type": "object"}},
+    ]}
+    normalize_request(bu)
+    assert [t["type"] for t in bu["tools"]] == ["function"]
+
+    # no web_search -> no sources include injected, and no bare include key added
+    bn = {"model": "FW-GLM-5.2", "tools": [{"type": "code_interpreter", "container": {"type": "auto"}}]}
+    normalize_request(bn)
+    assert "include" not in bn
 
     # no backend configured (FOUNDRY_PROJECT_BASE unset): route stays None regardless of model
     FOUNDRY_PROJECT_BASE = ""
