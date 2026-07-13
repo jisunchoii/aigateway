@@ -133,7 +133,18 @@ variable "model_deployments" {
 variable "reuse_foundry" {
   type        = bool
   default     = false
-  description = "When false, create and manage the AIServices account, project, and model deployments. When true, reuse an existing account and deployments; create a missing project or import an existing project before apply."
+  description = "When false, create and manage the AIServices account, project, and model deployments. When true, read an existing account and leave its model deployments unmanaged."
+}
+
+variable "reuse_foundry_project" {
+  type        = bool
+  default     = false
+  description = "When true, read the existing Foundry project without managing its lifecycle. Requires reuse_foundry = true."
+
+  validation {
+    condition     = !var.reuse_foundry_project || var.reuse_foundry
+    error_message = "reuse_foundry_project requires reuse_foundry = true."
+  }
 }
 
 variable "existing_foundry_name" {
@@ -165,7 +176,7 @@ variable "foundry_account_name" {
 variable "foundry_project_name" {
   type        = string
   default     = "codexproj"
-  description = "Foundry project name. In reuse mode Terraform creates this project when absent, or manages an existing project after it is imported."
+  description = "Foundry project name. Terraform creates and manages it unless reuse_foundry_project is true, in which case the existing project is read only."
 }
 
 variable "foundry_public_network_access_enabled" {

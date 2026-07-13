@@ -310,6 +310,89 @@ run "reuse_existing_account_uses_custom_subdomain" {
   }
 }
 
+run "reuse_existing_project_is_read_only" {
+  command = plan
+
+  variables {
+    name_suffix            = "aigw-test-eus2"
+    suffix                 = "abc123"
+    resource_group_name    = "rg-aigw-test-eus2"
+    location               = "eastus2"
+    tags                   = { env = "test" }
+    pe_subnet_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/snet-pe"
+    reuse_existing         = true
+    reuse_existing_project = true
+    existing_account_name  = "foundry-account-live"
+    existing_account_rg    = "rg-existing-eus2"
+    project_name           = "reusedproj"
+    dns_zone_ids = [
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.openai.azure.com",
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.cognitiveservices.azure.com",
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.services.ai.azure.com",
+    ]
+    deployments = {
+      "gpt-5.6-sol" = {
+        model_name    = "gpt-5.6-sol"
+        model_format  = "OpenAI"
+        model_version = "2026-07-09"
+        sku_name      = "GlobalStandard"
+        capacity      = 500
+      }
+    }
+  }
+
+  override_data {
+    target          = data.azapi_resource.existing_project[0]
+    override_during = plan
+
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing-eus2/providers/Microsoft.CognitiveServices/accounts/foundry-account-live/projects/reusedproj"
+    }
+  }
+
+  assert {
+    condition     = length(azapi_resource.project) == 0
+    error_message = "Existing-project reuse must not create or manage the Foundry project."
+  }
+
+  assert {
+    condition     = data.azapi_resource.existing_project[0].id == "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing-eus2/providers/Microsoft.CognitiveServices/accounts/foundry-account-live/projects/reusedproj"
+    error_message = "Existing-project reuse must read the selected project under the reused account."
+  }
+
+  assert {
+    condition     = length(keys(azurerm_cognitive_deployment.project_models)) == 0
+    error_message = "Existing-project reuse must not manage existing model deployments."
+  }
+
+  assert {
+    condition     = output.project_responses_base == "https://custom-subdomain.services.ai.azure.com/api/projects/reusedproj/openai/v1"
+    error_message = "Existing-project reuse must preserve the configured Responses project URL."
+  }
+}
+
+run "existing_project_reuse_requires_existing_account" {
+  command = plan
+
+  variables {
+    name_suffix         = "aigw-test-eus2"
+    suffix              = "abc123"
+    resource_group_name = "rg-aigw-test-eus2"
+    location            = "eastus2"
+    tags                = { env = "test" }
+    pe_subnet_id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/snet-pe"
+    dns_zone_ids = [
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.openai.azure.com",
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.cognitiveservices.azure.com",
+      "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.services.ai.azure.com",
+    ]
+    reuse_existing_project = true
+    deployments            = {}
+  }
+
+  expect_failures = [data.azapi_resource.existing_project[0]]
+}
+
 run "reuse_existing_account_requires_project_management" {
   command = plan
 

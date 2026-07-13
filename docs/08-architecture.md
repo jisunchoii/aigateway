@@ -71,7 +71,7 @@ registry ─▶ worker/admin-ui/codexproxy images
 | 항목 | 신규 모델 배포 | 기존 모델, 프로젝트 없음 | 기존 모델, 프로젝트 있음 |
 | --- | --- | --- | --- |
 | Foundry 계정 | Terraform이 생성 | 기존 계정을 data source로 읽음 | 기존 계정을 data source로 읽음 |
-| 프로젝트 | Terraform이 생성 | Terraform이 생성 | 기존 프로젝트 import |
+| 프로젝트 | Terraform이 생성 | Terraform이 생성 | data source로 조회만 함 |
 | 모델 deployment | Terraform이 생성 | 생성하지 않음 | 생성하지 않음 |
 | Private Endpoint | Terraform이 생성 | 없으면 생성, 있으면 import | 없으면 생성, 있으면 import |
 | RBAC | Terraform이 부여 | 없으면 부여, 있으면 import | 없으면 부여, 있으면 import |

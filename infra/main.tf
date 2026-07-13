@@ -79,6 +79,7 @@ module "foundry" {
   project_name                  = var.foundry_project_name
   public_network_access_enabled = var.foundry_public_network_access_enabled
   reuse_existing                = var.reuse_foundry
+  reuse_existing_project        = var.reuse_foundry_project
   existing_account_name         = var.existing_foundry_name
   existing_account_rg           = var.existing_foundry_rg
 }

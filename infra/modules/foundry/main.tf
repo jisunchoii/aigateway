@@ -58,7 +58,13 @@ variable "deployments" {
 variable "reuse_existing" {
   type        = bool
   default     = false
-  description = "Read an existing AIServices account and skip model deployment management. Terraform creates a missing project, PE, and RBAC; import matching existing resources before apply."
+  description = "Read an existing AIServices account and skip model deployment management. Terraform creates and manages the project unless reuse_existing_project is true, and continues to manage the gateway PE and RBAC."
+}
+
+variable "reuse_existing_project" {
+  type        = bool
+  default     = false
+  description = "Read the existing Foundry project without managing its lifecycle. Use only with reuse_existing = true."
 }
 
 variable "existing_account_name" {
@@ -82,7 +88,7 @@ variable "account_name" {
 variable "project_name" {
   type        = string
   default     = "codexproj"
-  description = "Foundry project used by Responses clients. In reuse mode, set this to the new or existing project name."
+  description = "Foundry project used by Responses clients. Set the exact existing project name when reuse_existing_project is true."
 }
 
 variable "public_network_access_enabled" {
@@ -111,6 +117,21 @@ data "azurerm_cognitive_account" "existing" {
     postcondition {
       condition     = self.public_network_access_enabled == false
       error_message = "Reused AIServices account must already have public network access disabled before this module can attach the private-only gateway topology."
+    }
+  }
+}
+
+data "azapi_resource" "existing_project" {
+  count = var.reuse_existing_project ? 1 : 0
+
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-10-01-preview"
+  name      = var.project_name
+  parent_id = local.account_id
+
+  lifecycle {
+    precondition {
+      condition     = var.reuse_existing
+      error_message = "reuse_existing_project requires reuse_existing = true."
     }
   }
 }
@@ -183,7 +204,7 @@ resource "azapi_resource" "project_account" {
 }
 
 resource "azapi_resource" "project" {
-  count     = 1
+  count     = var.reuse_existing_project ? 0 : 1
   type      = "Microsoft.CognitiveServices/accounts/projects@2025-10-01-preview"
   name      = var.project_name
   parent_id = local.account_id
