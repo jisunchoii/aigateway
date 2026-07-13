@@ -71,41 +71,49 @@ resource "azurerm_virtual_network" "vnet" {
 # NOTE: Do NOT add a subnet delegation here. Classic Developer/Premium APIM VNet
 # injection requires the subnet delegation to be None (per Microsoft docs).
 # Subnet delegation is only for the Premium v2 injection model, which we don't use.
+# default_outbound_access_enabled pinned to false: azurerm 4.79 flipped this default to true, which
+# would silently re-enable implicit outbound SNAT on every apply. Keep least-privilege (no default
+# outbound); VNet-injected APIM and the Container Apps env manage their own egress.
 resource "azurerm_subnet" "apim" {
-  name                 = "snet-apim"
-  resource_group_name  = var.resource_group_name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.apim_subnet_cidr]
+  name                            = "snet-apim"
+  resource_group_name             = var.resource_group_name
+  virtual_network_name            = azurerm_virtual_network.vnet.name
+  address_prefixes                = [var.apim_subnet_cidr]
+  default_outbound_access_enabled = false
 }
 
 resource "azurerm_subnet" "pe" {
-  name                 = "snet-pe"
-  resource_group_name  = var.resource_group_name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.pe_subnet_cidr]
+  name                            = "snet-pe"
+  resource_group_name             = var.resource_group_name
+  virtual_network_name            = azurerm_virtual_network.vnet.name
+  address_prefixes                = [var.pe_subnet_cidr]
+  default_outbound_access_enabled = false
 }
 
 resource "azurerm_subnet" "bastion" {
-  count                = var.enable_jumpbox ? 1 : 0
-  name                 = "AzureBastionSubnet"
-  resource_group_name  = var.resource_group_name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.bastion_subnet_cidr]
+  count                           = var.enable_jumpbox ? 1 : 0
+  name                            = "AzureBastionSubnet"
+  resource_group_name             = var.resource_group_name
+  virtual_network_name            = azurerm_virtual_network.vnet.name
+  address_prefixes                = [var.bastion_subnet_cidr]
+  default_outbound_access_enabled = false
 }
 
 resource "azurerm_subnet" "jumpbox" {
-  count                = var.enable_jumpbox ? 1 : 0
-  name                 = "snet-jumpbox"
-  resource_group_name  = var.resource_group_name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.jumpbox_subnet_cidr]
+  count                           = var.enable_jumpbox ? 1 : 0
+  name                            = "snet-jumpbox"
+  resource_group_name             = var.resource_group_name
+  virtual_network_name            = azurerm_virtual_network.vnet.name
+  address_prefixes                = [var.jumpbox_subnet_cidr]
+  default_outbound_access_enabled = false
 }
 
 resource "azurerm_subnet" "aca" {
-  name                 = "snet-aca"
-  resource_group_name  = var.resource_group_name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.aca_subnet_cidr]
+  name                            = "snet-aca"
+  resource_group_name             = var.resource_group_name
+  virtual_network_name            = azurerm_virtual_network.vnet.name
+  address_prefixes                = [var.aca_subnet_cidr]
+  default_outbound_access_enabled = false
 
   delegation {
     name = "aca-delegation"

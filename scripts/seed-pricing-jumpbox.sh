@@ -3,12 +3,17 @@
 # (Cosmos key-auth disabled + private endpoint). The worker (cost budget) + BFF (UI price labels)
 # both read id="pricing". Operator edits prices here, then re-runs to publish. Idempotent (upsert).
 #
-# Prices = the confirmed per-1M values / 1000:
-#   gpt-5.4         in $2.50/out $15   -> prompt 0.0025  / completion 0.015
-#   gpt-5.4-mini    in $0.75/out $4.5  -> prompt 0.00075 / completion 0.0045
-#   grok-4.3        in $1.25/out $2.5  -> prompt 0.00125 / completion 0.0025
-#   DeepSeek-V4-Pro in $1.74/out $3.48 -> prompt 0.00174 / completion 0.00348
-#   Kimi-K2.6       in $0.95/out $4.00 -> prompt 0.00095 / completion 0.004
+# Pricing source priority:
+#   1. Azure's official rate for the deployed region/SKU.
+#   2. If Azure does not publish a Fireworks model rate, the Fireworks public list price as an estimate.
+# Provider fallback rates can differ from the actual Azure bill because of region, SKU, and contract terms.
+# Verify the rates before enforcing production budgets.
+#
+# Current seeded prices = per-1M values / 1000:
+#   gpt-5.6-sol     in $5.00/out $30.00 -> prompt 0.005 / completion 0.03
+#   FW-GLM-5.2      in $1.40/out $4.40  -> prompt 0.0014 / completion 0.0044
+#   grok-4.3         in $1.25/out $2.5   -> prompt 0.00125 / completion 0.0025
+#   DeepSeek-V4-Pro  in $1.74/out $3.48  -> prompt 0.00174 / completion 0.00348
 #
 # Usage (controller invokes via az vm run-command):
 #   ./seed-pricing-jumpbox.sh https://<account>.documents.azure.com:443/
@@ -52,11 +57,10 @@ read -r -d '' doc <<'JSON' || true
   "currency": "USD",
   "unit": "per_1k_tokens",
   "models": {
-    "gpt-5.4":         { "prompt": 0.0025,  "completion": 0.015 },
-    "gpt-5.4-mini":    { "prompt": 0.00075, "completion": 0.0045 },
+    "gpt-5.6-sol":     { "prompt": 0.005, "completion": 0.03 },
+    "FW-GLM-5.2":      { "prompt": 0.0014, "completion": 0.0044 },
     "grok-4.3":        { "prompt": 0.00125, "completion": 0.0025 },
-    "DeepSeek-V4-Pro": { "prompt": 0.00174, "completion": 0.00348 },
-    "Kimi-K2.6-1":     { "prompt": 0.00095, "completion": 0.004 }
+    "DeepSeek-V4-Pro": { "prompt": 0.00174, "completion": 0.00348 }
   }
 }
 JSON

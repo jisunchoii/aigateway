@@ -1,31 +1,49 @@
+terraform {
+  required_providers {
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
+  }
+}
+
+data "azurerm_client_config" "current" {}
+
 variable "name_suffix" {
   type        = string
   description = "Naming suffix (workload-env-region) used in deterministic resource names."
 }
+
 variable "suffix" {
   type        = string
   description = "Six-character random alphanumeric suffix used for the globally-unique custom subdomain."
 }
+
 variable "resource_group_name" {
   type        = string
   description = "Name of the resource group where the AIServices account and its private endpoint are created."
 }
+
 variable "location" {
   type        = string
   description = "Azure region for all resources in this module."
 }
+
 variable "tags" {
   type        = map(string)
   description = "Tags applied to all taggable resources."
 }
+
 variable "pe_subnet_id" {
   type        = string
   description = "Resource ID of the private endpoint subnet where the AIServices private endpoint NIC is placed."
 }
+
 variable "dns_zone_ids" {
   type        = list(string)
   description = "Private DNS zone IDs for the AIServices PE (cognitiveservices + services.ai + openai)."
 }
+
 variable "deployments" {
   type = map(object({
     model_name    = string
@@ -34,42 +52,46 @@ variable "deployments" {
     sku_name      = string
     capacity      = number
   }))
-  description = "Foundry OSS/partner model deployments (PAYG GlobalStandard). Keys become deployment names (= client-facing aliases)."
+  description = "Supported model deployments. Reuse mode expects these deployments to exist and does not manage them."
 }
+
 variable "reuse_existing" {
   type        = bool
   default     = false
-  description = "When true, read an existing AIServices account via data source instead of creating it; do not create model deployments. PE + RBAC are still created against the referenced account."
+  description = "Read an existing AIServices account and skip model deployment management. Terraform creates a missing project, PE, and RBAC; import matching existing resources before apply."
 }
+
 variable "existing_account_name" {
   type        = string
   default     = ""
   description = "Name of the existing AIServices account (required when reuse_existing = true)."
 }
+
 variable "existing_account_rg" {
   type        = string
   default     = ""
   description = "Resource group of the existing AIServices account (required when reuse_existing = true)."
 }
 
-resource "azurerm_cognitive_account" "foundry" {
-  count                         = var.reuse_existing ? 0 : 1
-  name                          = "ais-${var.name_suffix}"
-  resource_group_name           = var.resource_group_name
-  location                      = var.location
-  kind                          = "AIServices"
-  sku_name                      = "S0"
-  custom_subdomain_name         = "ais-${var.suffix}"
-  local_auth_enabled            = false
-  public_network_access_enabled = false
-  tags                          = var.tags
-
-  network_acls {
-    default_action = "Deny"
-  }
+variable "account_name" {
+  type        = string
+  default     = ""
+  description = "Name of the project-enabled AIServices account created by Terraform. Defaults to aisproj- followed by the generated random suffix."
 }
 
-# Brownfield: reference an existing AIServices account instead of creating one.
+variable "project_name" {
+  type        = string
+  default     = "codexproj"
+  description = "Foundry project used by Responses clients. In reuse mode, set this to the new or existing project name."
+}
+
+variable "public_network_access_enabled" {
+  type        = bool
+  default     = false
+  description = "Temporary private-endpoint validation option. Keep false for normal deployments."
+}
+
+# Reuse an existing AIServices account instead of creating one.
 data "azurerm_cognitive_account" "existing" {
   count               = var.reuse_existing ? 1 : 0
   name                = var.existing_account_name
@@ -77,25 +99,109 @@ data "azurerm_cognitive_account" "existing" {
 
   lifecycle {
     postcondition {
-      # Gateway standard: the reused account must have key auth disabled (passwordless).
-      # If azurerm omits local_auth_enabled on this data source for the pinned provider
-      # version, remove this postcondition and rely on the az pre-check in GitBook 04.
       condition     = self.local_auth_enabled == false
       error_message = "Reused AIServices account has key auth enabled. Disable it before deploy: az resource update --ids <account-id> --set properties.disableLocalAuth=true properties.publicNetworkAccess=Disabled (see GitBook 04)."
+    }
+
+    postcondition {
+      condition     = self.project_management_enabled == true
+      error_message = "Reused AIServices account must already have project management enabled before this module can create or attach the Foundry project."
+    }
+
+    postcondition {
+      condition     = self.public_network_access_enabled == false
+      error_message = "Reused AIServices account must already have public network access disabled before this module can attach the private-only gateway topology."
     }
   }
 }
 
 locals {
-  account_id       = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].id : azurerm_cognitive_account.foundry[0].id
-  account_name     = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].name : azurerm_cognitive_account.foundry[0].name
-  account_endpoint = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].endpoint : azurerm_cognitive_account.foundry[0].endpoint
+  managed_account_name     = var.account_name != "" ? var.account_name : "aisproj-${var.suffix}"
+  reused_endpoint          = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].endpoint : null
+  reused_endpoint_host     = var.reuse_existing ? trimsuffix(trimprefix(trimprefix(local.reused_endpoint, "https://"), "http://"), "/") : null
+  account_custom_subdomain = var.reuse_existing ? split(".", local.reused_endpoint_host)[0] : local.managed_account_name
+  account_id               = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].id : azapi_resource.project_account[0].id
+  account_name             = var.reuse_existing ? data.azurerm_cognitive_account.existing[0].name : local.managed_account_name
+  account_endpoint         = var.reuse_existing ? local.reused_endpoint : "https://${local.managed_account_name}.cognitiveservices.azure.com/"
+  account_openai_host      = "https://${local.account_custom_subdomain}.openai.azure.com"
+  account_openai_v1        = "${local.account_openai_host}/openai/v1"
+  project_responses_base   = "https://${local.account_custom_subdomain}.services.ai.azure.com/api/projects/${var.project_name}/openai/v1"
 }
 
-resource "azurerm_cognitive_deployment" "models" {
+removed {
+  from = azurerm_cognitive_account.foundry
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = azurerm_cognitive_deployment.models
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = azurerm_private_endpoint.foundry
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+resource "azapi_resource" "project_account" {
+  count     = var.reuse_existing ? 0 : 1
+  type      = "Microsoft.CognitiveServices/accounts@2025-10-01-preview"
+  name      = local.managed_account_name
+  parent_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.resource_group_name}"
+  location  = var.location
+  tags      = var.tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  body = {
+    kind = "AIServices"
+    sku  = { name = "S0" }
+    properties = {
+      allowProjectManagement = true
+      associatedProjects     = [var.project_name]
+      customSubDomainName    = local.managed_account_name
+      defaultProject         = var.project_name
+      disableLocalAuth       = true
+      publicNetworkAccess    = var.public_network_access_enabled ? "Enabled" : "Disabled"
+      networkAcls = {
+        defaultAction = var.public_network_access_enabled ? "Allow" : "Deny"
+      }
+    }
+  }
+  response_export_values = ["properties.endpoints", "properties.endpoint"]
+}
+
+resource "azapi_resource" "project" {
+  count     = 1
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-10-01-preview"
+  name      = var.project_name
+  parent_id = local.account_id
+  location  = var.location
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  body = {
+    properties = {}
+  }
+}
+
+resource "azurerm_cognitive_deployment" "project_models" {
   for_each             = var.reuse_existing ? {} : var.deployments
   name                 = each.key
-  cognitive_account_id = azurerm_cognitive_account.foundry[0].id
+  cognitive_account_id = azapi_resource.project_account[0].id
 
   model {
     format  = each.value.model_format
@@ -109,17 +215,17 @@ resource "azurerm_cognitive_deployment" "models" {
   }
 }
 
-# The cognitive account can still report provisioningState="Accepted" for a short
-# window after create returns, which makes a parallel private-endpoint create fail with
-# 400 AccountProvisioningStateInvalid. Wait for the account to settle before attaching it.
 resource "time_sleep" "foundry_settle" {
-  count           = var.reuse_existing ? 0 : 1
-  depends_on      = [azurerm_cognitive_account.foundry]
+  depends_on      = [azapi_resource.project_account]
   create_duration = "60s"
+
+  triggers = {
+    account_id = local.account_id
+  }
 }
 
-resource "azurerm_private_endpoint" "foundry" {
-  name                = "pe-ais-${var.name_suffix}"
+resource "azurerm_private_endpoint" "project_account" {
+  name                = "pe-foundry-${var.name_suffix}"
   resource_group_name = var.resource_group_name
   location            = var.location
   subnet_id           = var.pe_subnet_id
@@ -128,39 +234,54 @@ resource "azurerm_private_endpoint" "foundry" {
   depends_on = [time_sleep.foundry_settle]
 
   private_service_connection {
-    name                           = "psc-ais"
+    name                           = "psc-foundry"
     private_connection_resource_id = local.account_id
     subresource_names              = ["account"]
     is_manual_connection           = false
   }
 
   private_dns_zone_group {
-    name                 = "ais-dns"
+    name                 = "foundry-dns"
     private_dns_zone_ids = var.dns_zone_ids
   }
 }
 
 output "id" {
-  description = "Resource ID of the AIServices (Foundry) cognitive account (created or referenced)."
   value       = local.account_id
+  description = "AIServices account resource ID used by the gateway."
 }
+
 output "name" {
-  description = "Name of the AIServices (Foundry) cognitive account."
   value       = local.account_name
+  description = "AIServices account name used by the gateway."
 }
+
 output "endpoint" {
-  description = "AIServices account control endpoint (https://ais-<suffix>.cognitiveservices.azure.com/)."
   value       = local.account_endpoint
+  description = "AIServices control endpoint used by the gateway."
 }
+
 output "endpoint_openai_v1" {
-  description = "GA OpenAI/v1 inference base for the AIServices account (…/openai/v1). Accepts gpt + OSS deployments with the model name in the body."
-  value       = "${trimsuffix(replace(local.account_endpoint, ".cognitiveservices.azure.com", ".openai.azure.com"), "/")}/openai/v1"
+  value       = local.account_openai_v1
+  description = "OpenAI/v1 inference base used by the gateway."
 }
+
 output "endpoint_openai_host" {
-  description = "AIServices account openai.azure.com host base (no path)."
-  value       = trimsuffix(replace(local.account_endpoint, ".cognitiveservices.azure.com", ".openai.azure.com"), "/")
+  value       = local.account_openai_host
+  description = "OpenAI host used by the gateway."
 }
+
 output "deployment_names" {
-  description = "Model deployment names created by this module (empty in reuse mode; the account already has them)."
-  value       = [for k, d in azurerm_cognitive_deployment.models : k]
+  value       = sort(keys(var.deployments))
+  description = "Configured deployment names; in reuse mode these describe the expected existing catalog."
+}
+
+output "project_account_id" {
+  value       = local.account_id
+  description = "Compatibility alias for the gateway AIServices account ID."
+}
+
+output "project_responses_base" {
+  value       = local.project_responses_base
+  description = "Foundry project OpenAI/v1 base used by the Codex proxy."
 }

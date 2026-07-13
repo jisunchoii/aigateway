@@ -81,31 +81,7 @@ variable "budget_start_date" {
   description = "First-of-month UTC start date for the cost budget. Must not be in the past when first applied."
 }
 
-variable "openai_deployments" {
-  type = map(object({
-    model_name    = string
-    model_version = string
-    sku_name      = string
-    capacity      = number
-  }))
-  default = {
-    "gpt-5.4" = {
-      model_name    = "gpt-5.4"
-      model_version = "2026-03-05"
-      sku_name      = "GlobalStandard"
-      capacity      = 10
-    }
-    "gpt-5.4-mini" = {
-      model_name    = "gpt-5.4-mini"
-      model_version = "2026-03-17"
-      sku_name      = "GlobalStandard"
-      capacity      = 10
-    }
-  }
-  description = "Azure OpenAI deployments. Deployment name = real model name (no alias indirection); gpt-5.4-nano removed."
-}
-
-variable "foundry_deployments" {
+variable "model_deployments" {
   type = map(object({
     model_name    = string
     model_format  = string
@@ -113,18 +89,20 @@ variable "foundry_deployments" {
     sku_name      = string
     capacity      = number
   }))
-  # PAYG-first (GlobalStandard). PTU models (FW-Kimi-K2.6 / FW-GLM-5.1) deferred — large reserved
-  # minimums. Kimi-K2.6 (PAYG) also deferred: 0 free quota in koreacentral (a bench deployment in
-  # another RG holds the entire 100-unit limit). Capacities fit available quota (verified live
-  # 2026-06): grok-4.3 has ~490 free; DeepSeek-V4-Pro catalog default is 5000 but only 500 is free,
-  # and for GlobalStandard (PAYG) capacity is a TPM rate ceiling (not reserved cost), so 500 is safe.
   default = {
-    "grok-4.3" = {
-      model_name    = "grok-4.3"
-      model_format  = "xAI"
-      model_version = "1"
+    "gpt-5.6-sol" = {
+      model_name    = "gpt-5.6-sol"
+      model_format  = "OpenAI"
+      model_version = "2026-07-09"
       sku_name      = "GlobalStandard"
-      capacity      = 10
+      capacity      = 500
+    }
+    "FW-GLM-5.2" = {
+      model_name    = "FW-GLM-5.2"
+      model_format  = "Fireworks"
+      model_version = "1"
+      sku_name      = "DataZoneStandard"
+      capacity      = 500
     }
     "DeepSeek-V4-Pro" = {
       model_name    = "DeepSeek-V4-Pro"
@@ -133,20 +111,35 @@ variable "foundry_deployments" {
       sku_name      = "GlobalStandard"
       capacity      = 500
     }
+    "grok-4.3" = {
+      model_name    = "grok-4.3"
+      model_format  = "xAI"
+      model_version = "1"
+      sku_name      = "GlobalStandard"
+      capacity      = 500
+    }
   }
-  description = "Foundry OSS/partner model deployments on the AIServices account (PAYG GlobalStandard). Keys become client-facing aliases."
+  description = "Supported model deployment map. In new-deployment mode Terraform creates these deployments; in reuse mode they describe the deployments that must already exist."
+
+  validation {
+    condition = alltrue([
+      for name, deployment in var.model_deployments :
+      name == deployment.model_name && deployment.capacity > 0
+    ])
+    error_message = "Each deployment key must equal model_name and capacity must be positive."
+  }
 }
 
 variable "reuse_foundry" {
   type        = bool
   default     = false
-  description = "Brownfield: when true, reuse an EXISTING single AIServices (Foundry) account instead of creating one. The account + model deployments are read via a data source (not created); only the Private Endpoint and APIM RBAC are added. When true, the separate Azure OpenAI account is NOT created and gpt traffic is routed to the same AIServices account. The account must already have local_auth disabled and public network access blocked (see GitBook 04)."
+  description = "When false, create and manage the AIServices account, project, and model deployments. When true, reuse an existing account and deployments; create a missing project or import an existing project before apply."
 }
 
 variable "existing_foundry_name" {
   type        = string
   default     = ""
-  description = "Name of the existing AIServices (Foundry) cognitive account to reuse. Required when reuse_foundry = true. Must be in the same subscription."
+  description = "Exact name of the existing AIServices account selected for reuse. Required when reuse_foundry = true; verify the full resource ID rather than matching by name alone."
   validation {
     condition     = !var.reuse_foundry || length(var.existing_foundry_name) > 0
     error_message = "existing_foundry_name is required when reuse_foundry = true."
@@ -156,11 +149,29 @@ variable "existing_foundry_name" {
 variable "existing_foundry_rg" {
   type        = string
   default     = ""
-  description = "Resource group of the existing AIServices account (may differ from the gateway RG; same subscription). Required when reuse_foundry = true."
+  description = "Resource group of the existing AIServices account selected for reuse. Required when reuse_foundry = true; the account must be in the same subscription."
   validation {
     condition     = !var.reuse_foundry || length(var.existing_foundry_rg) > 0
     error_message = "existing_foundry_rg is required when reuse_foundry = true."
   }
+}
+
+variable "foundry_account_name" {
+  type        = string
+  default     = ""
+  description = "Optional name for the AIServices account that Terraform creates and manages. Leave empty to use the generated name."
+}
+
+variable "foundry_project_name" {
+  type        = string
+  default     = "codexproj"
+  description = "Foundry project name. In reuse mode Terraform creates this project when absent, or manages an existing project after it is imported."
+}
+
+variable "foundry_public_network_access_enabled" {
+  type        = bool
+  default     = false
+  description = "Temporary private-endpoint validation option. Keep false for normal deployments."
 }
 
 variable "enable_jumpbox" {
@@ -168,6 +179,7 @@ variable "enable_jumpbox" {
   default     = false
   description = "Deploy the optional Bastion + jumpbox VM for in-VNet smoke testing."
 }
+
 variable "jumpbox_admin_password" {
   type        = string
   default     = null
@@ -183,18 +195,6 @@ variable "jumpbox_vm_size" {
   type        = string
   default     = "Standard_B2s_v2"
   description = "VM size for the jumpbox. Default B2s_v2 works in koreacentral; some regions restrict it (e.g. eastus2 -> use Standard_D2s_v7). Override per region in tfvars."
-}
-
-variable "openai_api_version" {
-  type        = string
-  default     = "2025-01-01-preview"
-  description = "Azure OpenAI data-plane REST API version that CLIENTS send as ?api-version= (e.g. smoke-test scripts). Phase 1 APIM passes it through and does not enforce it in-gateway; a later phase may pin it via a set-query-parameter policy. Not consumed by Terraform resources today."
-}
-
-variable "openai_openapi_spec_url" {
-  type        = string
-  default     = "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/main/specification/cognitiveservices/data-plane/AzureOpenAI/inference/stable/2024-10-21/inference.json"
-  description = "URL of the Azure OpenAI inference OpenAPI spec imported into APIM to create API operations (chat/completions, embeddings, etc)."
 }
 
 variable "tokens_per_minute" {
@@ -224,16 +224,6 @@ variable "token_quota_period" {
   validation {
     condition     = contains(["Hourly", "Daily", "Weekly", "Monthly", "Yearly"], var.token_quota_period)
     error_message = "token_quota_period must be one of: Hourly, Daily, Weekly, Monthly, Yearly."
-  }
-}
-
-variable "allowed_models" {
-  type        = list(string)
-  default     = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
-  description = "Model deployment names callers are allowed to request (OpenAI + Foundry OSS). A request for any other deployment returns 403."
-  validation {
-    condition     = alltrue([for m in var.allowed_models : m == trimspace(m) && length(m) > 0])
-    error_message = "allowed_models entries must be non-empty and have no leading/trailing whitespace."
   }
 }
 
@@ -309,6 +299,18 @@ variable "admin_group_object_id" {
   type        = string
   default     = ""
   description = "Entra ID security group object id whose members are gateway admins (prereq P1). The BFF gates writes on membership."
+}
+
+variable "codexproxy_image" {
+  type        = string
+  default     = ""
+  description = "Full image reference for the Codex proxy sidecar, e.g. acrllmgwxxxx.azurecr.io/codexproxy:latest. Empty disables the Container App."
+}
+
+variable "searchmcp_image" {
+  type        = string
+  default     = ""
+  description = "Full image reference for the Search MCP sidecar, e.g. acrllmgwxxxx.azurecr.io/searchmcp:latest. Empty disables the Container App."
 }
 
 variable "rate_tiers" {

@@ -1,5 +1,9 @@
 terraform {
   required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.20"
+    }
     azapi = {
       source  = "azure/azapi"
       version = "~> 2.0"
@@ -58,44 +62,19 @@ variable "public" {
   description = "When true, APIM is created in EXTERNAL VNet mode (gateway published on a public VIP, reachable from the internet). When false (default), Internal mode keeps the gateway private (VNet-only). VNet injection is retained either way so APIM can reach the private model backends."
 }
 
-variable "openai_account_id" {
+variable "model_account_id" {
   type        = string
-  description = "Resource ID of the Azure OpenAI account to grant the APIM identity access to."
+  description = "Canonical project-enabled AIServices account ID."
 }
 
-variable "openai_endpoint" {
+variable "model_openai_v1_base" {
   type        = string
-  description = "Base endpoint URL of the backing Azure OpenAI account."
-}
-
-variable "foundry_account_id" {
-  type        = string
-  description = "Resource ID of the AIServices (Foundry) account to grant the APIM identity inference access to."
-}
-
-variable "foundry_endpoint" {
-  type        = string
-  description = "AIServices OpenAI/v1 inference base (e.g. https://ais-<suffix>.openai.azure.com/openai/v1); used verbatim as the foundry API service_url."
-}
-
-variable "foundry_v1_base" {
-  type        = string
-  description = "AIServices account OpenAI/v1 base used by the openai policy to route requests, e.g. https://ais-<suffix>.openai.azure.com/openai/v1."
+  description = "Canonical OpenAI/v1 inference base."
 }
 
 variable "policy_template_path" {
   type        = string
   description = "Path to the APIM pipeline policy XML file."
-}
-
-variable "foundry_policy_template_path" {
-  type        = string
-  description = "Path to the APIM foundry (Model Inference) pipeline policy XML template."
-}
-
-variable "openai_openapi_spec_url" {
-  type        = string
-  description = "URL of the Azure OpenAI inference OpenAPI spec imported to define API operations."
 }
 
 variable "appinsights_id" {
@@ -134,7 +113,7 @@ variable "token_quota_period" {
   description = "Token quota reset period."
 }
 
-variable "allowed_models" {
+variable "allowed_model_names" {
   type        = list(string)
   description = "Allowed deployment aliases."
 }
@@ -169,6 +148,136 @@ variable "entra_team_claim" {
   description = "JWT claim used to derive consumerId."
 }
 
+variable "codexproxy_enabled" {
+  type        = bool
+  default     = false
+  description = "Whether the Responses operation dispatches to the Codex proxy."
+}
+
+variable "codexproxy_base_url" {
+  type        = string
+  default     = ""
+  description = "HTTPS base URL of the Codex proxy Container App."
+
+  validation {
+    condition     = !var.codexproxy_enabled || startswith(var.codexproxy_base_url, "https://")
+    error_message = "codexproxy_base_url must be HTTPS when codexproxy_enabled is true."
+  }
+}
+
+variable "codexproxy_key" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "APIM-to-sidecar hop key."
+
+  validation {
+    condition     = !(var.codexproxy_enabled || var.searchmcp_enabled) || length(var.codexproxy_key) > 0
+    error_message = "codexproxy_key is required when either codexproxy_enabled or searchmcp_enabled is true."
+  }
+}
+
+variable "searchmcp_enabled" {
+  type        = bool
+  default     = false
+  description = "Whether the Search MCP API is published through APIM."
+}
+
+variable "searchmcp_base_url" {
+  type        = string
+  default     = ""
+  description = "HTTPS base URL of the Search MCP Container App."
+
+  validation {
+    condition     = !var.searchmcp_enabled || startswith(var.searchmcp_base_url, "https://")
+    error_message = "searchmcp_base_url must be HTTPS when searchmcp_enabled is true."
+  }
+}
+
+locals {
+  allowed_models = sort(var.allowed_model_names)
+  shared_policy_inputs = {
+    entra_tenant_id         = var.entra_tenant_id
+    entra_api_audience      = var.entra_api_audience
+    entra_team_claim        = var.entra_team_claim
+    rate_tiers              = var.rate_tiers
+    model_tokens_per_minute = var.model_tokens_per_minute
+    deployed_models         = local.allowed_models
+    model_openai_v1_base    = var.model_openai_v1_base
+    codexproxy_enabled      = var.codexproxy_enabled
+    codexproxy_base_url     = var.codexproxy_base_url
+  }
+  model_gateway_policy_xml = templatefile(var.policy_template_path, merge(local.shared_policy_inputs, {
+    client_auth_mode   = var.client_auth_mode
+    model_source       = "body"
+    supports_responses = true
+    rewrite_chat_path  = false
+  }))
+  vscode_models_policy_xml = templatefile(var.policy_template_path, merge(local.shared_policy_inputs, {
+    client_auth_mode   = "subscription-key"
+    model_source       = "path"
+    supports_responses = false
+    rewrite_chat_path  = true
+  }))
+  search_mcp_policy_xml = var.searchmcp_enabled ? trimspace(<<-XML
+    <policies>
+      <inbound>
+        <base />
+        <rewrite-uri template="/mcp" />
+        <set-header name="api-key" exists-action="delete" />
+        <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+        <set-query-parameter name="subscription-key" exists-action="delete" />
+        <set-header name="Authorization" exists-action="override">
+          <value>@("Bearer " + "{{codexproxy-key}}")</value>
+        </set-header>
+      </inbound>
+      <backend>
+        <forward-request timeout="300" fail-on-error-status-code="false" buffer-response="false" />
+      </backend>
+      <outbound>
+        <base />
+      </outbound>
+      <on-error>
+        <base />
+      </on-error>
+    </policies>
+  XML
+  ) : null
+  search_mcp_contract = var.searchmcp_enabled ? {
+    name        = "search-mcp"
+    path        = "mcp"
+    header      = "api-key"
+    service_url = var.searchmcp_base_url
+    operations = {
+      mcp = {
+        method       = "POST"
+        url_template = "/"
+        policy = {
+          authorization_header    = "Bearer {{codexproxy-key}}"
+          buffer_response         = false
+          remove_headers          = ["api-key", "Ocp-Apim-Subscription-Key"]
+          remove_query_parameters = ["subscription-key"]
+          rewrite_uri             = "/mcp"
+        }
+      }
+    }
+  } : null
+}
+
+resource "terraform_data" "model_gateway_policy_hash" {
+  triggers_replace = sha256(local.model_gateway_policy_xml)
+}
+
+resource "terraform_data" "vscode_models_policy_hash" {
+  triggers_replace = sha256(local.vscode_models_policy_xml)
+}
+
+resource "terraform_data" "search_mcp_policy_hash" {
+  count = var.searchmcp_enabled ? 1 : 0
+
+  triggers_replace = sha256(local.search_mcp_policy_xml)
+}
+
 resource "azurerm_api_management" "apim" {
   name                = "apim-${var.name_suffix}"
   resource_group_name = var.resource_group_name
@@ -191,16 +300,16 @@ resource "azurerm_api_management" "apim" {
   tags = var.tags
 }
 
-resource "azurerm_role_assignment" "apim_to_openai" {
-  scope                = var.openai_account_id
+resource "azurerm_role_assignment" "apim_to_model_openai" {
+  scope                = var.model_account_id
   role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
 }
 
-# APIM MI calls the AIServices account for OSS-model inference. "Cognitive Services User" is the
-# inference data-plane role for AIServices (broader than the OpenAI-only role used above).
-resource "azurerm_role_assignment" "apim_to_foundry" {
-  scope                = var.foundry_account_id
+# APIM MI calls the canonical AIServices account for unified inference. "Cognitive Services User"
+# is the broader inference data-plane role needed for non-OpenAI models on the same account.
+resource "azurerm_role_assignment" "apim_to_model_foundry" {
+  scope                = var.model_account_id
   role_definition_name = "Cognitive Services User"
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
 }
@@ -211,24 +320,16 @@ resource "azurerm_role_assignment" "apim_to_appinsights" {
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
 }
 
-resource "azurerm_api_management_api" "openai" {
-  name                  = "azure-openai"
+resource "azurerm_api_management_api" "model_gateway" {
+  name                  = "model-gateway"
   resource_group_name   = var.resource_group_name
   api_management_name   = azurerm_api_management.apim.name
   revision              = "1"
-  display_name          = "Azure OpenAI"
-  path                  = "openai"
+  display_name          = "Model Gateway"
+  path                  = "openai/v1"
   protocols             = ["https"]
   subscription_required = var.client_auth_mode != "entra-id"
-  service_url           = "${trimsuffix(var.openai_endpoint, "/")}/openai"
-
-  # Import the Azure OpenAI inference OpenAPI spec so the API has real operations
-  # (chat/completions, embeddings, etc). Without operations APIM 404s every request.
-  # service_url above overrides the spec's servers URL for the backend.
-  import {
-    content_format = "openapi+json-link"
-    content_value  = var.openai_openapi_spec_url
-  }
+  service_url           = var.model_openai_v1_base
 
   subscription_key_parameter_names {
     header = "api-key"
@@ -236,45 +337,28 @@ resource "azurerm_api_management_api" "openai" {
   }
 }
 
-# Per-API policy: teamId counter-key derivation, model-permission allowlist, and MI backend auth.
-resource "azurerm_api_management_api_policy" "openai" {
-  api_name            = azurerm_api_management_api.openai.name
+resource "azurerm_api_management_api_operation" "model_gateway_chat" {
+  operation_id        = "chat-completions"
+  api_name            = azurerm_api_management_api.model_gateway.name
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
-  xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode        = var.client_auth_mode
-    entra_tenant_id         = var.entra_tenant_id
-    entra_api_audience      = var.entra_api_audience
-    entra_team_claim        = var.entra_team_claim
-    rate_tiers              = var.rate_tiers
-    model_tokens_per_minute = var.model_tokens_per_minute
-    foundry_v1_base         = var.foundry_v1_base
-  })
-
-  depends_on = [
-    azurerm_role_assignment.apim_to_openai,
-    azurerm_role_assignment.apim_to_foundry,
-    azurerm_api_management_named_value.allowed_models,
-    azurerm_api_management_named_value.tokens_per_minute,
-    azurerm_api_management_named_value.token_quota,
-    azurerm_api_management_named_value.token_quota_period,
-    azurerm_api_management_named_value.consumer_config_json,
-    azurerm_api_management_named_value.tier,
-    azurerm_api_management_api_diagnostic.openai,
-  ]
-
-  lifecycle {
-    precondition {
-      condition     = var.client_auth_mode != "entra-id" || (var.entra_tenant_id != "" && var.entra_api_audience != "" && var.entra_team_claim != "")
-      error_message = "entra_tenant_id, entra_api_audience, and entra_team_claim are required when client_auth_mode = entra-id."
-    }
-  }
+  display_name        = "Chat Completions"
+  method              = "POST"
+  url_template        = "/chat/completions"
 }
 
-# VS Code BYOK facade. VS Code supports custom request headers, including the APIM default
-# `Ocp-Apim-Subscription-Key`; keep it off the URL so keys don't leak via query strings.
-resource "azurerm_api_management_api" "vscode_openai" {
-  name                  = "vscode-openai"
+resource "azurerm_api_management_api_operation" "model_gateway_responses" {
+  operation_id        = "responses"
+  api_name            = azurerm_api_management_api.model_gateway.name
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = var.resource_group_name
+  display_name        = "Responses"
+  method              = "POST"
+  url_template        = "/responses"
+}
+
+resource "azurerm_api_management_api" "vscode_models" {
+  name                  = "vscode-models"
   resource_group_name   = var.resource_group_name
   api_management_name   = azurerm_api_management.apim.name
   revision              = "1"
@@ -282,44 +366,143 @@ resource "azurerm_api_management_api" "vscode_openai" {
   path                  = "vscode/models"
   protocols             = ["https"]
   subscription_required = true
-  service_url           = "${trimsuffix(var.openai_endpoint, "/")}/openai"
-
-  import {
-    content_format = "openapi+json-link"
-    content_value  = var.openai_openapi_spec_url
-  }
+  service_url           = var.model_openai_v1_base
 
   subscription_key_parameter_names {
     header = "Ocp-Apim-Subscription-Key"
-    query  = "api-key"
+    query  = "subscription-key"
   }
 }
 
-resource "azurerm_api_management_api_policy" "vscode_openai" {
-  api_name            = azurerm_api_management_api.vscode_openai.name
+resource "azurerm_api_management_api" "search_mcp" {
+  count                 = var.searchmcp_enabled ? 1 : 0
+  name                  = "search-mcp"
+  resource_group_name   = var.resource_group_name
+  api_management_name   = azurerm_api_management.apim.name
+  revision              = "1"
+  display_name          = "Search MCP"
+  path                  = "mcp"
+  protocols             = ["https"]
+  subscription_required = true
+  service_url           = var.searchmcp_base_url
+
+  subscription_key_parameter_names {
+    header = "api-key"
+    query  = "subscription-key"
+  }
+}
+
+resource "azurerm_api_management_api_operation" "vscode_chat" {
+  operation_id        = "vscode-chat-completions"
+  api_name            = azurerm_api_management_api.vscode_models.name
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
-  xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode        = "subscription-key"
-    entra_tenant_id         = var.entra_tenant_id
-    entra_api_audience      = var.entra_api_audience
-    entra_team_claim        = var.entra_team_claim
-    rate_tiers              = var.rate_tiers
-    model_tokens_per_minute = var.model_tokens_per_minute
-    foundry_v1_base         = var.foundry_v1_base
-  })
+  display_name        = "VS Code Chat Completions"
+  method              = "POST"
+  url_template        = "/deployments/{model}/chat/completions"
+
+  template_parameter {
+    name     = "model"
+    required = true
+    type     = "string"
+  }
+}
+
+resource "azurerm_api_management_api_operation" "search_mcp" {
+  count               = var.searchmcp_enabled ? 1 : 0
+  operation_id        = "search-mcp"
+  api_name            = one(azurerm_api_management_api.search_mcp[*].name)
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = var.resource_group_name
+  display_name        = "Search MCP"
+  method              = "POST"
+  url_template        = "/"
+}
+
+resource "azurerm_api_management_named_value" "codexproxy_key" {
+  count               = var.codexproxy_enabled || var.searchmcp_enabled ? 1 : 0
+  name                = "codexproxy-key"
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = var.resource_group_name
+  display_name        = "codexproxy-key"
+  value               = var.codexproxy_key
+  secret              = true
+}
+
+resource "azurerm_api_management_api_policy" "model_gateway" {
+  api_name            = azurerm_api_management_api.model_gateway.name
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = var.resource_group_name
+  xml_content         = local.model_gateway_policy_xml
 
   depends_on = [
-    azurerm_role_assignment.apim_to_openai,
-    azurerm_role_assignment.apim_to_foundry,
+    azurerm_role_assignment.apim_to_model_openai,
+    azurerm_role_assignment.apim_to_model_foundry,
     azurerm_api_management_named_value.allowed_models,
     azurerm_api_management_named_value.tokens_per_minute,
     azurerm_api_management_named_value.token_quota,
     azurerm_api_management_named_value.token_quota_period,
     azurerm_api_management_named_value.consumer_config_json,
     azurerm_api_management_named_value.tier,
-    azurerm_api_management_api_diagnostic.vscode_openai,
+    azurerm_api_management_api_operation.model_gateway_chat,
+    azurerm_api_management_api_operation.model_gateway_responses,
+    azurerm_api_management_named_value.codexproxy_key,
+    azurerm_api_management_api_diagnostic.model_gateway,
   ]
+
+  lifecycle {
+    ignore_changes       = [xml_content]
+    replace_triggered_by = [terraform_data.model_gateway_policy_hash]
+
+    precondition {
+      condition     = var.client_auth_mode != "entra-id" || (var.entra_tenant_id != "" && var.entra_api_audience != "" && var.entra_team_claim != "")
+      error_message = "entra_tenant_id, entra_api_audience, and entra_team_claim are required when client_auth_mode = entra-id."
+    }
+  }
+}
+
+resource "azurerm_api_management_api_policy" "vscode_models" {
+  api_name            = azurerm_api_management_api.vscode_models.name
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = var.resource_group_name
+  xml_content         = local.vscode_models_policy_xml
+
+  depends_on = [
+    azurerm_role_assignment.apim_to_model_openai,
+    azurerm_role_assignment.apim_to_model_foundry,
+    azurerm_api_management_named_value.allowed_models,
+    azurerm_api_management_named_value.tokens_per_minute,
+    azurerm_api_management_named_value.token_quota,
+    azurerm_api_management_named_value.token_quota_period,
+    azurerm_api_management_named_value.consumer_config_json,
+    azurerm_api_management_named_value.tier,
+    azurerm_api_management_api_operation.vscode_chat,
+    azurerm_api_management_api_diagnostic.vscode_models,
+  ]
+
+  lifecycle {
+    ignore_changes       = [xml_content]
+    replace_triggered_by = [terraform_data.vscode_models_policy_hash]
+  }
+}
+
+resource "azurerm_api_management_api_operation_policy" "search_mcp" {
+  count               = var.searchmcp_enabled ? 1 : 0
+  operation_id        = one(azurerm_api_management_api_operation.search_mcp[*].operation_id)
+  api_name            = one(azurerm_api_management_api.search_mcp[*].name)
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = var.resource_group_name
+  xml_content         = local.search_mcp_policy_xml
+
+  depends_on = [
+    azurerm_api_management_api_operation.search_mcp,
+    azurerm_api_management_named_value.codexproxy_key,
+  ]
+
+  lifecycle {
+    ignore_changes       = [xml_content]
+    replace_triggered_by = [terraform_data.search_mcp_policy_hash[0]]
+  }
 }
 
 resource "azurerm_api_management_logger" "appinsights" {
@@ -335,9 +518,9 @@ resource "azurerm_api_management_logger" "appinsights" {
   depends_on = [azurerm_role_assignment.apim_to_appinsights]
 }
 
-resource "azurerm_api_management_api_diagnostic" "openai" {
+resource "azurerm_api_management_api_diagnostic" "model_gateway" {
   identifier               = "applicationinsights"
-  api_name                 = azurerm_api_management_api.openai.name
+  api_name                 = azurerm_api_management_api.model_gateway.name
   api_management_name      = azurerm_api_management.apim.name
   resource_group_name      = var.resource_group_name
   api_management_logger_id = azurerm_api_management_logger.appinsights.id
@@ -349,9 +532,9 @@ resource "azurerm_api_management_api_diagnostic" "openai" {
   http_correlation_protocol = "W3C"
 }
 
-resource "azurerm_api_management_api_diagnostic" "vscode_openai" {
+resource "azurerm_api_management_api_diagnostic" "vscode_models" {
   identifier               = "applicationinsights"
-  api_name                 = azurerm_api_management_api.vscode_openai.name
+  api_name                 = azurerm_api_management_api.vscode_models.name
   api_management_name      = azurerm_api_management.apim.name
   resource_group_name      = var.resource_group_name
   api_management_logger_id = azurerm_api_management_logger.appinsights.id
@@ -364,9 +547,9 @@ resource "azurerm_api_management_api_diagnostic" "vscode_openai" {
 }
 
 # Enable custom metrics on the diagnostic (azurerm 4.x doesn't expose the `metrics` property).
-resource "azapi_update_resource" "openai_diag_metrics" {
+resource "azapi_update_resource" "model_gateway_diag_metrics" {
   type        = "Microsoft.ApiManagement/service/apis/diagnostics@2022-08-01"
-  resource_id = azurerm_api_management_api_diagnostic.openai.id
+  resource_id = azurerm_api_management_api_diagnostic.model_gateway.id
   body = {
     properties = {
       metrics = true
@@ -374,100 +557,9 @@ resource "azapi_update_resource" "openai_diag_metrics" {
   }
 }
 
-resource "azapi_update_resource" "vscode_openai_diag_metrics" {
+resource "azapi_update_resource" "vscode_models_diag_metrics" {
   type        = "Microsoft.ApiManagement/service/apis/diagnostics@2022-08-01"
-  resource_id = azurerm_api_management_api_diagnostic.vscode_openai.id
-  body = {
-    properties = {
-      metrics = true
-    }
-  }
-}
-
-# --- Foundry (AIServices Model Inference API) — separate API, path=foundry, OSS/partner models. ---
-resource "azurerm_api_management_api" "foundry" {
-  name                  = "foundry"
-  resource_group_name   = var.resource_group_name
-  api_management_name   = azurerm_api_management.apim.name
-  revision              = "1"
-  display_name          = "Foundry (Model Inference)"
-  path                  = "foundry"
-  protocols             = ["https"]
-  subscription_required = var.client_auth_mode != "entra-id"
-  # GA OpenAI/v1 inference base (…/openai/v1). Clients call POST /foundry/chat/completions with the
-  # deployment name in the body "model" field; APIM appends the path to this service_url.
-  service_url = var.foundry_endpoint
-
-  subscription_key_parameter_names {
-    header = "Ocp-Apim-Subscription-Key"
-    query  = "api-key"
-  }
-}
-
-# Wildcard operation so every /foundry/* path routes (no OpenAPI import for the Model Inference API).
-resource "azurerm_api_management_api_operation" "foundry_proxy" {
-  operation_id        = "proxy"
-  api_name            = azurerm_api_management_api.foundry.name
-  api_management_name = azurerm_api_management.apim.name
-  resource_group_name = var.resource_group_name
-  display_name        = "Proxy"
-  method              = "POST"
-  url_template        = "/*"
-  description         = "Catch-all proxy to the AIServices Model Inference endpoint."
-}
-
-resource "azurerm_api_management_api_policy" "foundry" {
-  api_name            = azurerm_api_management_api.foundry.name
-  api_management_name = azurerm_api_management.apim.name
-  resource_group_name = var.resource_group_name
-  xml_content = templatefile(var.foundry_policy_template_path, {
-    client_auth_mode        = var.client_auth_mode
-    entra_tenant_id         = var.entra_tenant_id
-    entra_api_audience      = var.entra_api_audience
-    entra_team_claim        = var.entra_team_claim
-    rate_tiers              = var.rate_tiers
-    model_tokens_per_minute = var.model_tokens_per_minute
-    foundry_v1_base         = var.foundry_v1_base
-  })
-
-  depends_on = [
-    azurerm_role_assignment.apim_to_openai,
-    azurerm_role_assignment.apim_to_foundry,
-    azurerm_api_management_named_value.allowed_models,
-    azurerm_api_management_named_value.tokens_per_minute,
-    azurerm_api_management_named_value.token_quota,
-    azurerm_api_management_named_value.token_quota_period,
-    azurerm_api_management_named_value.consumer_config_json,
-    azurerm_api_management_named_value.tier,
-    azurerm_api_management_api_diagnostic.foundry,
-    azurerm_api_management_api_operation.foundry_proxy,
-  ]
-
-  lifecycle {
-    precondition {
-      condition     = var.client_auth_mode != "entra-id" || (var.entra_tenant_id != "" && var.entra_api_audience != "" && var.entra_team_claim != "")
-      error_message = "entra_tenant_id, entra_api_audience, and entra_team_claim are required when client_auth_mode = entra-id."
-    }
-  }
-}
-
-resource "azurerm_api_management_api_diagnostic" "foundry" {
-  identifier               = "applicationinsights"
-  api_name                 = azurerm_api_management_api.foundry.name
-  api_management_name      = azurerm_api_management.apim.name
-  resource_group_name      = var.resource_group_name
-  api_management_logger_id = azurerm_api_management_logger.appinsights.id
-
-  sampling_percentage       = 100
-  always_log_errors         = true
-  log_client_ip             = true
-  verbosity                 = "information"
-  http_correlation_protocol = "W3C"
-}
-
-resource "azapi_update_resource" "foundry_diag_metrics" {
-  type        = "Microsoft.ApiManagement/service/apis/diagnostics@2022-08-01"
-  resource_id = azurerm_api_management_api_diagnostic.foundry.id
+  resource_id = azurerm_api_management_api_diagnostic.vscode_models.id
   body = {
     properties = {
       metrics = true
@@ -478,6 +570,11 @@ resource "azapi_update_resource" "foundry_diag_metrics" {
 output "id" {
   description = "Resource ID of the APIM instance."
   value       = azurerm_api_management.apim.id
+}
+
+output "logger_id" {
+  description = "Resource ID of the Application Insights APIM logger."
+  value       = azurerm_api_management_logger.appinsights.id
 }
 
 output "name" {
@@ -495,6 +592,11 @@ output "gateway_url" {
   value       = azurerm_api_management.apim.gateway_url
 }
 
+output "model_gateway_base_url" {
+  description = "Base URL for Chat Completions and Responses clients."
+  value       = "${azurerm_api_management.apim.gateway_url}/openai/v1"
+}
+
 output "vscode_base_url" {
   description = "Base URL prefix for VS Code BYOK model URLs."
   value       = "${azurerm_api_management.apim.gateway_url}/vscode/models"
@@ -505,17 +607,77 @@ output "private_ip" {
   value       = try(azurerm_api_management.apim.private_ip_addresses[0], null)
 }
 
+output "model_role_assignments" {
+  description = "Canonical AIServices RBAC granted to the APIM managed identity."
+  value = {
+    openai = {
+      scope                = azurerm_role_assignment.apim_to_model_openai.scope
+      role_definition_name = azurerm_role_assignment.apim_to_model_openai.role_definition_name
+    }
+    foundry = {
+      scope                = azurerm_role_assignment.apim_to_model_foundry.scope
+      role_definition_name = azurerm_role_assignment.apim_to_model_foundry.role_definition_name
+    }
+  }
+}
+
+output "allowed_models_seed_value" {
+  description = "Create-time allowed-models named value seed derived from the canonical Terraform catalog."
+  value       = nonsensitive(azurerm_api_management_named_value.allowed_models.value)
+}
+
+output "api_contract" {
+  value = {
+    model_gateway = {
+      name   = azurerm_api_management_api.model_gateway.name
+      path   = azurerm_api_management_api.model_gateway.path
+      header = azurerm_api_management_api.model_gateway.subscription_key_parameter_names[0].header
+      operations = {
+        chat      = azurerm_api_management_api_operation.model_gateway_chat.url_template
+        responses = azurerm_api_management_api_operation.model_gateway_responses.url_template
+      }
+    }
+    vscode_models = {
+      name   = azurerm_api_management_api.vscode_models.name
+      path   = azurerm_api_management_api.vscode_models.path
+      header = azurerm_api_management_api.vscode_models.subscription_key_parameter_names[0].header
+      operations = {
+        chat = azurerm_api_management_api_operation.vscode_chat.url_template
+      }
+    }
+    search_mcp = local.search_mcp_contract
+  }
+}
+
+output "rendered_policy_xml" {
+  description = "Rendered shared policy variants used by contract tests."
+  value = {
+    model_gateway = local.model_gateway_policy_xml
+    vscode_models = local.vscode_models_policy_xml
+    search_mcp    = local.search_mcp_policy_xml
+  }
+}
+
+output "codexproxy_contract" {
+  value = {
+    enabled           = var.codexproxy_enabled
+    base_url          = var.codexproxy_base_url
+    named_value_count = length(azurerm_api_management_named_value.codexproxy_key)
+  }
+}
+
 resource "azurerm_api_management_named_value" "allowed_models" {
   name                = "allowed-models"
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   display_name        = "allowed-models"
-  value               = join(",", var.allowed_models)
+  value               = join(",", local.allowed_models)
 
   lifecycle {
-    # The Phase 3a config-sync worker is the runtime owner of this value (it writes it from
-    # the Cosmos config doc). Terraform sets the initial value on create but must not revert
-    # the worker's updates on subsequent applies.
+    # The Phase 3a config-sync worker is the runtime owner of this value (it publishes Cosmos
+    # id=global.allowed_models, including updates made via scripts/seed-cosmos-jumpbox.sh).
+    # Terraform seeds the create-time default only; later applies must not clobber Admin UI /
+    # Cosmos-driven runtime catalog changes after config-sync propagates them into APIM.
     ignore_changes = [value]
   }
 }

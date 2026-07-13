@@ -1,0 +1,315 @@
+<policies>
+  <inbound>
+    <base />
+%{ if client_auth_mode == "entra-id" ~}
+    <validate-jwt header-name="Authorization" require-scheme="Bearer"
+                  failed-validation-httpcode="401"
+                  failed-validation-error-message="Unauthorized. A valid Entra ID access token is required."
+                  output-token-variable-name="jwt">
+      <openid-config url="https://login.microsoftonline.com/${entra_tenant_id}/v2.0/.well-known/openid-configuration" validate-connectivity="false" />
+      <audiences><audience>${entra_api_audience}</audience></audiences>
+      <issuers><issuer>https://login.microsoftonline.com/${entra_tenant_id}/v2.0</issuer></issuers>
+    </validate-jwt>
+    <set-variable name="consumerId" value='@{
+        var jwt = (Jwt)context.Variables["jwt"];
+        return jwt.Claims.ContainsKey("${entra_team_claim}")
+            ? (jwt.Claims["${entra_team_claim}"].FirstOrDefault() ?? "unknown-consumer")
+            : "unknown-consumer";
+    }' />
+%{ endif ~}
+    <set-variable name="consumerId" value='@{
+        var existing = context.Variables.ContainsKey("consumerId")
+            ? (string)context.Variables["consumerId"]
+            : null;
+        if (!string.IsNullOrEmpty(existing)) { return existing; }
+        return context.Subscription?.Name ?? context.Subscription?.Id ?? "anonymous";
+    }' />
+
+    <set-variable name="requestBodyValid" value='@{
+        try {
+            context.Request.Body.As&lt;Newtonsoft.Json.Linq.JObject&gt;(preserveContent: true);
+            return true;
+        } catch {
+            return false;
+        }
+    }' />
+    <choose>
+      <when condition='@(!(bool)context.Variables["requestBodyValid"])'>
+        <return-response>
+          <set-status code="400" reason="Bad Request" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-body>{"error":"invalid JSON body"}</set-body>
+        </return-response>
+      </when>
+    </choose>
+
+%{ if model_source == "body" ~}
+    <set-variable name="requestedModel" value='@{
+        var body = context.Request.Body.As&lt;Newtonsoft.Json.Linq.JObject&gt;(preserveContent: true);
+        var token = body["model"];
+        return token != null &amp;&amp; token.Type == Newtonsoft.Json.Linq.JTokenType.String
+            ? (string)token
+            : "";
+    }' />
+%{ else ~}
+    <set-variable name="requestedModel" value='@(context.Request.MatchedParameters.GetValueOrDefault("model", ""))' />
+%{ endif ~}
+    <choose>
+      <when condition='@(string.IsNullOrWhiteSpace((string)context.Variables["requestedModel"]))'>
+        <return-response>
+          <set-status code="400" reason="Bad Request" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-body>{"error":"model is required"}</set-body>
+        </return-response>
+      </when>
+    </choose>
+
+    <set-variable name="consumerCfg" value='@{
+        var b64 = "{{consumer-config-json}}";
+        if (string.IsNullOrEmpty(b64)) { return (string)null; }
+        var raw = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(b64));
+        var all = Newtonsoft.Json.Linq.JObject.Parse(raw);
+        var consumer = (string)context.Variables["consumerId"];
+        return all[consumer] != null
+            ? all[consumer].ToString(Newtonsoft.Json.Formatting.None)
+            : (string)null;
+    }' />
+    <set-variable name="effectiveAllowedModels" value='@{
+        if (context.Variables["consumerCfg"] != null) {
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+            var configured = cfg.Value&lt;string&gt;("allowed_models");
+            if (!string.IsNullOrEmpty(configured)) { return configured; }
+        }
+        return "{{allowed-models}}";
+    }' />
+    <set-variable name="requestedModelAllowed" value='@{
+        var requested = (string)context.Variables["requestedModel"];
+        var deployed = new[] { ${join(", ", [for model in deployed_models : "\"${model}\""])} };
+        if (!deployed.Contains(requested)) { return false; }
+        var allowed = ((string)context.Variables["effectiveAllowedModels"])
+            .Split(",".ToCharArray())
+            .Select(model =&gt; model.Trim())
+            .Where(model =&gt; model.Length &gt; 0)
+            .ToList();
+        return allowed.Contains(requested);
+    }' />
+    <choose>
+      <when condition='@(!(bool)context.Variables["requestedModelAllowed"])'>
+        <return-response>
+          <set-status code="403" reason="Forbidden" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-body>@(Newtonsoft.Json.JsonConvert.SerializeObject(new {
+              error = "model '" + (string)context.Variables["requestedModel"] + "' is not allowed"
+          }))</set-body>
+        </return-response>
+      </when>
+    </choose>
+
+    <set-variable name="effectiveTier" value='@{
+        if (context.Variables["consumerCfg"] != null) {
+            var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+            var tier = cfg.Value&lt;string&gt;("tier");
+            if (${join(" || ", [for name, _ in rate_tiers : "tier == \"${name}\""])}) { return tier; }
+        }
+        return "default";
+    }' />
+    <set-variable name="downgradeLevel" value='@{
+        if (context.Variables["consumerCfg"] == null) { return 0; }
+        var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+        var active = cfg["active_downgrade"];
+        return active != null &amp;&amp; active["level"] != null
+            ? (int)active["level"]
+            : 0;
+    }' />
+    <set-variable name="effectiveModel" value='@{
+        var requested = (string)context.Variables["requestedModel"];
+        if (context.Variables["consumerCfg"] == null) { return requested; }
+        var level = (int)context.Variables["downgradeLevel"];
+        if (level &lt;= 0) { return requested; }
+        var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
+        var ladderRaw = cfg.Value&lt;string&gt;("downgrade_ladder");
+        if (string.IsNullOrEmpty(ladderRaw)) { return requested; }
+        var ladder = ladderRaw.Split(",".ToCharArray())
+            .Select(model =&gt; model.Trim())
+            .Where(model =&gt; model.Length &gt; 0)
+            .ToList();
+        var index = ladder.IndexOf(requested);
+        if (index &lt; 0) { return requested; }
+        var candidate = ladder[System.Math.Min(index + level, ladder.Count - 1)];
+        var deployed = new[] { ${join(", ", [for model in deployed_models : "\"${model}\""])} };
+        var allowed = ((string)context.Variables["effectiveAllowedModels"])
+            .Split(",".ToCharArray())
+            .Select(model =&gt; model.Trim())
+            .Where(model =&gt; model.Length &gt; 0)
+            .ToList();
+        return deployed.Contains(candidate) &amp;&amp; allowed.Contains(candidate)
+            ? candidate
+            : requested;
+    }' />
+
+    <set-body>@{
+        var body = context.Request.Body.As&lt;Newtonsoft.Json.Linq.JObject&gt;();
+        var effective = (string)context.Variables["effectiveModel"];
+        if (effective == "FW-GLM-5.2") {
+            var messages = body["messages"] as Newtonsoft.Json.Linq.JArray;
+            if (messages != null) {
+                foreach (var messageToken in messages) {
+                    var message = messageToken as Newtonsoft.Json.Linq.JObject;
+                    if (message != null) {
+                        var refusal = message["refusal"];
+                        if (refusal != null &amp;&amp; refusal.Type == Newtonsoft.Json.Linq.JTokenType.Null) {
+                            message.Remove("refusal");
+                        }
+                    }
+                }
+            }
+        }
+        body["model"] = effective;
+        if (context.Operation.Id == "responses") {
+            var input = body["input"] as Newtonsoft.Json.Linq.JArray;
+            if (input != null) {
+                foreach (var inputToken in input) {
+                    var item = inputToken as Newtonsoft.Json.Linq.JObject;
+                    if (item != null &amp;&amp;
+                        item["type"] == null &amp;&amp;
+                        item["role"] != null &amp;&amp;
+                        item["content"] != null) {
+                        item["type"] = "message";
+                    }
+                }
+            }
+        }
+        if (context.Operation.Id != "responses" &amp;&amp;
+            effective == "gpt-5.6-sol" &amp;&amp;
+            body["max_tokens"] != null &amp;&amp;
+            body["max_completion_tokens"] == null) {
+            body["max_completion_tokens"] = body["max_tokens"];
+            body.Remove("max_tokens");
+        }
+        return body.ToString(Newtonsoft.Json.Formatting.None);
+    }</set-body>
+
+    <set-header name="api-key" exists-action="delete" />
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-query-parameter name="subscription-key" exists-action="delete" />
+
+    <choose>
+      <when condition='@((string)context.Variables["effectiveModel"] != (string)context.Variables["requestedModel"])'>
+        <trace source="llm-gateway" severity="information">
+          <message>@("model routed from " + (string)context.Variables["requestedModel"] + " to " + (string)context.Variables["effectiveModel"])</message>
+          <metadata name="consumer" value='@((string)context.Variables["consumerId"])' />
+          <metadata name="requestedModel" value='@((string)context.Variables["requestedModel"])' />
+          <metadata name="effectiveModel" value='@((string)context.Variables["effectiveModel"])' />
+          <metadata name="downgradeLevel" value='@(((int)context.Variables["downgradeLevel"]).ToString())' />
+        </trace>
+      </when>
+    </choose>
+
+    <choose>
+%{ for name, _ in rate_tiers ~}
+      <when condition='@((string)context.Variables["effectiveTier"] == "${name}")'>
+        <llm-token-limit counter-key='@((string)context.Variables["consumerId"])'
+                         tokens-per-minute="{{tier-${name}-tpm}}"
+                         token-quota="{{tier-${name}-quota}}"
+                         token-quota-period="{{tier-${name}-period}}"
+                         estimate-prompt-tokens="false"
+                         remaining-tokens-variable-name="remainingTokens" />
+      </when>
+%{ endfor ~}
+%{ for model, tpm in model_tokens_per_minute ~}
+      <when condition='@((string)context.Variables["effectiveTier"] == "default" &amp;&amp; (string)context.Variables["effectiveModel"] == "${model}")'>
+        <llm-token-limit counter-key='@((string)context.Variables["consumerId"])'
+                         tokens-per-minute="${tpm}"
+                         token-quota="{{token-quota}}"
+                         token-quota-period="{{token-quota-period}}"
+                         estimate-prompt-tokens="false"
+                         remaining-tokens-variable-name="remainingTokens" />
+      </when>
+%{ endfor ~}
+      <otherwise>
+        <llm-token-limit counter-key='@((string)context.Variables["consumerId"])'
+                         tokens-per-minute="{{tokens-per-minute}}"
+                         token-quota="{{token-quota}}"
+                         token-quota-period="{{token-quota-period}}"
+                         estimate-prompt-tokens="false"
+                         remaining-tokens-variable-name="remainingTokens" />
+      </otherwise>
+    </choose>
+
+    <llm-emit-token-metric namespace="llm-gateway">
+      <dimension name="consumer" value='@((string)context.Variables["consumerId"])' />
+      <dimension name="deployment" value='@((string)context.Variables["requestedModel"])' />
+      <dimension name="effectiveModel" value='@((string)context.Variables["effectiveModel"])' />
+      <dimension name="API ID" />
+    </llm-emit-token-metric>
+
+%{ if supports_responses ~}
+    <choose>
+      <when condition='@(context.Operation.Id == "responses")'>
+        <choose>
+          <when condition='@((string)context.Variables["effectiveModel"] == "gpt-5.6-sol")'>
+            <set-backend-service base-url="${model_openai_v1_base}" />
+            <authentication-managed-identity resource="https://cognitiveservices.azure.com"
+                                             output-token-variable-name="msi-access-token" />
+            <set-header name="Authorization" exists-action="override">
+              <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
+            </set-header>
+          </when>
+          <otherwise>
+%{ if codexproxy_enabled ~}
+            <set-backend-service base-url="${codexproxy_base_url}" />
+            <set-header name="Authorization" exists-action="override">
+              <value>@("Bearer " + "{{codexproxy-key}}")</value>
+            </set-header>
+%{ else ~}
+            <return-response>
+              <set-status code="503" reason="Service Unavailable" />
+              <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+              <set-body>{"error":"Responses backend is not configured"}</set-body>
+            </return-response>
+%{ endif ~}
+          </otherwise>
+        </choose>
+      </when>
+      <otherwise>
+        <set-backend-service base-url="${model_openai_v1_base}" />
+        <authentication-managed-identity resource="https://cognitiveservices.azure.com"
+                                         output-token-variable-name="msi-access-token" />
+        <set-header name="Authorization" exists-action="override">
+          <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
+        </set-header>
+      </otherwise>
+    </choose>
+%{ else ~}
+    <set-backend-service base-url="${model_openai_v1_base}" />
+%{ if rewrite_chat_path ~}
+    <rewrite-uri template="/chat/completions" copy-unmatched-params="false" />
+%{ endif ~}
+    <authentication-managed-identity resource="https://cognitiveservices.azure.com"
+                                     output-token-variable-name="msi-access-token" />
+    <set-header name="Authorization" exists-action="override">
+      <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
+    </set-header>
+%{ endif ~}
+  </inbound>
+  <backend>
+    <forward-request timeout="300" fail-on-error-status-code="false" buffer-response="false" />
+  </backend>
+  <outbound>
+    <base />
+    <choose>
+      <when condition='@((string)context.Variables["effectiveModel"] != (string)context.Variables["requestedModel"])'>
+        <set-header name="x-ai-gateway-requested-model" exists-action="override">
+          <value>@((string)context.Variables["requestedModel"])</value>
+        </set-header>
+        <set-header name="x-ai-gateway-effective-model" exists-action="override">
+          <value>@((string)context.Variables["effectiveModel"])</value>
+        </set-header>
+        <set-header name="x-ai-gateway-downgrade-level" exists-action="override">
+          <value>@(((int)context.Variables["downgradeLevel"]).ToString())</value>
+        </set-header>
+      </when>
+    </choose>
+  </outbound>
+  <on-error><base /></on-error>
+</policies>

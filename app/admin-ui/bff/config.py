@@ -14,8 +14,10 @@ _DEFAULT_RATE_TIERS = {
 # IS the real model name. Authoritative source is Terraform (alias_models_json display map)
 # injected via ALIAS_MODELS_JSON; this default mirrors it for local dev / when the env is absent.
 _DEFAULT_ALIAS_MODELS = {
-    "gpt-5.4": "GPT-5.4", "gpt-5.4-mini": "GPT-5.4 mini",
-    "grok-4.3": "Grok 4.3 (xAI)", "DeepSeek-V4-Pro": "DeepSeek V4 Pro",
+    "gpt-5.6-sol": "GPT-5.6 Sol",
+    "FW-GLM-5.2": "GLM 5.2 (Fireworks)",
+    "DeepSeek-V4-Pro": "DeepSeek V4 Pro",
+    "grok-4.3": "Grok 4.3 (xAI)",
 }
 
 

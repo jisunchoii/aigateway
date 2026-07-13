@@ -34,7 +34,7 @@ _Q_RECENT_REQUESTS = ('AppRequests | top 50 by TimeGenerated desc '
 _Q_BLOCKED_EVENTS = ('AppRequests | where toint(ResultCode) in (403, 429) | top 50 by TimeGenerated desc '
                      '| project TimeGenerated, Name, ResultCode')
 _Q_DOWNGRADE_EVENTS = (
-    "AppTraces | where Message has 'model downgraded' | top 50 by TimeGenerated desc "
+    "AppTraces | where Message has 'model routed' | top 50 by TimeGenerated desc "
     "| extend p=parse_json(Properties) "
     "| project TimeGenerated, Message, consumer=tostring(p.consumer), "
     "requestedModel=tostring(p.requestedModel), effectiveModel=tostring(p.effectiveModel), "

@@ -21,7 +21,7 @@ def test_settings_read_from_env(monkeypatch):
     # With no explicit ALLOWED_MODEL_ALIASES and no ALIAS_MODELS_JSON, the validator allowlist
     # derives from the default alias-models map keys (incl. the Foundry OSS aliases).
     assert set(s.allowed_model_aliases) == set(s.alias_models.keys())
-    assert "grok-4.3" in s.allowed_model_aliases
+    assert "gpt-5.6-sol" in s.allowed_model_aliases
     assert set(s.rate_tiers.keys()) == {"small", "medium", "large"}
     assert s.rate_tiers["medium"]["tpm"] == 150000
     assert s.issuer == "https://login.microsoftonline.com/entra_tenant_id/v2.0"
@@ -29,6 +29,27 @@ def test_settings_read_from_env(monkeypatch):
         "https://login.microsoftonline.com/entra_tenant_id/discovery/v2.0/keys"
     )
     assert s.log_analytics_workspace_id == "log_analytics_workspace_id"
+
+
+def test_default_catalog_matches_canonical_deployments(monkeypatch):
+    for key in [
+        "ENTRA_TENANT_ID", "BFF_API_AUDIENCE", "SPA_CLIENT_ID",
+        "ADMIN_GROUP_OBJECT_ID", "SUBSCRIPTION_ID", "APIM_RG",
+        "APIM_NAME", "COSMOS_ENDPOINT", "COSMOS_DATABASE",
+        "COSMOS_MAP_CONTAINER",
+    ]:
+        monkeypatch.setenv(key, key.lower())
+    monkeypatch.delenv("ALIAS_MODELS_JSON", raising=False)
+    monkeypatch.delenv("ALLOWED_MODEL_ALIASES", raising=False)
+
+    settings = Settings.from_env()
+
+    assert set(settings.alias_models) == {
+        "gpt-5.6-sol",
+        "FW-GLM-5.2",
+        "DeepSeek-V4-Pro",
+        "grok-4.3",
+    }
 
 
 def test_allowed_aliases_default_to_alias_models_keys(monkeypatch):
@@ -41,9 +62,9 @@ def test_allowed_aliases_default_to_alias_models_keys(monkeypatch):
         monkeypatch.setenv(k, k.lower())
     monkeypatch.delenv("ALLOWED_MODEL_ALIASES", raising=False)
     monkeypatch.setenv("ALIAS_MODELS_JSON",
-                       '{"gpt-5.4":"gpt-5.4","grok-4.3":"grok-4.3","DeepSeek-V4-Pro":"DeepSeek-V4-Pro"}')
+                       '{"gpt-5.6-sol":"gpt-5.6-sol","FW-GLM-5.2":"FW-GLM-5.2","DeepSeek-V4-Pro":"DeepSeek-V4-Pro"}')
     s = Settings.from_env()
-    assert set(s.allowed_model_aliases) == {"gpt-5.4", "grok-4.3", "DeepSeek-V4-Pro"}
+    assert set(s.allowed_model_aliases) == {"gpt-5.6-sol", "FW-GLM-5.2", "DeepSeek-V4-Pro"}
 
 
 def test_explicit_allowed_aliases_env_overrides(monkeypatch):
@@ -51,7 +72,7 @@ def test_explicit_allowed_aliases_env_overrides(monkeypatch):
               "SUBSCRIPTION_ID", "APIM_RG", "APIM_NAME", "COSMOS_ENDPOINT",
               "COSMOS_DATABASE", "COSMOS_MAP_CONTAINER"]:
         monkeypatch.setenv(k, k.lower())
-    monkeypatch.setenv("ALLOWED_MODEL_ALIASES", "gpt-5.4,gpt-5.4-mini")
-    monkeypatch.setenv("ALIAS_MODELS_JSON", '{"gpt-5.4":"gpt-5.4","grok-4.3":"grok-4.3"}')
+    monkeypatch.setenv("ALLOWED_MODEL_ALIASES", "gpt-5.6-sol,FW-GLM-5.2")
+    monkeypatch.setenv("ALIAS_MODELS_JSON", '{"gpt-5.6-sol":"gpt-5.6-sol","grok-4.3":"grok-4.3"}')
     s = Settings.from_env()
-    assert s.allowed_model_aliases == ("gpt-5.4", "gpt-5.4-mini")
+    assert s.allowed_model_aliases == ("gpt-5.6-sol", "FW-GLM-5.2")

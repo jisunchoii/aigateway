@@ -13,14 +13,34 @@ output "apim_gateway_url" {
   value       = module.apim.gateway_url
 }
 
+output "apim_name" {
+  description = "API Management service name."
+  value       = module.apim.name
+}
+
+output "model_gateway_base_url" {
+  description = "Base URL for GitHub Copilot CLI, OpenCode, Codex, and direct clients."
+  value       = module.apim.model_gateway_base_url
+}
+
+output "responses_endpoint" {
+  description = "Codex CLI base URL; Codex appends /responses."
+  value       = module.apim.model_gateway_base_url
+}
+
 output "vscode_base_url" {
   description = "Base URL prefix for VS Code BYOK model URLs."
   value       = module.apim.vscode_base_url
 }
 
-output "openai_endpoint" {
-  description = "Azure OpenAI account endpoint. Use with smoke-direct-blocked.ps1 from outside the VNet. Null in reuse mode (no dedicated Azure OpenAI account)."
-  value       = try(module.openai[0].endpoint, null)
+output "model_account_name" {
+  description = "Canonical project-enabled AIServices account name."
+  value       = module.foundry.name
+}
+
+output "model_openai_v1_endpoint" {
+  description = "Canonical OpenAI/v1 inference base."
+  value       = module.foundry.endpoint_openai_v1
 }
 
 # --- Phase 3a: dynamic config (Cosmos + sync worker) ---
@@ -55,4 +75,11 @@ output "config_sync_job_name" {
 output "admin_ui_fqdn" {
   description = "Internal FQDN of the Admin UI (null until admin_ui_image is set). Browse to https://<this> from inside the VNet (jumpbox)."
   value       = module.control_plane.admin_ui_fqdn
+}
+
+output "search_mcp_url" {
+  # Cross-task contract: Task 2 keeps the canonical /mcp/ root URL while Task 3
+  # maps APIM to the exact mcp path segment.
+  description = "APIM MCP endpoint for Codex web search (null until searchmcp_image is set)."
+  value       = local.searchmcp_enabled ? "${module.apim.gateway_url}/mcp/" : null
 }

@@ -66,7 +66,7 @@ Admin UI의 **Policies** 탭에서 consumer별 운영 정책을 조정합니다.
 
 ### 변경 반영
 
-Admin UI에서 저장한 설정은 Cosmos DB config 문서에 기록되고, config-sync worker가 APIM Named Value로 동기화합니다.
+Admin UI에서 저장한 설정은 Cosmos DB config 문서에 기록되고, config-sync worker가 **APIM runtime Named Value**로 동기화합니다. Admin UI의 모델 목록 자체는 Terraform이 `model_deployments`에서 생성한 `ALIAS_MODELS_JSON` BFF 환경 변수로 공급되며, config-sync가 이 alias map을 갱신하지는 않습니다.
 
 | 단계 | 동작 |
 |---|---|
@@ -115,7 +115,7 @@ az containerapp job start \
 |---|---|
 | `x-ai-gateway-requested-model` | 클라이언트가 요청한 원래 모델 |
 | `x-ai-gateway-effective-model` | 실제로 호출된 모델 |
-| `x-ai-gateway-downgrade-level` | `0` 전환 없음, `1` 80% 임계, `2` 100% 임계 |
+| `x-ai-gateway-downgrade-level` | `0` budget 전환 없음, `1` 80% 임계, `2` 100% 임계 |
 
 ### Application Insights 쿼리
 
@@ -150,18 +150,18 @@ consumer별 일별 예산은 Admin UI Policies 탭에서 설정합니다. 사용
 전환 순서는 Cosmos DB config의 `downgrade_ladder` 배열로 정의합니다.
 
 ```text
-gpt-5.4 -> gpt-5.4-mini -> DeepSeek-V4-Pro
+gpt-5.6-sol -> DeepSeek-V4-Pro -> grok-4.3
 ```
 
 ### 가격 데이터 갱신
 
-모델 단가가 바뀌면 jumpbox에서 pricing seed를 다시 실행합니다.
+모델 단가가 바뀌면 jumpbox에서 pricing seed를 다시 실행합니다. Seed 값은 Azure 공식 단가를 우선 사용합니다. Azure가 단가를 공개하지 않은 Fireworks 모델은 Fireworks 공개 단가를 임시 참고값으로 사용할 수 있지만, 지역, SKU, 계약 조건이 반영된 실제 Azure 청구 단가와 다를 수 있으므로 운영 전에 확인하고 수정해야 합니다.
 
 ```bash
 ./scripts/seed-pricing-jumpbox.sh https://<cosmos-account>.documents.azure.com:443/
 ```
 
-갱신 후 config-sync worker를 실행하면 Admin UI의 가격 라벨과 예산 계산에 반영됩니다.
+갱신 후 config-sync worker를 실행하면 Admin UI의 가격 라벨과 예산 계산에 반영됩니다. Budget 계산은 Cosmos `pricing` 문서에 저장된 per-1K 단가를 사용하며, 해당 문서에 단가가 없는 모델만 `$0`으로 집계됩니다.
 
 ### Azure Cost Management 예산
 
@@ -204,41 +204,43 @@ APIM SKU 변경은 수십 분이 걸릴 수 있습니다. 프로덕션에서는 
 
 ### 모델 capacity 조정
 
-greenfield 배포에서는 `infra/` 디렉터리의 `terraform.tfvars` 파일에서 deployment map의 capacity를 조정합니다.
+신규 모델 배포에서는 `infra/terraform.tfvars`의 `model_deployments` map에서 capacity를 조정합니다.
 
 ```text
-openai_deployments = {
-  "gpt-5.4"      = { capacity = 50 }
-  "gpt-5.4-mini" = { capacity = 100 }
-}
-
-foundry_deployments = {
-  "grok-4.3"        = { capacity = 30 }
-  "DeepSeek-V4-Pro" = { capacity = 30 }
+model_deployments = {
+  "gpt-5.6-sol" = { model_name = "gpt-5.6-sol", model_format = "OpenAI", model_version = "2026-07-09", sku_name = "GlobalStandard", capacity = 300 }
+  "FW-GLM-5.2"  = { model_name = "FW-GLM-5.2",  model_format = "Fireworks", model_version = "1", sku_name = "DataZoneStandard", capacity = 300 }
+  "DeepSeek-V4-Pro" = { model_name = "DeepSeek-V4-Pro", model_format = "DeepSeek", model_version = "2026-04-23", sku_name = "GlobalStandard", capacity = 30 }
+  "grok-4.3"    = { model_name = "grok-4.3", model_format = "xAI", model_version = "1", sku_name = "GlobalStandard", capacity = 30 }
 }
 ```
 
-brownfield 재사용 모드(`reuse_foundry=true`)에서는 Terraform이 기존 모델 deployment를 소유하지 않으므로 Microsoft Foundry 포털 또는 `az` CLI에서 직접 capacity를 조정합니다.
+기존 계정 재사용 모드(`reuse_foundry=true`)에서는 Terraform이 기존 모델 deployment를 소유하지 않으므로 Microsoft Foundry 포털 또는 `az` CLI에서 직접 capacity를 조정합니다.
+
+### 기존 계정의 프로젝트 관리
+
+`reuse_foundry=true`에서 프로젝트가 없으면 Terraform이 `foundry_project_name`으로 새 프로젝트를 생성합니다. 기존 프로젝트가 있으면 이름을 정확히 맞추고 apply 전에 `module.foundry.azapi_resource.project[0]`으로 import합니다. Private Endpoint와 APIM 역할 할당도 같은 용도의 기존 리소스를 유지하려면 정확한 ID로 import합니다.
 
 ### 모델 추가·제거
 
-게이트웨이에 모델을 추가하거나 빼려면 두 곳을 갱신합니다.
+게이트웨이에 모델을 추가하거나 빼려면 Terraform seed와 runtime catalog를 구분해서 갱신합니다.
 
 | 위치 | 무엇 | 효과 |
 |---|---|---|
-| `infra/terraform.tfvars`의 `allowed_models`(+ `openai_deployments`/`foundry_deployments`) | 허용 모델 목록과 deployment 정의 | `terraform apply` 후 APIM이 호출을 허용하고, Admin UI Models 페이지에 자동 표시 |
+| `infra/terraform.tfvars`의 `model_deployments` | 신규/최종 지원 모델 deployment 정의와 Terraform-side Admin UI catalog seed (`ALIAS_MODELS_JSON`) | `terraform apply` 후 기준 계정의 deployment와 Admin UI model picker가 갱신됨 |
+| Cosmos `global` 문서 (`scripts/seed-cosmos-jumpbox.sh` 예시) | 운영 중 APIM global named value catalog (`allowed_models`, quota 등) | config-sync 실행 후 APIM runtime catalog가 갱신됨. Terraform은 이후 이 값을 되돌리지 않음 |
 | `scripts/seed-pricing-jumpbox.sh`의 `models` 맵 | 모델별 per-1k 단가 | 시드 재실행 후 Admin UI 단가 표시와 budget 비용 계산 반영 |
 
-Admin UI 모델 목록은 `allowed_models`에서 자동 생성되므로 별도 코드 수정은 필요 없습니다. 단, 가격은 운영자 소유 Cosmos `pricing` 문서라 시드를 갱신하지 않으면 신규 모델은 단가가 표시되지 않고 budget 비용이 0으로 잡힙니다.
+정리하면 **Admin UI 모델 목록은 Terraform/BFF env**, **APIM runtime 허용 카탈로그는 Cosmos + config-sync**가 소유합니다. 새 지원 모델을 운영에 올릴 때는 두 경로를 모두 갱신해야 합니다. 단, 가격은 운영자 소유 Cosmos `pricing` 문서라 시드를 갱신하지 않으면 신규 모델은 단가가 표시되지 않고 budget 비용이 0으로 잡힙니다.
 
 ```text
 "models": {
-  "gpt-5.4":         { "prompt": 0.0025,  "completion": 0.015 },
-  "Kimi-K2.6-1":     { "prompt": 0.00095, "completion": 0.004 }
+  "grok-4.3":        { "prompt": 0.00125, "completion": 0.0025 },
+  "DeepSeek-V4-Pro": { "prompt": 0.00174, "completion": 0.00348 }
 }
 ```
 
-per-1k 단가는 모델별 per-1M 가격을 1000으로 나눈 값입니다. 예를 들어 Kimi K2.6은 Microsoft Foundry Models 공식 가격 기준 input $0.95/M, output $4.00/M이므로 per-1k 단가는 prompt 0.00095, completion 0.004입니다.
+per-1k 단가는 모델별로 확인한 per-1M 가격을 1000으로 나눈 값입니다. 현재 seed에는 `gpt-5.6-sol`과 `FW-GLM-5.2`를 포함한 지원 모델의 단가가 들어 있습니다. 새 모델을 추가할 때는 공식 단가 또는 문서화된 provider 참고 단가를 같은 map에 추가해야 하며, 단가가 누락된 모델만 예산 계산에서 `$0`으로 집계됩니다.
 
 ### APIM 공개 모드 변경
 
@@ -300,7 +302,7 @@ az group delete -n "$resource_group_name" --yes
 `az group delete`는 해당 리소스 그룹의 모든 리소스를 삭제합니다. 같은 RG에 수동으로 만든 리소스가 있으면 먼저 옮기거나 백업하세요.
 {% endhint %}
 
-### brownfield 재사용 모드
+### 기존 계정 재사용 모드
 
 `reuse_foundry=true`인 경우 기존 Microsoft Foundry 계정은 별도 리소스 그룹에 있으므로 gateway RG를 삭제해도 보존됩니다. 단, gateway VNet에서 만든 Private Endpoint와 APIM managed identity 역할 할당은 함께 제거됩니다.
 

@@ -54,22 +54,21 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `openai_deployments` | `gpt-5.4`, `gpt-5.4-mini` | greenfield에서 생성할 Azure OpenAI deployment map |
-| `foundry_deployments` | `grok-4.3`, `DeepSeek-V4-Pro` | AIServices/Foundry partner model deployment map |
-| `allowed_models` | `gpt-5.4`, `gpt-5.4-mini`, `grok-4.3`, `DeepSeek-V4-Pro` | APIM 정책이 허용하는 모델 목록 |
-| `openai_api_version` | `2025-01-01-preview` | 클라이언트가 보내는 Azure OpenAI API version |
-| `openai_openapi_spec_url` | Azure REST API spec URL | APIM OpenAPI import에 사용하는 spec URL |
+| `model_deployments` | `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` | 지원 모델 AIServices deployment map. map key가 곧 APIM/Admin UI 모델 이름 |
+| `foundry_project_name` | `codexproj` | 기준 child project 이름 |
+| `foundry_public_network_access_enabled` | `false` | `false`면 기준 모델 계정을 private-only로 유지 |
 
 ### 기존 Foundry 계정 재사용
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `reuse_foundry` | `false` | `true`면 기존 AIServices 계정을 data source로 읽고 gateway 연결만 추가 |
-| `existing_foundry_name` | `""` | 재사용할 AIServices 계정 이름. `reuse_foundry=true`면 필수 |
+| `reuse_foundry` | `false` | `false`면 계정·프로젝트·모델을 생성하고, `true`면 기존 계정과 모델을 유지 |
+| `existing_foundry_name` | `""` | 재사용할 기존 AIServices 계정의 정확한 이름. `reuse_foundry=true`면 필수 |
 | `existing_foundry_rg` | `""` | 기존 AIServices 계정의 resource group. `reuse_foundry=true`면 필수 |
+| `foundry_project_name` | `codexproj` | 프로젝트가 없으면 새로 만들 이름, 있으면 import할 기존 프로젝트 이름 |
 
 {% hint style="info" %}
-`reuse_foundry=true`에서는 기존 계정과 모델 deployment를 Terraform이 생성하거나 삭제하지 않습니다. 연결에 필요한 Private Endpoint와 APIM managed identity RBAC만 gateway 쪽에서 추가합니다.
+기존 계정에 프로젝트가 없으면 Terraform이 `foundry_project_name`으로 생성합니다. 프로젝트가 이미 있으면 같은 이름을 설정하고 기존 프로젝트를 import합니다. 두 경우 모두 기존 모델 deployment는 Terraform이 생성하거나 수정하지 않습니다.
 {% endhint %}
 
 ### 클라이언트 인증
@@ -93,6 +92,8 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | `config_sync_cron` | `*/5 * * * *` | config-sync Container Apps Job cron |
 | `admin_ui_image` | `""` | Admin UI image. 비어 있으면 Admin UI 미배포 |
 | `admin_ui_public` | `false` | `true`면 Admin UI public FQDN 노출 |
+| `codexproxy_image` | `""` | Codex proxy image. 비어 있으면 `/openai/v1/responses` backend 미활성화 |
+| `searchmcp_image` | `""` | Search MCP image. 비어 있으면 `/mcp/` API 미배포 |
 | `bff_api_audience` | `""` | Admin UI BFF JWT audience |
 | `spa_client_id` | `""` | SPA app registration client ID |
 | `admin_group_object_id` | `""` | Admin UI 쓰기 권한을 가진 Entra security group object ID |
@@ -118,7 +119,7 @@ large  = { tpm = 300000, quota = 1000000000, period = "Monthly" }
 ```
 
 {% hint style="info" %}
-`openai_deployments[*].capacity`와 `foundry_deployments[*].capacity`는 Azure 모델 deployment의 `sku.capacity`로 배포됩니다. APIM default tier는 모델별 `capacity * 1000`을 TPM으로 계산하지만, consumer에 `small`/`medium`/`large` tier가 있으면 `rate_tiers` 값이 우선합니다. APIM tier TPM은 backend deployment rate limit 이하로 잡아야 효과가 있습니다. 자세한 운영 기준은 [거버넌스 — Rate limit](02-governance.md#rate-limit)을 참고하세요.
+`model_deployments[*].capacity`는 Azure 모델 deployment의 `sku.capacity`로 배포됩니다. APIM default tier는 모델별 `capacity * 1000`을 TPM으로 계산하지만, consumer에 `small`/`medium`/`large` tier가 있으면 `rate_tiers` 값이 우선합니다. APIM tier TPM은 backend deployment rate limit 이하로 잡아야 효과가 있습니다. 자세한 운영 기준은 [거버넌스 — Rate limit](02-governance.md#rate-limit)을 참고하세요.
 {% endhint %}
 
 ### Jumpbox
@@ -139,7 +140,8 @@ large  = { tpm = 300000, quota = 1000000000, period = "Monthly" }
 | `apim_gateway_url` | Copilot CLI, 직접 API 호출 base URL |
 | `apim_private_ip` | VNet 내부 진단에서 APIM private IP 확인 |
 | `vscode_base_url` | VS Code BYOK custom model URL |
-| `openai_endpoint` | greenfield Azure OpenAI 계정 endpoint 확인. `reuse_foundry=true`면 `null` |
+| `model_account_name` | 기준 AIServices 계정 이름 확인 |
+| `model_openai_v1_endpoint` | 기준 모델 계정의 `/openai/v1` backend base 확인 |
 | `registry_name` | `az acr build --registry` 입력값 |
 | `registry_login_server` | `worker_image`, `admin_ui_image` 구성 |
 | `config_store_endpoint` | Cosmos DB seed script 입력값 |
@@ -176,7 +178,7 @@ az containerapp job start -g "$rg" -n "$job"
 |---|---|---|
 | 첫 `terraform apply`가 오래 걸림 | APIM VNet 주입 구성 | 중단하지 말고 대기. 약 45분 소요 가능 |
 | APIM OpenAPI import 400 | APIM provisioning 직후 race | `terraform apply` 재실행 |
-| 모델 호출 403 | `allowed_models` 차단 또는 deployment 이름 불일치 | 요청 모델과 tfvars deployment key 확인 |
+| 모델 호출 403 | consumer `allowed_models` 차단 또는 deployment 이름 불일치 | 요청 모델, consumer config, tfvars deployment key 확인 |
 | 모델 호출 429 | rate tier 또는 token quota 초과 | Admin UI에서 tier 상향 또는 quota 조정 |
 | 요청 모델과 응답 모델이 다름 | budget 기반 모델 전환 | `x-ai-gateway-*` 응답 헤더 확인 |
 | partner 모델만 배포/호출 실패 | Marketplace 약관 미동의 | Azure Portal에서 모델 약관 동의 |
@@ -185,18 +187,23 @@ az containerapp job start -g "$rg" -n "$job"
 
 ### 403 Forbidden
 
-요청한 모델이 consumer의 허용 모델 목록에 없거나, `allowed_models`와 실제 deployment 이름이 일치하지 않을 때 발생합니다.
+요청한 모델이 consumer의 허용 모델 목록(`allowed_models`)에 없거나, `model_deployments`의 key와 실제 deployment 이름이 일치하지 않을 때 발생합니다. 새 모델을 추가하는 경우에는 **Terraform `model_deployments` + Admin UI `ALIAS_MODELS_JSON`** 경로와 **Cosmos `global.allowed_models` + config-sync** 경로가 모두 최신인지 확인해야 합니다.
 
 ```text
-allowed_models = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
+model_deployments = {
+  "gpt-5.6-sol"     = { ... }
+  "FW-GLM-5.2"      = { ... }
+  "DeepSeek-V4-Pro" = { ... }
+  "grok-4.3"        = { ... }
+}
 ```
 
 확인 순서:
 
 1. 클라이언트가 보낸 `model` 값 확인
-2. `allowed_models`에 해당 값 포함 여부 확인
-3. `openai_deployments` 또는 `foundry_deployments`의 key와 실제 deployment 이름 일치 여부 확인
-4. 변경 후 `terraform apply` 또는 config-sync worker 실행
+2. consumer allowed models와 Cosmos `global.allowed_models`에 해당 값 포함 여부 확인
+3. `model_deployments`의 key와 실제 deployment 이름 일치 여부 확인
+4. catalog 변경이었다면 `terraform apply`로 Admin UI alias map 갱신 후, config-sync worker로 APIM runtime catalog 반영
 
 ### 429 Too Many Requests
 
@@ -215,12 +222,12 @@ rate_tiers = {
 budget 정책이 발동하면 요청한 모델과 실제 호출 모델이 달라질 수 있습니다. 응답 헤더로 확인합니다.
 
 ```text
-x-ai-gateway-requested-model: gpt-5.4
-x-ai-gateway-effective-model: gpt-5.4-mini
+x-ai-gateway-requested-model: gpt-5.6-sol
+x-ai-gateway-effective-model: FW-GLM-5.2
 x-ai-gateway-downgrade-level: 1
 ```
 
-`downgrade-level`이 `0`이면 전환 없음, `1`이면 80% 임계값, `2`이면 100% 임계값에 도달한 상태입니다.
+일반적으로 `downgrade-level`이 `0`이면 budget 전환 없음, `1`이면 80% 임계값, `2`이면 100% 임계값입니다. 실제 처리 모델은 requested/effective 헤더를 함께 확인합니다.
 
 ### APIM 첫 apply 지연
 
@@ -243,24 +250,25 @@ terraform apply
 
 ### 기존 Foundry 계정 재사용 precondition
 
-`reuse_foundry=true`에서 기존 계정의 local auth 또는 public access 설정이 맞지 않으면 plan/apply가 실패합니다.
+`reuse_foundry=true`에서 기존 계정의 project management / local auth / public access 설정이 맞지 않으면 plan/apply가 실패합니다.
 
 ```bash
 az resource show --ids <aiservices-account-id> \
-  --query "properties.{disableLocalAuth:disableLocalAuth, publicNetworkAccess:publicNetworkAccess}" \
+  --query "properties.{allowProjectManagement:allowProjectManagement, disableLocalAuth:disableLocalAuth, publicNetworkAccess:publicNetworkAccess}" \
   -o jsonc
 ```
 
 기대값:
 
 ```text
+allowProjectManagement: true
 disableLocalAuth: true
 publicNetworkAccess: "Disabled"
 ```
 
 ### Partner model 약관
 
-`grok-4.3`, `DeepSeek-V4-Pro` 같은 partner 모델은 테넌트에서 Azure Marketplace 약관 동의가 필요할 수 있습니다. 해당 모델만 실패하면 Azure Portal에서 모델 배포 플로우를 열어 약관 동의 상태를 확인하세요.
+`FW-GLM-5.2`, `grok-4.3`, `DeepSeek-V4-Pro` 같은 partner 모델은 테넌트에서 Azure Marketplace 약관 동의가 필요할 수 있습니다. 해당 모델만 실패하면 Azure Portal에서 모델 배포 플로우를 열어 약관 동의 상태를 확인하세요.
 
 ### PE/RBAC 전파 지연
 

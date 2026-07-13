@@ -48,18 +48,17 @@ module "observability" {
   budget_start_date   = var.budget_start_date
 }
 
-module "openai" {
-  count               = var.reuse_foundry ? 0 : 1
-  source              = "./modules/openai"
-  name_suffix         = local.name_suffix
-  suffix              = local.sfx
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
-  tags                = local.tags
-  pe_subnet_id        = module.network.pe_subnet_id
-  dns_zone_id         = module.network.dns_zone_ids["openai"]
-  deployments         = var.openai_deployments
-  enabled             = true
+removed {
+  from = module.openai
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+moved {
+  from = azurerm_api_management_named_value.codexproxy_key
+  to   = module.apim.azurerm_api_management_named_value.codexproxy_key
 }
 
 module "foundry" {
@@ -75,10 +74,13 @@ module "foundry" {
     module.network.dns_zone_ids["aiservices"],
     module.network.dns_zone_ids["openai"],
   ]
-  deployments           = var.foundry_deployments
-  reuse_existing        = var.reuse_foundry
-  existing_account_name = var.existing_foundry_name
-  existing_account_rg   = var.existing_foundry_rg
+  deployments                   = var.model_deployments
+  account_name                  = var.foundry_account_name
+  project_name                  = var.foundry_project_name
+  public_network_access_enabled = var.foundry_public_network_access_enabled
+  reuse_existing                = var.reuse_foundry
+  existing_account_name         = var.existing_foundry_name
+  existing_account_rg           = var.existing_foundry_rg
 }
 
 module "jumpbox" {
@@ -100,7 +102,7 @@ module "jumpbox" {
 
 module "apim" {
   source                        = "./modules/apim"
-  depends_on                    = [module.network]
+  depends_on                    = [module.network, module.foundry]
   name_suffix                   = local.name_suffix
   resource_group_name           = azurerm_resource_group.rg.name
   location                      = var.location
@@ -111,26 +113,26 @@ module "apim" {
   apim_subnet_id                = module.network.apim_subnet_id
   public_ip_id                  = module.network.apim_public_ip_id
   public                        = var.apim_public
-  openai_account_id             = local.gpt_backend_account_id
-  openai_endpoint               = local.gpt_backend_endpoint
-  foundry_account_id            = module.foundry.id
-  foundry_endpoint              = module.foundry.endpoint_openai_v1
-  policy_template_path          = "${path.root}/../policies/openai-pipeline.xml.tftpl"
-  foundry_policy_template_path  = "${path.root}/../policies/foundry-pipeline.xml.tftpl"
-  foundry_v1_base               = module.foundry.endpoint_openai_v1
-  openai_openapi_spec_url       = var.openai_openapi_spec_url
+  model_account_id              = module.foundry.id
+  model_openai_v1_base          = module.foundry.endpoint_openai_v1
+  policy_template_path          = "${path.root}/../policies/inference-pipeline.xml.tftpl"
   appinsights_id                = module.observability.appi_id
   appinsights_connection_string = module.observability.appi_connection_string
   tokens_per_minute             = var.tokens_per_minute
   model_tokens_per_minute       = local.model_tokens_per_minute
   token_quota                   = var.token_quota
   token_quota_period            = var.token_quota_period
-  allowed_models                = var.allowed_models
+  allowed_model_names           = local.allowed_models
   rate_tiers                    = var.rate_tiers
   client_auth_mode              = var.client_auth_mode
   entra_tenant_id               = var.entra_tenant_id
   entra_api_audience            = var.entra_api_audience
   entra_team_claim              = var.entra_team_claim
+  codexproxy_enabled            = local.codexproxy_enabled
+  codexproxy_base_url           = local.codexproxy_enabled ? "https://${module.control_plane.codexproxy_fqdn}" : ""
+  codexproxy_key                = local.codexproxy_key
+  searchmcp_enabled             = local.searchmcp_enabled
+  searchmcp_base_url            = local.searchmcp_enabled ? "https://${module.control_plane.searchmcp_fqdn}" : ""
 }
 
 module "config_store" {
@@ -195,12 +197,16 @@ module "control_plane" {
   admin_group_object_id = var.admin_group_object_id
   cosmos_map_container  = module.config_store.map_container_name
   rate_tiers_json       = jsonencode(var.rate_tiers)
-  # Deployment names ARE the real model names (no alias indirection): build the Admin UI
-  # model-id -> display-label map dynamically from allowed_models so a new tfvars model shows in
-  # the Models UI automatically (label = id; modelLabel.ts hides labels equal to the id). Prices are
-  # operator-owned (Cosmos `pricing` doc, scripts/seed-pricing-jumpbox.sh), not derived here.
-  alias_models_json          = jsonencode({ for m in var.allowed_models : m => m })
+  # The final catalog follows canonical deployments; config-sync still owns APIM runtime named values.
+  alias_models_json          = jsonencode({ for model in local.allowed_models : model => model })
   log_analytics_workspace_id = module.observability.law_customer_id
+  codexproxy_image           = var.codexproxy_image
+  searchmcp_image            = var.searchmcp_image
+  codexproxy_identity_id     = module.identity.codexproxy_id
+  codexproxy_principal_id    = module.identity.codexproxy_principal_id
+  codexproxy_client_id       = module.identity.codexproxy_client_id
+  codexproxy_key             = local.codexproxy_key
+  codexproxy_project_base    = module.foundry.project_responses_base
 }
 
 # The Admin UI BFF (cp_write identity) reads token metrics + request logs from Log Analytics
@@ -221,4 +227,21 @@ resource "azurerm_role_assignment" "worker_log_reader" {
   scope                = module.observability.law_id
   role_definition_name = "Log Analytics Reader"
   principal_id         = module.identity.worker_principal_id
+}
+
+resource "random_password" "codexproxy_key" {
+  count   = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
+  length  = 48
+  special = false
+}
+
+locals {
+  codexproxy_key = local.codexproxy_enabled || local.searchmcp_enabled ? "sk-${random_password.codexproxy_key[0].result}" : ""
+}
+
+resource "azurerm_role_assignment" "codexproxy_to_project_account" {
+  count                = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
+  scope                = module.foundry.id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = module.identity.codexproxy_principal_id
 }

@@ -1,5 +1,5 @@
 # Deterministic per-deployment suffix reserved for child modules that need
-# globally-unique names (Key Vault, Azure OpenAI custom subdomain, etc.).
+# globally-unique names (Key Vault, canonical AIServices custom subdomain, etc.).
 # Intentionally unused at the root scope.
 resource "random_string" "sfx" {
   length  = 6
@@ -32,18 +32,13 @@ locals {
     costCenter = var.cost_center
   }
 
-  # gpt backend resolution: in reuse mode there is no separate Azure OpenAI account — gpt lives on
-  # the same AIServices (Foundry) account, reached via its GA OpenAI/v1 route. In greenfield mode
-  # gpt uses the dedicated Azure OpenAI account. Downstream (apim) consumes these, not the modules
-  # directly, so the apim module signature is unchanged across both modes.
-  gpt_backend_account_id = var.reuse_foundry ? module.foundry.id : module.openai[0].id
-  gpt_backend_endpoint   = var.reuse_foundry ? module.foundry.endpoint_openai_host : module.openai[0].endpoint
+  allowed_models = sort(keys(var.model_deployments))
 
   model_tokens_per_minute = {
-    for model in var.allowed_models : model => try(
-      var.foundry_deployments[model].capacity * 1000,
-      var.openai_deployments[model].capacity * 1000,
-      var.tokens_per_minute
-    )
+    for model, deployment in var.model_deployments :
+    model => deployment.capacity * 1000
   }
+
+  codexproxy_enabled = var.codexproxy_image != ""
+  searchmcp_enabled  = var.searchmcp_image != ""
 }

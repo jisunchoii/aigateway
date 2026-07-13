@@ -7,6 +7,10 @@
 #
 # The jumpbox MI must hold "Cosmos DB Built-in Data Contributor" on the account (data-plane
 # RBAC propagation can take a few minutes after the assignment).
+# This id=global document becomes the runtime source of truth for APIM's global named values
+# after the config-sync job runs. Terraform only seeds those named values on create and
+# intentionally ignores later value changes, so update this document + run/wait for config-sync
+# instead of expecting terraform apply to overwrite APIM.
 #
 # Usage (run in bash on the jumpbox):
 #   ./seed-cosmos-jumpbox.sh https://<account>.documents.azure.com:443/
@@ -53,7 +57,7 @@ date_hdr="$(LC_ALL=C TZ=GMT date +"%a, %d %b %Y %H:%M:%S GMT")"
 read -r -d '' doc <<'JSON' || true
 {
   "id": "global",
-  "allowed_models": ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"],
+  "allowed_models": ["gpt-5.6-sol", "FW-GLM-5.2", "DeepSeek-V4-Pro", "grok-4.3"],
   "tokens_per_minute": 1000,
   "token_quota": 50000,
   "token_quota_period": "Daily"
@@ -73,3 +77,4 @@ resp="$(curl -sS -X POST "$uri" \
 
 echo "Upserted config doc id='global' into $DATABASE/$CONTAINER :"
 echo "$resp"
+echo "Run or wait for config-sync to publish this runtime-owned catalog into APIM named values."

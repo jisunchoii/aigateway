@@ -15,6 +15,7 @@
   * [VS Code BYOK](07-connect-clients/vscode-byok.md)
   * [GitHub Copilot CLI](07-connect-clients/copilot-cli.md)
   * [OpenCode](07-connect-clients/opencode.md)
+  * [Codex CLI](07-connect-clients/codex-cli.md)
   * [직접 API 호출](07-connect-clients/direct-api.md)
 * [운영](06-operate.md)
 * [향후 지원 계획](09-future.md)
