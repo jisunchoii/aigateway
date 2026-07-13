@@ -86,10 +86,11 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 | `location` | 배포 리전 |
 | `apim_public` | VS Code/Copilot CLI 같은 외부 도구에서 APIM을 호출해야 하면 `true` |
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
+| `reuse_foundry_project` | 기존 Foundry 프로젝트를 Terraform 비관리 상태로 재사용할지 |
 | `model_deployments` | 기준 AIServices 계정에 배포할 모델 이름/모델/sku/capacity |
 | `monthly_budget_amount`, `budget_alert_email` | Azure Cost Management 알림 예산 |
 
-모델 백엔드는 세 가지 경우로 나뉩니다. 모델을 새로 배포하면 `reuse_foundry=false`를 사용합니다. 기존 모델을 활용할 때는 `reuse_foundry=true`를 사용하며, 프로젝트가 없으면 Terraform이 새로 만들고 프로젝트가 이미 있으면 apply 전에 기존 프로젝트를 import합니다. 자세한 절차는 [모델 백엔드 기존 계정 재사용](docs/04-reuse-foundry.md)을 따릅니다.
+모델 백엔드는 세 가지 경우로 나뉩니다. 신규 배포는 `reuse_foundry=false`, 기존 계정에 프로젝트가 없으면 `reuse_foundry=true`와 `reuse_foundry_project=false`, 기존 프로젝트까지 그대로 쓰면 두 값을 모두 `true`로 설정합니다. 마지막 경로에서 Terraform은 프로젝트를 data source로 조회만 하므로 import하거나 destroy하지 않습니다. 자세한 절차는 [모델 백엔드 기존 계정 재사용](docs/04-reuse-foundry.md)을 따릅니다.
 
 ### 3. 게이트웨이 core 배포
 

@@ -217,9 +217,9 @@ model_deployments = {
 
 기존 계정 재사용 모드(`reuse_foundry=true`)에서는 Terraform이 기존 모델 deployment를 소유하지 않으므로 Microsoft Foundry 포털 또는 `az` CLI에서 직접 capacity를 조정합니다.
 
-### 기존 계정의 프로젝트 관리
+### 기존 계정의 프로젝트 lifecycle
 
-`reuse_foundry=true`에서 프로젝트가 없으면 Terraform이 `foundry_project_name`으로 새 프로젝트를 생성합니다. 기존 프로젝트가 있으면 이름을 정확히 맞추고 apply 전에 `module.foundry.azapi_resource.project[0]`으로 import합니다. Private Endpoint와 APIM 역할 할당도 같은 용도의 기존 리소스를 유지하려면 정확한 ID로 import합니다.
+`reuse_foundry=true`, `reuse_foundry_project=false`이면 Terraform이 `foundry_project_name`으로 새 프로젝트를 생성하고 lifecycle을 관리하므로 `terraform destroy`에서 삭제합니다. 기존 프로젝트를 보존하려면 `reuse_foundry_project=true`와 정확한 프로젝트 이름을 설정합니다. 이 경로는 프로젝트를 data source로 조회만 하므로 import하지 않으며 `terraform destroy`에서도 삭제하지 않습니다. Private Endpoint와 APIM 역할 할당은 계속 Terraform 관리 대상이므로 같은 용도의 기존 리소스를 유지하려면 정확한 ID로 import합니다.
 
 ### 모델 추가·제거
 
@@ -304,12 +304,15 @@ az group delete -n "$resource_group_name" --yes
 
 ### 기존 계정 재사용 모드
 
-`reuse_foundry=true`인 경우 기존 Microsoft Foundry 계정은 별도 리소스 그룹에 있으므로 gateway RG를 삭제해도 보존됩니다. 단, gateway VNet에서 만든 Private Endpoint와 APIM managed identity 역할 할당은 함께 제거됩니다.
+아래 표는 `terraform destroy` 기준입니다. 기존 계정 재사용 경로에서는 Terraform이 기존 Microsoft Foundry 계정과 모델 deployment를 삭제하지 않습니다. `reuse_foundry_project=false`로 만든 프로젝트는 관리 리소스이므로 삭제되지만, `reuse_foundry_project=true`로 조회한 기존 프로젝트는 보존됩니다. gateway VNet의 Private Endpoint와 APIM managed identity 역할 할당은 제거됩니다.
 
-| 리소스 | 정리 결과 |
+| 리소스 | `terraform destroy` 결과 |
 |---|---|
 | Gateway RG의 APIM, Container Apps, Cosmos DB, ACR | 삭제 |
 | 기존 Foundry 계정 | 보존 |
+| 기존 모델 deployment | 보존 |
+| Terraform이 만든 프로젝트 (`reuse_foundry_project=false`) | 삭제 |
+| 조회만 한 기존 프로젝트 (`reuse_foundry_project=true`) | 보존 |
 | Gateway VNet에서 만든 Private Endpoint | 삭제 |
 | APIM managed identity의 기존 Foundry RBAC | 삭제 |
 

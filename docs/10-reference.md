@@ -63,12 +63,13 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `reuse_foundry` | `false` | `false`면 계정·프로젝트·모델을 생성하고, `true`면 기존 계정과 모델을 유지 |
+| `reuse_foundry_project` | `false` | `true`면 기존 프로젝트를 조회만 하고 Terraform lifecycle에서 제외. `reuse_foundry=true` 필요 |
 | `existing_foundry_name` | `""` | 재사용할 기존 AIServices 계정의 정확한 이름. `reuse_foundry=true`면 필수 |
 | `existing_foundry_rg` | `""` | 기존 AIServices 계정의 resource group. `reuse_foundry=true`면 필수 |
-| `foundry_project_name` | `codexproj` | 프로젝트가 없으면 새로 만들 이름, 있으면 import할 기존 프로젝트 이름 |
+| `foundry_project_name` | `codexproj` | 새로 만들 프로젝트 이름 또는 조회할 기존 프로젝트의 정확한 이름 |
 
 {% hint style="info" %}
-기존 계정에 프로젝트가 없으면 Terraform이 `foundry_project_name`으로 생성합니다. 프로젝트가 이미 있으면 같은 이름을 설정하고 기존 프로젝트를 import합니다. 두 경우 모두 기존 모델 deployment는 Terraform이 생성하거나 수정하지 않습니다.
+기존 계정에 프로젝트가 없으면 `reuse_foundry_project=false`로 두어 Terraform이 `foundry_project_name`으로 생성합니다. 프로젝트가 이미 있으면 `reuse_foundry_project=true`와 같은 이름을 설정해 조회만 합니다. 두 경우 모두 기존 모델 deployment는 Terraform이 생성하거나 수정하지 않습니다.
 {% endhint %}
 
 ### 클라이언트 인증

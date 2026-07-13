@@ -63,6 +63,7 @@ description: "모델 백엔드 신규 생성 — Terraform이 project-enabled AI
 
 ``` 
 reuse_foundry = false
+reuse_foundry_project                 = false
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
 

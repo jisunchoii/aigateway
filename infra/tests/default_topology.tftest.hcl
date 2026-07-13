@@ -277,3 +277,82 @@ run "searchmcp_image_enables_container_app_wiring" {
     error_message = "Both sidecars must reference PROXY_KEY as a Container App secret and include a non-secret revision marker so key rotation restarts them."
   }
 }
+
+run "existing_foundry_project_is_reused_read_only" {
+  command = plan
+
+  override_data {
+    target          = module.foundry.data.azurerm_cognitive_account.existing[0]
+    override_during = plan
+
+    values = {
+      id                            = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing-eus2/providers/Microsoft.CognitiveServices/accounts/foundry-account-live"
+      name                          = "foundry-account-live"
+      endpoint                      = "https://custom-subdomain.cognitiveservices.azure.com/"
+      local_auth_enabled            = false
+      project_management_enabled    = true
+      public_network_access_enabled = false
+    }
+  }
+
+  override_data {
+    target          = module.foundry.data.azapi_resource.existing_project[0]
+    override_during = plan
+
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing-eus2/providers/Microsoft.CognitiveServices/accounts/foundry-account-live/projects/reusedproj"
+    }
+  }
+
+  variables {
+    location              = "eastus2"
+    owner                 = "test@example.com"
+    cost_center           = "TEST"
+    apim_publisher_name   = "Test"
+    apim_publisher_email  = "test@example.com"
+    budget_alert_email    = "test@example.com"
+    budget_start_date     = "2026-07-01T00:00:00Z"
+    reuse_foundry         = true
+    reuse_foundry_project = true
+    existing_foundry_name = "foundry-account-live"
+    existing_foundry_rg   = "rg-existing-eus2"
+    foundry_project_name  = "reusedproj"
+    codexproxy_image      = ""
+    searchmcp_image       = ""
+  }
+
+  assert {
+    condition     = module.foundry.project_responses_base == "https://custom-subdomain.services.ai.azure.com/api/projects/reusedproj/openai/v1"
+    error_message = "The root module must pass existing-project reuse through to the Foundry module."
+  }
+
+  assert {
+    condition = (
+      var.reuse_foundry_project &&
+      length(regexall(
+        "reuse_existing_project\\s*=\\s*var\\.reuse_foundry_project",
+        file("main.tf")
+      )) == 1
+    )
+    error_message = "The root module must wire reuse_foundry_project to the Foundry module."
+  }
+}
+
+run "existing_project_reuse_requires_account_reuse" {
+  command = plan
+
+  variables {
+    location              = "eastus2"
+    owner                 = "test@example.com"
+    cost_center           = "TEST"
+    apim_publisher_name   = "Test"
+    apim_publisher_email  = "test@example.com"
+    budget_alert_email    = "test@example.com"
+    budget_start_date     = "2026-07-01T00:00:00Z"
+    reuse_foundry_project = true
+    codexproxy_image      = ""
+    searchmcp_image       = ""
+  }
+
+  expect_failures = [var.reuse_foundry_project]
+}

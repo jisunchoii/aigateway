@@ -81,6 +81,7 @@ budget_start_date     = "2026-07-01T00:00:00Z"   # 과거 날짜 금지(첫 appl
 
 ```
 reuse_foundry = false
+reuse_foundry_project                 = false
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
 
@@ -116,12 +117,14 @@ model_deployments = {
 }
 ```
 
-`reuse_foundry=true`에서는 지원 모델 deployment가 기존 계정에 이미 있어야 합니다. 프로젝트가 없다면 `foundry_project_name`에 새 프로젝트 이름을 입력하면 Terraform이 생성합니다. 프로젝트가 이미 있다면 기존 이름을 입력하고 `module.foundry.azapi_resource.project[0]`으로 import합니다. 기존 Private Endpoint나 APIM 역할 할당도 재사용하려면 정확한 resource ID로 import합니다.
+`reuse_foundry=true`에서는 지원 모델 deployment가 기존 계정에 이미 있어야 합니다. 프로젝트가 없다면 `reuse_foundry_project=false`와 새 `foundry_project_name`을 사용해 Terraform이 프로젝트를 생성하게 합니다. 프로젝트가 이미 있다면 `reuse_foundry_project=true`와 정확한 기존 이름을 사용하며, Terraform은 프로젝트를 조회만 합니다. 기존 Private Endpoint나 APIM 역할 할당도 재사용하려면 정확한 resource ID로 import합니다.
 
 ```
 reuse_foundry         = true
+reuse_foundry_project = false # 기존 프로젝트까지 재사용하면 true
 existing_foundry_name = "<existing-aiservices-account-name>"
 existing_foundry_rg   = "<existing-aiservices-resource-group>"
+foundry_project_name  = "codexproj"
 
 model_deployments = {
   "gpt-5.6-sol" = {
@@ -172,6 +175,7 @@ enable_jumpbox = false
 | ---------------------------------------------------------------- | ------------------------------- |
 | `owner`, `cost_center`, `apim_publisher_*`, `budget_alert_email` | 기본값이 없어 파일에 넣어야 하는 공통 값         |
 | `reuse_foundry`                                                  | 모델 백엔드 신규 생성/기존 계정 재사용 선택       |
+| `reuse_foundry_project`                                          | 기존 프로젝트 read-only 재사용 여부              |
 | `model_deployments`                                              | 지원 모델 네 개 또는 운영자가 승인한 동일 schema deployment 정의 |
 | `worker_image`                                                   | 비워 두면 config-sync worker 미배포    |
 | `codexproxy_image`                                               | 비워 두면 Responses backend 미활성화 |
@@ -209,7 +213,7 @@ terraform plan
 terraform apply
 ```
 
-`reuse_foundry=true`를 사용하는 경우 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인하고, 프로젝트 유무에 따른 [import와 plan 검증](../04-reuse-foundry.md#5-기존-프로젝트와-연결-리소스-import)을 따릅니다.
+`reuse_foundry=true`를 사용하는 경우 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인하고, 프로젝트 유무에 따른 [설정과 plan 검증](../04-reuse-foundry.md)을 따릅니다.
 
 APIM VNet 주입이 포함된 첫 apply는 약 45분 걸릴 수 있습니다. 완료 후 gateway URL을 확인합니다.
 
