@@ -3,7 +3,13 @@
 # (Cosmos key-auth disabled + private endpoint). The worker (cost budget) + BFF (UI price labels)
 # both read id="pricing". Operator edits prices here, then re-runs to publish. Idempotent (upsert).
 #
-# Prices = the confirmed per-1M values / 1000:
+# Pricing source priority:
+#   1. Azure's official rate for the deployed region/SKU.
+#   2. If Azure does not publish a Fireworks model rate, the Fireworks public list price as an estimate.
+# Provider fallback rates can differ from the actual Azure bill because of region, SKU, and contract terms.
+# Verify the rates before enforcing production budgets.
+#
+# Current seeded prices = per-1M values / 1000:
 #   gpt-5.6-sol     in $5.00/out $30.00 -> prompt 0.005 / completion 0.03
 #   FW-GLM-5.2      in $1.40/out $4.40  -> prompt 0.0014 / completion 0.0044
 #   grok-4.3         in $1.25/out $2.5   -> prompt 0.00125 / completion 0.0025

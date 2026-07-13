@@ -155,13 +155,13 @@ gpt-5.6-sol -> DeepSeek-V4-Pro -> grok-4.3
 
 ### 가격 데이터 갱신
 
-모델 단가가 바뀌면 jumpbox에서 pricing seed를 다시 실행합니다. 2026-07-10 기준 Azure Retail Prices에는 GPT-5.6 meter가 없어서 `gpt-5.6-sol` 공식 단가를 자동으로 채울 수 없습니다. 가격이 비어 있는 canonical 모델은 운영자가 공식 per-1K rate를 넣기 전까지 budget 계산에서 `$0`으로 집계됩니다.
+모델 단가가 바뀌면 jumpbox에서 pricing seed를 다시 실행합니다. Seed 값은 Azure 공식 단가를 우선 사용합니다. Azure가 단가를 공개하지 않은 Fireworks 모델은 Fireworks 공개 단가를 임시 참고값으로 사용할 수 있지만, 지역, SKU, 계약 조건이 반영된 실제 Azure 청구 단가와 다를 수 있으므로 운영 전에 확인하고 수정해야 합니다.
 
 ```bash
 ./scripts/seed-pricing-jumpbox.sh https://<cosmos-account>.documents.azure.com:443/
 ```
 
-갱신 후 config-sync worker를 실행하면 Admin UI의 가격 라벨과 예산 계산에 반영됩니다.
+갱신 후 config-sync worker를 실행하면 Admin UI의 가격 라벨과 예산 계산에 반영됩니다. Budget 계산은 Cosmos `pricing` 문서에 저장된 per-1K 단가를 사용하며, 해당 문서에 단가가 없는 모델만 `$0`으로 집계됩니다.
 
 ### Azure Cost Management 예산
 

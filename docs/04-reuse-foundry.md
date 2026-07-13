@@ -37,11 +37,19 @@ description: 모델 백엔드 기존 계정 재사용 — 기존 AIServices(Foun
 
 ## 기존 state 분류
 
-업그레이드 apply 전에 remote state를 아래 세 경로 중 하나로 **명시적으로 분류**합니다. 이름이 비슷하다는 이유만으로 리소스를 같은 것으로 간주하지 않습니다.
+업그레이드 apply 전에 remote state에서 **Terraform이 현재 어떤 Foundry 계정을 소유하고 있는지** 먼저 확인합니다. 예전에 사용한 `reuse_foundry` 값이 아니라, state에 `project_account`가 있는지가 판단 기준입니다.
+
+| remote state 상태 | 사용할 설정 | 처리 방법 |
+| ----------------- | ----------- | --------- |
+| `project_account`가 있고 현재도 `reuse_foundry=false` | `reuse_foundry=false` 유지 | 기존 계정과 모델을 그대로 관리 |
+| 예전에는 `reuse_foundry=true`였지만 `project_account`가 있음 | `reuse_foundry=false`로 변경 | state가 이미 소유한 같은 계정을 canonical 계정으로 계속 사용 |
+| `project_account`가 없음 | `reuse_foundry=true` | 외부 계정을 Terraform 소유로 가져오지 않고 재사용 |
+
+계정 이름이 비슷하다는 이유만으로 서로 다른 Azure 리소스를 같은 것으로 간주하거나 state 주소를 옮기면 안 됩니다.
 
 ### 현재 managed 이력 (`reuse_foundry=false`)
 
-현재 live 이력처럼 아래 주소를 이미 소유한다면 안전한 managed 경로입니다.
+현재 live 환경처럼 아래 주소가 state에 있다면 Terraform이 계정, project, deployment를 이미 관리하고 있습니다.
 
 ```text
 module.foundry.azapi_resource.project_account[0]
@@ -49,11 +57,11 @@ module.foundry.azapi_resource.project[0]
 module.foundry.azurerm_cognitive_deployment.project_models[...]
 ```
 
-`reuse_foundry=false`를 유지하고 `foundry_account_name`을 state의 exact account name으로 설정합니다. 이 주소를 다른 리소스로 이동하거나 external reuse로 전환하지 않습니다.
+`reuse_foundry=false`를 유지하고 `foundry_account_name`에는 state에 기록된 계정 이름을 대소문자까지 정확히 입력합니다. 기존 Azure 리소스와 state 주소는 그대로 두며 external reuse 경로로 바꾸지 않습니다.
 
 ### Sidecar-era reuse 이력에 managed project account가 있는 경우
 
-이전 버전을 `reuse_foundry=true`로 적용했더라도 위 `project_account`/`project`/`project_models` 주소가 state에 있으면 그 project-enabled account가 canonical 계정입니다. 먼저 exact ID와 name을 캡처합니다.
+이전 버전을 `reuse_foundry=true`로 적용했더라도 위 `project_account`/`project`/`project_models` 주소가 state에 있다면 Terraform이 해당 계정을 이미 소유하고 있습니다. 새 계정을 만들거나 기존 계정을 import하지 말고, 먼저 현재 계정의 정확한 ID와 이름을 확인합니다.
 
 ```bash
 cd infra
@@ -69,13 +77,15 @@ reuse_foundry        = false
 foundry_account_name = "<state의 project_account exact name>"
 ```
 
-기존 `module.apim.azurerm_role_assignment.apim_to_openai`와 `apim_to_foundry`는 이전 reused regular account를 가리키는 rollback fallback입니다. **새 canonical 역할 주소로 `terraform state mv`하지 않습니다.** 제거 블록이 이 역할을 remote에서 삭제하지 않고 state에서만 forget하도록 둡니다.
+이 변경은 Azure 계정을 이동하거나 이름을 바꾸는 작업이 아닙니다. **이미 state가 관리하는 같은 계정을 앞으로도 canonical 계정으로 사용하도록 Terraform 설정만 맞추는 작업**입니다.
 
-`reuse_foundry=true`를 그대로 두면 Terraform이 managed project account/deployment를 제거하고 project parent를 교체하려는 plan을 만들 수 있습니다. hardened migration verifier가 이를 의도적으로 차단하므로, verifier를 우회하지 말고 위 managed 전환을 사용합니다.
+기존 `module.apim.azurerm_role_assignment.apim_to_openai`와 `apim_to_foundry`는 예전 재사용 계정을 가리키는 rollback용 권한입니다. 이 권한을 새 canonical 역할 주소로 `terraform state mv`하면 Terraform이 서로 다른 역할 할당을 같은 리소스로 잘못 인식할 수 있습니다. 따라서 기존 역할 할당은 Azure에 fallback으로 남겨 두고, 제거 블록을 통해 Terraform state에서만 제외합니다. 새 canonical 역할 할당은 새 주소에서 별도로 관리합니다.
+
+`reuse_foundry=true`를 그대로 두면 Terraform이 이미 관리 중인 계정이나 deployment를 제거하고 project parent를 교체하려는 plan을 만들 수 있습니다. migration verifier가 이를 차단하면 우회하지 말고 위와 같이 `reuse_foundry=false`로 설정을 바로잡습니다.
 
 ### State에 managed project account가 없는 external-final 재사용
 
-이미 최종 형태인 외부 AIServices 계정을 선택하고 state에 managed `project_account`가 없을 때만 `reuse_foundry=true`를 사용합니다. account full resource ID와 name을 확인한 뒤, 이미 존재하는 다음 리소스는 apply 전에 exact ID로 import합니다.
+state에 managed `project_account`가 없고, 기존 AIServices 계정을 Terraform 소유로 편입하지 않을 때만 `reuse_foundry=true`를 사용합니다. account full resource ID와 name을 확인한 뒤, gateway 연결을 위해 이미 존재하는 다음 리소스만 apply 전에 exact ID로 import합니다.
 
 ```text
 module.foundry.azapi_resource.project[0]

@@ -186,7 +186,7 @@ config_sync_job_name="$(terraform output -raw config_sync_job_name)"
 az containerapp job start -g "$resource_group_name" -n "$config_sync_job_name"
 ```
 
-2026-07-10 기준 Azure Retail Prices에는 GPT-5.6 meter가 없어서 `gpt-5.6-sol` 공식 단가를 seed할 수 없습니다. 가격이 아직 없는 canonical 모델은 운영자가 공식 per-1K rate를 넣기 전까지 budget 계산에서 `$0`으로 집계됩니다.
+`seed-pricing-jumpbox.sh`에는 canonical 모델의 per-1K 단가가 포함되어 있습니다. Azure가 공식 단가를 공개한 모델은 Azure 단가를 우선 사용하고, Azure 단가가 없는 Fireworks 모델은 Fireworks 공개 단가를 임시 참고값으로 사용할 수 있습니다. provider 공개 단가는 지역, SKU, 계약 조건이 반영된 실제 Azure 청구 단가와 다를 수 있으므로 운영 전에 확인하고 수정해야 합니다. Budget 계산은 Cosmos `pricing` 문서의 값을 사용하며, 해당 문서에 단가가 없는 모델만 `$0`으로 집계됩니다.
 
 운영 중 Admin UI에서 consumer 정책을 저장하면 BFF가 config-sync job을 best-effort로 즉시 시작합니다. 실패하더라도 worker cron(`config_sync_cron`, 기본 5분)이 보완합니다.
 
