@@ -147,8 +147,6 @@ Agent 2는 README.md, docs/07-connect-clients.md, docs/SUMMARY.md를 읽고 Code
 파일은 수정하지 말고, 각 agent의 확인 결과와 최종 결론만 한국어로 짧게 정리해줘.
 ```
 
-위 검증은 `FW-GLM-5.2`로 실행합니다. 다른 모델도 스크린샷에 포함하려면 `/model`로 `DeepSeek-V4-Pro`, `grok-4.3`, `gpt-5.6-sol` 중 하나로 전환한 뒤 같은 프롬프트를 한 번 더 실행합니다. Admin UI에서 해당 consumer의 allowed models에 선택한 모델이 포함되어 있어야 합니다.
-
 | 멀티에이전트 검증 | 서브에이전트 검증 |
 | ---------------- | ---------------- |
 | ![Codex CLI에서 APIM 경유 모델로 멀티에이전트 검증을 수행하는 화면](../images/codex-cli-responses.png) | ![Codex CLI에서 APIM 경유 모델로 서브에이전트 검증을 수행하는 화면](../images/screenshot-codex-cli-validation.png) |
