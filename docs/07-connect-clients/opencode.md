@@ -79,15 +79,37 @@ OpenCode global config는 Linux 기준 `~/.config/opencode/opencode.json`에 둡
       "models": {
         "FW-GLM-5.2": {
           "name": "GLM 5.2 via APIM",
-          "tool_call": true
+          "tool_call": true,
+          "reasoning": true,
+          "variants": {
+            "high": {
+              "reasoningEffort": "high"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            }
+          }
         },
         "DeepSeek-V4-Pro": {
           "name": "DeepSeek V4 Pro via APIM",
-          "tool_call": true
+          "tool_call": true,
+          "reasoning": true
         },
         "grok-4.3": {
           "name": "Grok 4.3 via APIM",
-          "tool_call": true
+          "tool_call": true,
+          "reasoning": true,
+          "variants": {
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          }
         }
       }
     }
@@ -110,6 +132,25 @@ OpenCode 내장 `openai` provider는 GPT-5.6 요청을 `/responses`로 보내고
 | API 형식             | Responses                            | Chat Completions |
 
 GPT-5.6의 `reasoningEffort`, `reasoningSummary`, `textVerbosity`, `include` 값은 Responses 요청 옵션입니다. APIM policy는 OpenCode가 보낸 `/responses` 요청의 `input[]` 메시지에 누락된 `type: "message"`를 보강해 Azure Responses 형식과 호환되도록 처리합니다.
+
+### Reasoning effort 선택
+
+| 모델 | OpenCode variants | 동작 |
+| --- | --- | --- |
+| `FW-GLM-5.2` | `high`, `max` | GLM-5.2가 지원하는 두 단계입니다. API 기본값은 `max`입니다. |
+| `DeepSeek-V4-Pro` | 없음 | reasoning은 사용하지만 현재 배포에서는 `reasoning_effort` 값을 구분해 적용하지 않습니다. |
+| `grok-4.3` | `low`, `medium`, `high` | 선택한 effort를 요청에 전달합니다. |
+
+OpenCode TUI에서는 `Ctrl+T`로 현재 모델의 variant를 순환합니다. UI에는 선택된 variant만 표시되므로 `Default` 상태에서는 GLM API가 기본값 `max`를 사용하더라도 `max` 라벨이 보이지 않습니다. 가이드 예제는 고정 `options.reasoningEffort` 대신 `variants`를 사용해 UI 표시와 실제 요청 값을 일치시킵니다.
+
+CLI에서는 variant를 직접 지정할 수 있습니다.
+
+```bash
+opencode run --model aigateway/FW-GLM-5.2 --variant high "Reply only: ok"
+opencode run --model aigateway/grok-4.3 --variant high "Reply only: ok"
+```
+
+GLM-5.2의 `reasoning_effort` 값은 Azure OpenAI reasoning 모델의 값 체계와 별개인 모델별 사양입니다. GLM-5.2는 `high`와 `max`만 지원합니다.
 
 ## 5. Azure provider와 Azure Cognitive Services provider
 
@@ -170,5 +211,7 @@ Agent 2는 README.md, docs/07-connect-clients.md, docs/SUMMARY.md를 읽고 Open
 * [OpenCode — Config](https://opencode.ai/docs/config/)
 * [AI SDK — OpenAI Compatible Providers](https://ai-sdk.dev/providers/openai-compatible-providers)
 * [Azure OpenAI Responses API](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/responses)
+* [GLM-5.2 — 마이그레이션 및 reasoning effort](https://docs.bigmodel.cn/cn/guide/start/migrate-to-glm-new.md)
+* [Microsoft Learn — Azure OpenAI reasoning models](https://learn.microsoft.com/azure/foundry/openai/how-to/reasoning)
 * [Azure API Management policies](https://learn.microsoft.com/azure/api-management/api-management-howto-policies)
 * [Azure API Management — Subscriptions](https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions)
