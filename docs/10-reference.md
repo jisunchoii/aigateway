@@ -254,7 +254,9 @@ terraform apply
 `reuse_foundry=true`에서 기존 계정의 project management / local auth / public access 설정이 맞지 않으면 plan/apply가 실패합니다.
 
 ```bash
-az resource show --ids <aiservices-account-id> \
+az resource show \
+  --ids <aiservices-account-id> \
+  --api-version "2026-05-01" \
   --query "properties.{allowProjectManagement:allowProjectManagement, disableLocalAuth:disableLocalAuth, publicNetworkAccess:publicNetworkAccess}" \
   -o jsonc
 ```

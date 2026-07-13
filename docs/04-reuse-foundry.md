@@ -57,23 +57,34 @@ gateway는 APIM managed identity와 RBAC로 backend를 호출합니다. 따라�
 먼저 계정 resource ID를 확인합니다.
 
 ```bash
-az resource list \
+existing_foundry_name="ais-customer-prod"
+existing_foundry_rg="rg-customer-ai"
+
+account_id="$(az resource show \
+  --name "$existing_foundry_name" \
+  --resource-group "$existing_foundry_rg" \
   --resource-type "Microsoft.CognitiveServices/accounts" \
-  --query "[].{name:name, resourceId:id, rg:resourceGroup}" \
-  -o table
+  --api-version "2026-05-01" \
+  --query id -o tsv)"
+
+printf '%s\n' "$account_id"
 ```
 
 project management, API key 인증, 공용 네트워크 접근을 최종 상태로 맞춥니다.
 
 ```bash
-az resource update --ids <aiservices-account-id> \
+az resource update \
+  --ids "$account_id" \
+  --api-version "2026-05-01" \
   --set properties.allowProjectManagement=true properties.disableLocalAuth=true properties.publicNetworkAccess=Disabled
 ```
 
 설정 상태를 확인합니다.
 
 ```bash
-az resource show --ids <aiservices-account-id> \
+az resource show \
+  --ids "$account_id" \
+  --api-version "2026-05-01" \
   --query "properties.{allowProjectManagement:allowProjectManagement, disableLocalAuth:disableLocalAuth, publicNetworkAccess:publicNetworkAccess}" -o jsonc
 ```
 
@@ -169,9 +180,11 @@ Private Endpoint나 APIM 역할 할당도 기존에 없다면 Terraform이 생�
 existing_foundry_name="ais-customer-prod"
 existing_foundry_rg="rg-customer-ai"
 
-account_id="$(az cognitiveservices account show \
+account_id="$(az resource show \
   --name "$existing_foundry_name" \
   --resource-group "$existing_foundry_rg" \
+  --resource-type "Microsoft.CognitiveServices/accounts" \
+  --api-version "2026-05-01" \
   --query id -o tsv)"
 
 printf '%s\n' "$account_id"
