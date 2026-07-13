@@ -21,11 +21,11 @@ Azure API Management(APIM)을 중심으로 하나의 project-enabled AIServices 
 
 | 클라이언트 | APIM 경로 | 인증 헤더 | 비고 |
 |---|---|---|---|
-| GitHub Copilot CLI | `/openai/deployments/<model>/chat/completions` | `api-key` | CLI는 `COPILOT_PROVIDER_TYPE=azure` 사용 |
+| GitHub Copilot CLI | `/openai/v1/chat/completions` | `api-key` | Azure provider 사용, `COPILOT_PROVIDER_AZURE_API_VERSION`은 설정하지 않음 |
 | VS Code BYOK | `/vscode/models/deployments/<model>/chat/completions` | `Ocp-Apim-Subscription-Key` | VS Code provider는 **Custom Endpoint** 사용 |
-| Codex CLI | `/responses` | `Ocp-Apim-Subscription-Key` | `/responses`만 Codex proxy sidecar가 Responses payload를 정규화한 뒤 같은 `codexproj` backend로 전달 |
-| OpenCode | `/openai/deployments/<model>/chat/completions` 또는 `/foundry/chat/completions` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | custom OpenAI-compatible provider를 APIM 경로별로 분리 |
-| 직접 API 호출 | `/openai` 또는 `/foundry` | `api-key` 또는 `Ocp-Apim-Subscription-Key` | 앱/스크립트 검증용 |
+| Codex CLI | `/openai/v1/responses` | `api-key` | Responses API 사용. partner/OSS 모델 요청은 Codex proxy sidecar가 payload를 정규화 |
+| OpenCode | `/openai/v1/chat/completions` 또는 `/openai/v1/responses` | `api-key` | provider별 wire API만 구분하고 같은 통합 base URL 사용 |
+| 직접 API 호출 | `/openai/v1/chat/completions` 또는 `/openai/v1/responses` | `api-key` | body의 `model`로 배포 선택 |
 
 `api-key`와 `Ocp-Apim-Subscription-Key`는 서로 다른 credential이 아니라, 같은 APIM subscription key를 어떤 헤더 이름으로 보내는지만 다릅니다.
 
@@ -37,6 +37,7 @@ Azure API Management(APIM)을 중심으로 하나의 project-enabled AIServices 
 | `policies/` | Terraform이 렌더링하는 APIM policy template |
 | `app/admin-ui/` | React SPA + FastAPI BFF. 하나의 Admin UI 컨테이너 이미지로 배포 |
 | `app/config-sync-worker/` | Cosmos consumer config와 pricing 정보를 읽어 APIM named value/active downgrade를 동기화하는 Container Apps Job |
+| `app/search-mcp/` | OSS 모델용 bounded web search MCP 서버. APIM `/mcp/` 뒤에서 hosted `web_search`를 단일 Responses 요청으로 실행 |
 | `scripts/` | 배포/운영 보조 스크립트 |
 | `docs/` | GitBook 배포·운영 가이드 |
 
@@ -48,8 +49,6 @@ Azure API Management(APIM)을 중심으로 하나의 project-enabled AIServices 
 | `scripts/app-registration.sh` | Admin UI용 Entra admin group, BFF API app, SPA app 생성. `entra_tenant_id`, `admin_group_object_id`, `bff_api_audience`, `spa_client_id` 출력 |
 | `scripts/seed-pricing-jumpbox.sh` | Cosmos `pricing` 문서 업서트. Admin UI 가격 표시와 budget 계산에 사용 |
 | `scripts/seed-cosmos-jumpbox.sh` | 선택적 global config seed. Terraform 기본값 대신 Cosmos global doc으로 APIM named value를 덮어쓰려는 경우에만 사용 |
-| `scripts/smoke-v1-gateway.sh` | public APIM gateway end-to-end smoke test |
-| `scripts/smoke-v1-backend.sh` | jumpbox/VNet 내부에서 backend AIServices 직접 호출 검증 |
 
 ## 배포 개요
 
@@ -88,8 +87,6 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 | `apim_public` | VS Code/Copilot CLI 같은 외부 도구에서 APIM을 호출해야 하면 `true` |
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
 | `model_deployments` | canonical AIServices account에 둘 deployment 이름/모델/sku/capacity |
-| `legacy_gpt_compat_enabled` | live migration 중 legacy GPT 요청/allowlist를 `gpt-5.6-sol`로 호환할지. 기본/final은 `false` |
-| `admin_ui_legacy_gpt_aliases_enabled` | live migration 중 Admin UI에 legacy GPT alias를 임시 노출할지. 기본/final은 `false` |
 | `monthly_budget_amount`, `budget_alert_email` | Azure Cost Management 알림 예산 |
 
 기존 state 업그레이드는 먼저 [모델 백엔드 기존 계정 재사용](docs/04-reuse-foundry.md)의 이력 분류를 따릅니다. 현재 `reuse_foundry=false` managed 이력은 그대로 유지합니다. Sidecar-era `reuse_foundry=true` state가 `project_account`를 이미 소유한다면 그 계정을 exact name으로 managed canonical 계정으로 승격하고 `reuse_foundry=false`로 바꿉니다. 기존 APIM 역할 할당은 rollback fallback이므로 새 주소로 `state mv`하지 않습니다.
@@ -118,6 +115,8 @@ acr=$(terraform output -raw registry_login_server)
 
 az acr build --registry "$reg" --image config-sync-worker:latest ../app/config-sync-worker
 az acr build --registry "$reg" --image admin-ui:latest ../app/admin-ui
+az acr build --registry "$reg" --image codexproxy:latest ../app/codex-proxy
+az acr build --registry "$reg" --image searchmcp:latest ../app/search-mcp
 ```
 
 ### 5. Admin UI용 Entra 객체 준비
@@ -150,6 +149,8 @@ https://login.microsoftonline.com/<tenant id>/adminconsent?client_id=<spa app id
 ```hcl
 worker_image          = "<registry_login_server>/config-sync-worker:latest"
 admin_ui_image        = "<registry_login_server>/admin-ui:latest"
+codexproxy_image      = "<registry_login_server>/codexproxy:latest"
+searchmcp_image       = "<registry_login_server>/searchmcp:latest"
 admin_ui_public       = true
 ```
 
@@ -232,23 +233,23 @@ VS Code는 **Custom Endpoint** provider를 사용합니다. 예시는 [VS Code B
 
 ### GitHub Copilot CLI
 
-Copilot CLI는 **Azure provider**로 설정합니다. `COPILOT_PROVIDER_BASE_URL`에는 APIM host만 넣고 `/openai`를 붙이지 않습니다.
+Copilot CLI 1.0.70은 **Azure provider**로 설정합니다. `COPILOT_PROVIDER_BASE_URL`에는 APIM host만 넣고 `COPILOT_PROVIDER_AZURE_API_VERSION`은 설정하지 않습니다. 이 조합에서 CLI는 통합 `/openai/v1/chat/completions` 경로를 호출합니다.
 
 ```bash
 export COPILOT_PROVIDER_TYPE=azure
 export COPILOT_PROVIDER_BASE_URL=https://<apim-host>
 export COPILOT_PROVIDER_API_KEY="<APIM subscription key>"
-export COPILOT_PROVIDER_AZURE_API_VERSION=2025-01-01-preview
+unset COPILOT_PROVIDER_AZURE_API_VERSION
 export COPILOT_PROVIDER_WIRE_API=completions
-export COPILOT_PROVIDER_MODEL_ID=gpt-5.6-sol
-export COPILOT_PROVIDER_WIRE_MODEL=gpt-5.6-sol
+export COPILOT_PROVIDER_MODEL_ID=FW-GLM-5.2
+export COPILOT_PROVIDER_WIRE_MODEL=FW-GLM-5.2
 export COPILOT_PROVIDER_MAX_PROMPT_TOKENS=128000
 export COPILOT_PROVIDER_MAX_OUTPUT_TOKENS=16000
 ```
 
 ### OpenCode
 
-OpenCode는 **OpenAI-compatible custom provider**를 APIM 경로별로 나눠 사용합니다. gpt 계열은 `/openai/deployments/<model>`, partner/OSS 모델은 `/foundry`로 연결합니다. 자세한 설정은 [OpenCode 가이드](docs/07-connect-clients/opencode.md)를 따릅니다.
+OpenCode는 provider별 wire API만 구분하고 같은 `https://<apim-host>/openai/v1` base URL과 `api-key` 헤더를 사용합니다. 자세한 설정은 [OpenCode 가이드](docs/07-connect-clients/opencode.md)를 따릅니다.
 
 ## 관측과 검증
 

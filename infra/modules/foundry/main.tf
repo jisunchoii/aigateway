@@ -154,19 +154,24 @@ removed {
 
 resource "azapi_resource" "project_account" {
   count     = var.reuse_existing ? 0 : 1
-  type      = "Microsoft.CognitiveServices/accounts@2025-04-01-preview"
+  type      = "Microsoft.CognitiveServices/accounts@2025-10-01-preview"
   name      = local.managed_account_name
   parent_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.resource_group_name}"
   location  = var.location
   tags      = var.tags
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   body = {
-    kind     = "AIServices"
-    sku      = { name = "S0" }
-    identity = { type = "SystemAssigned" }
+    kind = "AIServices"
+    sku  = { name = "S0" }
     properties = {
       allowProjectManagement = true
+      associatedProjects     = [var.project_name]
       customSubDomainName    = local.managed_account_name
+      defaultProject         = var.project_name
       disableLocalAuth       = true
       publicNetworkAccess    = var.public_network_access_enabled ? "Enabled" : "Disabled"
       networkAcls = {
@@ -179,13 +184,16 @@ resource "azapi_resource" "project_account" {
 
 resource "azapi_resource" "project" {
   count     = 1
-  type      = "Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview"
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-10-01-preview"
   name      = var.project_name
   parent_id = local.account_id
   location  = var.location
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   body = {
-    identity   = { type = "SystemAssigned" }
     properties = {}
   }
 }

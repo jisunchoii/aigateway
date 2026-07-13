@@ -13,14 +13,6 @@ apim_sku_name        = "Developer_1"
 reuse_foundry = false
 foundry_project_name                  = "codexproj"
 foundry_public_network_access_enabled = false
-legacy_gpt_compat_enabled             = false
-admin_ui_legacy_gpt_aliases_enabled   = false
-
-# Staged live migration only:
-# Task 7: legacy_gpt_compat_enabled=true, admin_ui_legacy_gpt_aliases_enabled=true
-# Task 8: keep legacy_gpt_compat_enabled=true, set admin_ui_legacy_gpt_aliases_enabled=false
-# Task 9: after legacy-request telemetry reaches zero, set legacy_gpt_compat_enabled=false
-#         together with foundry_public_network_access_enabled=false.
 
 # Greenfield: Terraform creates these canonical deployments. Deployment name = real model name.
 model_deployments = {
@@ -50,7 +42,7 @@ model_deployments = {
     model_format  = "xAI"
     model_version = "1"
     sku_name      = "GlobalStandard"
-    capacity      = 10
+    capacity      = 500
   }
 }
 
@@ -63,14 +55,18 @@ model_deployments = {
 # existing_foundry_name = "<existing-aiservices-account>"
 # existing_foundry_rg   = "<existing-resource-group>"
 
-# /responses sidecar bootstrap
-# First apply: leave empty so ACR can be created.
-codexproxy_image      = ""
-route_via_codexproxy  = false
+# /openai/v1/responses sidecar bootstrap
+# First apply: leave empty so Terraform can create ACR and the rest of the gateway.
+codexproxy_image = ""
 
-# Second apply after `az acr build`:
-# codexproxy_image      = "acraigwabc123.azurecr.io/codexproxy:0123456"
-# route_via_codexproxy  = true
+# Second apply after an immutable ACR build:
+# codexproxy_image = "acraigwabc123.azurecr.io/codexproxy:<git-sha>"
+
+# Bounded Search MCP bootstrap. Leave empty on the first apply.
+searchmcp_image = ""
+
+# Second apply after an immutable ACR build:
+# searchmcp_image = "acraigwabc123.azurecr.io/searchmcp:<git-sha>"
 
 # Cost guardrail (observability module)
 monthly_budget_amount = 200

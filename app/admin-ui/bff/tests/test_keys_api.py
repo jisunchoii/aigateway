@@ -47,22 +47,22 @@ class FakeStore:
 
 class FakeMetrics:
     def consumer_usage(self, consumer, span):
-        # 100k prompt + 40k completion of gpt-5.4 -> with the test pricing = $0.85
-        return {"gpt-5.4": {"prompt": 100000, "completion": 40000}}
+        # 100k prompt + 40k completion of gpt-5.6-sol -> with the test pricing = $0.85
+        return {"gpt-5.6-sol": {"prompt": 100000, "completion": 40000}}
 
     def monitoring(self, span):
         return {"recent": [{"TimeGenerated": "t", "Name": "POST /openai", "ResultCode": "200", "DurationMs": 12}],
                 "blocked": [{"TimeGenerated": "t", "Name": "POST /openai", "ResultCode": "429"}],
                 "downgrades": [{"TimeGenerated": "t", "consumer": "ghcp",
-                                "requestedModel": "gpt-5.4", "effectiveModel": "grok-4.3",
+                                "requestedModel": "gpt-5.6-sol", "effectiveModel": "grok-4.3",
                                 "downgradeLevel": "2"}]}
 
     def dashboard(self, span):
         return {"total_tokens": 999,
                 "by_consumer": [{"consumer": "a3b801e9-1a17-4af8-b1ef-3103a1e0f075", "tokens": 500},
                             {"consumer": "smoke", "tokens": 499}],
-                "by_model": [{"deployment": "gpt-5.4-mini", "tokens": 999}],
-                "requests_by_model": [{"deployment": "gpt-5.4-mini", "requests": 10}],
+                "by_model": [{"deployment": "FW-GLM-5.2", "tokens": 999}],
+                "requests_by_model": [{"deployment": "FW-GLM-5.2", "requests": 10}],
                 "total_requests": 10, "error_rate": 0.1,
                 "blocked_403": 2, "blocked_429": 1}
 
@@ -133,7 +133,7 @@ def _settings():
         admin_group_object_id="gid", subscription_id="s", apim_rg="rg",
         apim_name="apim", cosmos_endpoint="https://c",
         cosmos_database="gateway", cosmos_map_container="team_subscription_map",
-        allowed_model_aliases=("gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"),
+        allowed_model_aliases=("gpt-5.6-sol", "FW-GLM-5.2", "grok-4.3", "DeepSeek-V4-Pro"),
         rate_tiers={"small": {"tpm": 50000, "quota": 5000000, "period": "Daily"},
                     "medium": {"tpm": 150000, "quota": 30000000, "period": "Daily"},
                     "large": {"tpm": 300000, "quota": 1000000000, "period": "Monthly"}},
@@ -146,7 +146,7 @@ def ctx():
     deps = AppDeps(settings=_settings(), apim=apim, store=store, spa_dir=None,
                    consumerconfig=FakeConsumerConfig(), metrics=FakeMetrics(),
                    consumerregistry=FakeConsumerRegistry(),
-                   model_prices={"gpt-5.4": {"prompt": 0.0025, "completion": 0.015}})
+                   model_prices={"gpt-5.6-sol": {"prompt": 0.0025, "completion": 0.015}})
     app = app_factory(deps)
     client = TestClient(app)
     return app, client, apim, store
@@ -170,8 +170,8 @@ def test_config_is_anonymous(ctx):
     assert body["apiScope"] == "api://bff/access_as_user"
     # model id -> display label map (non-secret), for the Models page. Keys are the real model
     # names (= APIM deployment names); values are friendly labels. _settings() uses the default map.
-    assert body["aliasModels"]["gpt-5.4"] == "GPT-5.4"
-    assert body["aliasModels"]["gpt-5.4-mini"] == "GPT-5.4 mini"
+    assert body["aliasModels"]["gpt-5.6-sol"] == "GPT-5.6 Sol"
+    assert body["aliasModels"]["FW-GLM-5.2"] == "GLM 5.2 (Fireworks)"
     # OSS/partner models (Phase 5, PAYG-first set) appear in the default map too.
     assert body["aliasModels"]["grok-4.3"] == "Grok 4.3 (xAI)"
     assert body["aliasModels"]["DeepSeek-V4-Pro"] == "DeepSeek V4 Pro"
@@ -182,7 +182,7 @@ def test_config_is_anonymous(ctx):
 def test_config_exposes_model_prices(ctx):
     _, client, *_ = ctx
     body = client.get("/api/config").json()
-    assert body["modelPrices"]["gpt-5.4"] == {"prompt": 0.0025, "completion": 0.015}
+    assert body["modelPrices"]["gpt-5.6-sol"] == {"prompt": 0.0025, "completion": 0.015}
 
 
 def test_create_key_requires_admin(ctx):
@@ -235,7 +235,7 @@ def _ctx_with_consumerconfig():
     jobs = FakeJobStarter()
     deps = AppDeps(settings=_settings(), apim=apim, store=store, spa_dir=None, consumerconfig=tc,
                    metrics=FakeMetrics(), consumerregistry=FakeConsumerRegistry(),
-                   model_prices={"gpt-5.4": {"prompt": 0.0025, "completion": 0.015}},
+                   model_prices={"gpt-5.6-sol": {"prompt": 0.0025, "completion": 0.015}},
                    job_starter=jobs)
     app = app_factory(deps)
     app.state.fake_jobs = jobs  # tests reach the job starter here without changing the 3-tuple
@@ -259,19 +259,19 @@ def test_get_consumer_config_falls_back_to_global_when_absent():
     assert r.status_code == 200
     body = r.json()
     assert body["isDefault"] is True
-    assert body["allowed_models"] == ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
+    assert body["allowed_models"] == ["gpt-5.6-sol", "FW-GLM-5.2", "grok-4.3", "DeepSeek-V4-Pro"]
 
 
 def test_put_then_get_consumer_config():
     app, client, _ = _ctx_with_consumerconfig()
     _as(app, ADMIN)
     r = client.put("/api/consumers/consumer-a/config",
-                   json={"allowed_models": ["gpt-5.4"], "daily_budget": 100})
+                   json={"allowed_models": ["gpt-5.6-sol"], "daily_budget": 100})
     assert r.status_code == 200
     g = client.get("/api/consumers/consumer-a/config")
     body = g.json()
     assert body["isDefault"] is False
-    assert body["allowed_models"] == ["gpt-5.4"]
+    assert body["allowed_models"] == ["gpt-5.6-sol"]
     assert body["daily_budget"] == 100
 
 
@@ -310,11 +310,11 @@ def test_budget_put_triggers_worker():
     assert app.state.fake_jobs.started == 1
 
 
-def test_nonbudget_put_does_not_trigger_worker():
+def test_nonbudget_put_triggers_worker_for_bundle_refresh():
     app, client, _ = _ctx_with_consumerconfig()
     _as(app, ADMIN)
-    client.put("/api/consumers/consumer-a/config", json={"allowed_models": ["gpt-5.4"]})
-    assert app.state.fake_jobs.started == 0
+    client.put("/api/consumers/consumer-a/config", json={"allowed_models": ["gpt-5.6-sol"]})
+    assert app.state.fake_jobs.started == 1
 
 
 def test_put_unknown_alias_400():
@@ -339,9 +339,9 @@ def test_partial_put_preserves_other_fields():
                       json={"tier": "large"}).status_code == 200
     # Then set ONLY allowed_models (model page) — must NOT wipe tier
     assert client.put("/api/consumers/consumer-a/config",
-                      json={"allowed_models": ["gpt-5.4"]}).status_code == 200
+                      json={"allowed_models": ["gpt-5.6-sol"]}).status_code == 200
     body = client.get("/api/consumers/consumer-a/config").json()
-    assert body["allowed_models"] == ["gpt-5.4"]
+    assert body["allowed_models"] == ["gpt-5.6-sol"]
     assert body["tier"] == "large"             # preserved across the second PUT
 
 
@@ -392,7 +392,7 @@ def test_dashboard_metrics():
     assert body["total_tokens"] == 999
     assert body["blocked_403"] == 2
     assert body["blocked_429"] == 1
-    assert body["requests_by_model"] == [{"deployment": "gpt-5.4-mini", "requests": 10}]
+    assert body["requests_by_model"] == [{"deployment": "FW-GLM-5.2", "requests": 10}]
     assert body["downgrades"] == [{"consumer": "smoke", "level": 2}]
 
 
@@ -528,7 +528,7 @@ def test_delete_consumer_no_keys_removes_registry_and_config():
     _as(app, ADMIN)
     # a registry-only consumer with a config doc but NO keys
     client.post("/api/consumers", json={"consumer": "ghost", "entra_group_id": GUID_A})
-    tc.put("ghost", {"allowed_models": ["gpt-5.4"], "daily_budget_usd": 1.0})
+    tc.put("ghost", {"allowed_models": ["gpt-5.6-sol"], "daily_budget_usd": 1.0})
     assert tc.get("ghost") is not None
     r = client.delete("/api/consumers/ghost")
     assert r.status_code == 200
@@ -581,7 +581,7 @@ def test_consumer_config_exposes_active_downgrade_readonly():
     app, client, tc = _ctx_with_consumerconfig()
     _as(app, ADMIN)
     tc.docs["smoke"] = {"id": "consumer:smoke", "doc_type": "consumer_config", "consumer": "smoke",
-                        "daily_budget": 1000, "downgrade_ladder": ["gpt-5.4", "gpt-5.4-mini"],
+                        "daily_budget": 1000, "downgrade_ladder": ["gpt-5.6-sol", "FW-GLM-5.2"],
                         "active_downgrade": {"level": 1, "usage_tokens": 800, "pct": 0.8,
                                              "evaluated_at": "2026-06-16T00:00:00Z"}}
     body = client.get("/api/consumers/smoke/config").json()

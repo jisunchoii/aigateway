@@ -56,6 +56,11 @@ removed {
   }
 }
 
+moved {
+  from = azurerm_api_management_named_value.codexproxy_key
+  to   = module.apim.azurerm_api_management_named_value.codexproxy_key
+}
+
 module "foundry" {
   source              = "./modules/foundry"
   name_suffix         = local.name_suffix
@@ -110,9 +115,7 @@ module "apim" {
   public                        = var.apim_public
   model_account_id              = module.foundry.id
   model_openai_v1_base          = module.foundry.endpoint_openai_v1
-  policy_template_path          = "${path.root}/../policies/openai-pipeline.xml.tftpl"
-  foundry_policy_template_path  = "${path.root}/../policies/foundry-pipeline.xml.tftpl"
-  openai_openapi_spec_url       = var.openai_openapi_spec_url
+  policy_template_path          = "${path.root}/../policies/inference-pipeline.xml.tftpl"
   appinsights_id                = module.observability.appi_id
   appinsights_connection_string = module.observability.appi_connection_string
   tokens_per_minute             = var.tokens_per_minute
@@ -125,7 +128,11 @@ module "apim" {
   entra_tenant_id               = var.entra_tenant_id
   entra_api_audience            = var.entra_api_audience
   entra_team_claim              = var.entra_team_claim
-  legacy_gpt_compat_enabled     = var.legacy_gpt_compat_enabled
+  codexproxy_enabled            = local.codexproxy_enabled
+  codexproxy_base_url           = local.codexproxy_enabled ? "https://${module.control_plane.codexproxy_fqdn}" : ""
+  codexproxy_key                = local.codexproxy_key
+  searchmcp_enabled             = local.searchmcp_enabled
+  searchmcp_base_url            = local.searchmcp_enabled ? "https://${module.control_plane.searchmcp_fqdn}" : ""
 }
 
 module "config_store" {
@@ -190,12 +197,11 @@ module "control_plane" {
   admin_group_object_id = var.admin_group_object_id
   cosmos_map_container  = module.config_store.map_container_name
   rate_tiers_json       = jsonencode(var.rate_tiers)
-  # The final catalog follows canonical deployments. During the staged GPT migration only, the
-  # explicit Admin UI compatibility flag unions the two legacy aliases so stale documents remain
-  # editable; config-sync still owns APIM runtime named values.
-  alias_models_json          = jsonencode({ for model in local.admin_ui_models : model => model })
+  # The final catalog follows canonical deployments; config-sync still owns APIM runtime named values.
+  alias_models_json          = jsonencode({ for model in local.allowed_models : model => model })
   log_analytics_workspace_id = module.observability.law_customer_id
   codexproxy_image           = var.codexproxy_image
+  searchmcp_image            = var.searchmcp_image
   codexproxy_identity_id     = module.identity.codexproxy_id
   codexproxy_principal_id    = module.identity.codexproxy_principal_id
   codexproxy_client_id       = module.identity.codexproxy_client_id
@@ -224,28 +230,17 @@ resource "azurerm_role_assignment" "worker_log_reader" {
 }
 
 resource "random_password" "codexproxy_key" {
-  count   = local.codexproxy_enabled ? 1 : 0
+  count   = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
   length  = 48
   special = false
 }
 
 locals {
-  codexproxy_key = local.codexproxy_enabled ? "sk-${random_password.codexproxy_key[0].result}" : ""
-}
-
-# APIM<->sidecar hop secret, presented by the policy as Authorization: Bearer {{codexproxy-key}}.
-resource "azurerm_api_management_named_value" "codexproxy_key" {
-  count               = local.codexproxy_enabled ? 1 : 0
-  name                = "codexproxy-key"
-  api_management_name = module.apim.name
-  resource_group_name = azurerm_resource_group.rg.name
-  display_name        = "codexproxy-key"
-  value               = local.codexproxy_key
-  secret              = true
+  codexproxy_key = local.codexproxy_enabled || local.searchmcp_enabled ? "sk-${random_password.codexproxy_key[0].result}" : ""
 }
 
 resource "azurerm_role_assignment" "codexproxy_to_project_account" {
-  count                = local.codexproxy_enabled ? 1 : 0
+  count                = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
   scope                = module.foundry.id
   role_definition_name = "Cognitive Services User"
   principal_id         = module.identity.codexproxy_principal_id

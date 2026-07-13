@@ -33,7 +33,7 @@ description: 모델 백엔드 기존 계정 재사용 — 기존 AIServices(Foun
 | Private Endpoint | 생성            | gateway VNet에 새로 생성   |
 | APIM MI RBAC     | 부여            | 기존 계정 scope에 부여       |
 
-재사용 모드(`reuse_foundry=true`)에서는 별도 Azure OpenAI 계정을 만들지 않습니다. canonical 네 모델(`gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`)을 포함한 `/openai`·`/vscode/models`·`/foundry` 요청은 기존 AIServices 계정의 canonical OpenAI/v1 account path(`https://<account>.openai.azure.com/openai/v1`)로 라우팅됩니다. 반면 `/responses`는 Codex proxy sidecar를 거쳐 같은 계정 아래 canonical project `codexproj`의 Responses path(`/api/projects/codexproj/openai/v1/responses`)를 호출합니다.
+재사용 모드(`reuse_foundry=true`)에서는 별도 Azure OpenAI 계정을 만들지 않습니다. canonical 네 모델(`gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`)의 `/openai/v1/chat/completions`와 `/vscode/models` 요청은 기존 AIServices 계정의 canonical OpenAI/v1 account path(`https://<account>.openai.azure.com/openai/v1`)로 라우팅됩니다. `/openai/v1/responses`는 Codex proxy sidecar를 거쳐 같은 계정 아래 canonical project `codexproj`의 Responses path(`/api/projects/codexproj/openai/v1/responses`)를 호출합니다.
 
 ## 기존 state 분류
 
@@ -212,8 +212,7 @@ model_deployments = {
 cd infra
 terraform init
 terraform plan -out=reuse-upgrade.tfplan
-terraform show -json reuse-upgrade.tfplan > reuse-upgrade-plan.json
-python ../scripts/verify_model_topology_plan.py reuse-upgrade-plan.json migration
+terraform show reuse-upgrade.tfplan
 ```
 
 | 확인 항목                             | 기대값 |

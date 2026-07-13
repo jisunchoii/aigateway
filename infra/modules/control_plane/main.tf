@@ -164,6 +164,13 @@ variable "codexproxy_image" {
   default     = ""
   description = "Codex proxy sidecar image reference. Empty disables the app."
 }
+
+variable "searchmcp_image" {
+  type        = string
+  default     = ""
+  description = "Search MCP sidecar image reference. Empty disables the app."
+}
+
 variable "codexproxy_identity_id" {
   type        = string
   default     = ""
@@ -195,10 +202,12 @@ locals {
   worker_enabled     = var.worker_image != ""
   admin_ui_enabled   = var.admin_ui_image != ""
   codexproxy_enabled = var.codexproxy_image != ""
+  searchmcp_enabled  = var.searchmcp_image != ""
+  proxy_key_revision = nonsensitive(substr(sha256(var.codexproxy_key), 0, 16))
   # The in-VNet ACA private DNS zone + wildcard records are only needed to reach an INTERNAL env
   # by FQDN. An external (public) env gets public DNS automatically, so skip them when public.
   # Needed whenever an internal-reachable app (Admin UI, Codex proxy) is deployed.
-  aca_private_dns_enabled = (local.admin_ui_enabled || local.codexproxy_enabled) && !var.admin_ui_public
+  aca_private_dns_enabled = (local.admin_ui_enabled || local.codexproxy_enabled || local.searchmcp_enabled) && !var.admin_ui_public
 }
 
 resource "azurerm_role_assignment" "worker_acr_pull" {
@@ -245,7 +254,7 @@ resource "azurerm_role_assignment" "admin_ui_start_job" {
 }
 
 resource "azurerm_role_assignment" "codexproxy_acr_pull" {
-  count                = local.codexproxy_enabled ? 1 : 0
+  count                = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
   scope                = var.acr_id
   role_definition_name = "AcrPull"
   principal_id         = var.codexproxy_principal_id
@@ -259,6 +268,10 @@ resource "azurerm_container_app_environment" "cp" {
   infrastructure_subnet_id       = var.infra_subnet_id
   internal_load_balancer_enabled = !var.admin_ui_public
   tags                           = var.tags
+
+  lifecycle {
+    ignore_changes = [workload_profile]
+  }
 }
 
 # Internal Container Apps env has no public DNS. To reach the BFF by FQDN from inside the VNet
@@ -313,6 +326,7 @@ resource "azurerm_container_app_job" "config_sync" {
   resource_group_name          = var.resource_group_name
   location                     = var.location
   container_app_environment_id = azurerm_container_app_environment.cp.id
+  workload_profile_name        = "Consumption"
   replica_timeout_in_seconds   = 300
   replica_retry_limit          = 1
 
@@ -380,6 +394,7 @@ resource "azurerm_container_app" "admin_ui" {
   name                         = "ca-adminui-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
   container_app_environment_id = azurerm_container_app_environment.cp.id
+  workload_profile_name        = "Consumption"
   revision_mode                = "Single"
 
   identity {
@@ -500,6 +515,7 @@ resource "azurerm_container_app" "codexproxy" {
   name                         = "ca-codexproxy-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
   container_app_environment_id = azurerm_container_app_environment.cp.id
+  workload_profile_name        = "Consumption"
   revision_mode                = "Single"
 
   identity {
@@ -510,6 +526,11 @@ resource "azurerm_container_app" "codexproxy" {
   registry {
     server   = var.acr_login_server
     identity = var.codexproxy_identity_id
+  }
+
+  secret {
+    name  = "proxy-key"
+    value = var.codexproxy_key
   }
 
   ingress {
@@ -549,12 +570,95 @@ resource "azurerm_container_app" "codexproxy" {
         value = var.codexproxy_client_id
       }
       env {
-        name  = "PROXY_KEY"
-        value = var.codexproxy_key
+        name        = "PROXY_KEY"
+        secret_name = "proxy-key"
+      }
+      env {
+        name  = "PROXY_KEY_VERSION"
+        value = local.proxy_key_revision
       }
       env {
         name  = "PORT"
         value = "8789"
+      }
+    }
+  }
+}
+
+resource "azurerm_container_app" "searchmcp" {
+  count                        = local.searchmcp_enabled ? 1 : 0
+  name                         = "ca-searchmcp-${var.name_suffix}"
+  resource_group_name          = var.resource_group_name
+  container_app_environment_id = azurerm_container_app_environment.cp.id
+  workload_profile_name        = "Consumption"
+  revision_mode                = "Single"
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.codexproxy_identity_id]
+  }
+
+  registry {
+    server   = var.acr_login_server
+    identity = var.codexproxy_identity_id
+  }
+
+  secret {
+    name  = "proxy-key"
+    value = var.codexproxy_key
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 8790
+    transport        = "auto"
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
+  template {
+    min_replicas = 1
+    max_replicas = 3
+
+    container {
+      name   = "searchmcp"
+      image  = var.searchmcp_image
+      cpu    = 0.5
+      memory = "1Gi"
+
+      startup_probe {
+        transport               = "TCP"
+        port                    = 8790
+        initial_delay           = 5
+        interval_seconds        = 5
+        failure_count_threshold = 30
+      }
+
+      env {
+        name  = "FOUNDRY_PROJECT_BASE"
+        value = var.codexproxy_project_base
+      }
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = var.codexproxy_client_id
+      }
+      env {
+        name        = "PROXY_KEY"
+        secret_name = "proxy-key"
+      }
+      env {
+        name  = "PROXY_KEY_VERSION"
+        value = local.proxy_key_revision
+      }
+      env {
+        name  = "SEARCH_MODEL"
+        value = "gpt-5.6-sol"
+      }
+      env {
+        name  = "PORT"
+        value = "8790"
       }
     }
   }
@@ -580,6 +684,26 @@ output "alias_models_json_input" {
 }
 
 output "codexproxy_fqdn" {
-  description = "Internal FQDN of the Codex proxy Container App (null until codexproxy_image is set). APIM /responses service_url."
+  description = "Internal FQDN of the Codex proxy Container App (null until codexproxy_image is set). APIM /openai/v1/responses backend."
   value       = one(azurerm_container_app.codexproxy[*].ingress[0].fqdn)
+}
+
+output "searchmcp_contract" {
+  description = "Search MCP Container App contract for root assertions."
+  value = local.searchmcp_enabled ? {
+    name            = one(azurerm_container_app.searchmcp[*].name)
+    target_port     = one(azurerm_container_app.searchmcp[*].ingress[0].target_port)
+    identity_source = "codexproxy"
+    env_names       = sort([for item in one(azurerm_container_app.searchmcp[*].template[0].container[0].env) : item.name])
+    known_env = {
+      FOUNDRY_PROJECT_BASE = var.codexproxy_project_base
+      SEARCH_MODEL         = "gpt-5.6-sol"
+      PORT                 = "8790"
+    }
+  } : null
+}
+
+output "searchmcp_fqdn" {
+  description = "Internal FQDN of the Search MCP Container App (null until searchmcp_image is set)."
+  value       = one(azurerm_container_app.searchmcp[*].ingress[0].fqdn)
 }

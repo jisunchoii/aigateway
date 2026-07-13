@@ -4,13 +4,10 @@
 # both read id="pricing". Operator edits prices here, then re-runs to publish. Idempotent (upsert).
 #
 # Prices = the confirmed per-1M values / 1000:
+#   gpt-5.6-sol     in $5.00/out $30.00 -> prompt 0.005 / completion 0.03
+#   FW-GLM-5.2      in $1.40/out $4.40  -> prompt 0.0014 / completion 0.0044
 #   grok-4.3         in $1.25/out $2.5   -> prompt 0.00125 / completion 0.0025
 #   DeepSeek-V4-Pro  in $1.74/out $3.48  -> prompt 0.00174 / completion 0.00348
-#
-# As of 2026-07-10, Azure Retail Prices exposes no GPT-5.6 meter.
-# Canonical models without an operator-entered price (for example gpt-5.6-sol or FW-GLM-5.2)
-# count as $0 in budget evaluation until this document is updated with an official per-1K rate.
-# Do not guess those prices here; add them only after confirming the published rate card.
 #
 # Usage (controller invokes via az vm run-command):
 #   ./seed-pricing-jumpbox.sh https://<account>.documents.azure.com:443/
@@ -54,6 +51,8 @@ read -r -d '' doc <<'JSON' || true
   "currency": "USD",
   "unit": "per_1k_tokens",
   "models": {
+    "gpt-5.6-sol":     { "prompt": 0.005, "completion": 0.03 },
+    "FW-GLM-5.2":      { "prompt": 0.0014, "completion": 0.0044 },
     "grok-4.3":        { "prompt": 0.00125, "completion": 0.0025 },
     "DeepSeek-V4-Pro": { "prompt": 0.00174, "completion": 0.00348 }
   }

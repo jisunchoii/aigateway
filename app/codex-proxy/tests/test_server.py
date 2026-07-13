@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -105,16 +106,27 @@ def test_deepseek_strips_reasoning_effort(monkeypatch):
     assert body["reasoning"] == {"summary": "auto"}
 
 
-def test_web_search_passes_and_injects_sources_include(monkeypatch):
+@pytest.mark.parametrize("model", ["FW-GLM-5.2", "DeepSeek-V4-Pro", "grok-4.3"])
+def test_oss_models_strip_all_hosted_tools(monkeypatch, model):
     _enable_project_route(monkeypatch)
-    body = {"model": "FW-GLM-5.2", "tools": [{"type": "web_search"}]}
+    body = {
+        "model": model,
+        "tools": [
+            {"type": "web_search"},
+            {"type": "code_interpreter", "container": {"type": "auto"}},
+            {"type": "file_search", "vector_store_ids": ["vs_x"]},
+            {"type": "image_generation"},
+            {"type": "mcp", "server_label": "search", "server_url": "https://example.com/mcp"},
+            {"type": "function", "name": "keep_me", "parameters": {"type": "object"}},
+        ],
+    }
 
     proxy.normalize_request(body)
 
-    # web_search runs on GLM; keep it and inject the include so Codex sees results
-    # (otherwise web_search_call.action.sources is empty -> infinite re-search).
-    assert body["tools"] == [{"type": "web_search"}]
-    assert body["include"] == ["web_search_call.action.sources"]
+    assert body["tools"] == [
+        {"type": "function", "name": "keep_me", "parameters": {"type": "object"}}
+    ]
+    assert "include" not in body
 
 
 def test_unsupported_hosted_tool_stripped_but_request_survives(monkeypatch):
@@ -130,7 +142,70 @@ def test_unsupported_hosted_tool_stripped_but_request_survives(monkeypatch):
 
     proxy.normalize_request(body)
 
-    assert [t["type"] for t in body["tools"]] == ["web_search", "function"]
+    assert [t["type"] for t in body["tools"]] == ["function"]
+
+
+def test_gpt_native_hosted_tools_are_preserved(monkeypatch):
+    _enable_project_route(monkeypatch)
+    hosted_tools = [
+        {"type": "web_search"},
+        {"type": "web_search_2025_08_26"},
+        {"type": "web_search_preview"},
+        {"type": "web_search_preview_2025_03_11"},
+        {"type": "code_interpreter", "container": {"type": "auto"}},
+        {"type": "file_search", "vector_store_ids": ["vs_x"]},
+        {"type": "image_generation"},
+        {"type": "mcp", "server_label": "search", "server_url": "https://example.com/mcp"},
+        {"type": "computer"},
+        {"type": "computer_use_preview", "environment": "browser"},
+        {"type": "tool_search"},
+        {"type": "shell"},
+        {"type": "programmatic_tool_calling"},
+    ]
+    body = {"model": "gpt-5.6-sol", "tools": hosted_tools}
+
+    proxy.normalize_request(body)
+
+    assert body["tools"] == hosted_tools
+    assert body["include"] == ["web_search_call.action.sources"]
+
+
+def test_mcp_namespace_is_flattened_and_restored(monkeypatch):
+    _enable_project_route(monkeypatch)
+    body = {
+        "model": "FW-GLM-5.2",
+        "tools": [
+            {
+                "type": "namespace",
+                "name": "mcp__web_search__",
+                "tools": [
+                    {
+                        "type": "function",
+                        "name": "search",
+                        "parameters": {"type": "object"},
+                    }
+                ],
+            }
+        ],
+    }
+
+    _, ns_map = proxy.normalize_request(body)
+
+    assert body["tools"] == [
+        {"type": "function", "name": "search", "parameters": {"type": "object"}}
+    ]
+    assert ns_map == {"search": "mcp__web_search__"}
+
+    event = (
+        b"event: response.output_item.done\n"
+        b'data: {"type":"response.output_item.done","item":{"type":"function_call",'
+        b'"name":"search","call_id":"call_1","arguments":"{}"}}'
+    )
+    restored, count = proxy._restore_ns_in_event(event, ns_map)
+
+    assert count == 1
+    data_line = next(line for line in restored.split(b"\n") if line.startswith(b"data:"))
+    assert json.loads(data_line[5:])["item"]["namespace"] == "mcp__web_search__"
 
 
 def test_computer_use_stripped_for_all_sidecar_models(monkeypatch):

@@ -116,7 +116,7 @@ variable "model_deployments" {
       model_format  = "xAI"
       model_version = "1"
       sku_name      = "GlobalStandard"
-      capacity      = 10
+      capacity      = 500
     }
   }
   description = "Canonical model deployments. Keys are client-visible deployment names and drive APIM/Admin UI catalogs."
@@ -174,23 +174,12 @@ variable "foundry_public_network_access_enabled" {
   description = "Temporary migration escape hatch. Final and fresh deployments keep this false."
 }
 
-variable "legacy_gpt_compat_enabled" {
-  type        = bool
-  default     = false
-  description = "Migration-only APIM compatibility shim. When true, gpt-5.4, gpt-5.4-mini, and gpt-5.6-sol are authorization-equivalent and any selected family member is dispatched as gpt-5.6-sol after budget downgrade selection. Keep false for fresh/final deployments."
-}
-
-variable "admin_ui_legacy_gpt_aliases_enabled" {
-  type        = bool
-  default     = false
-  description = "Migration-only Admin UI catalog staging. When true, add gpt-5.4 and gpt-5.4-mini to the canonical deployment-derived aliases so stale consumer documents remain editable. Keep false for fresh/final deployments."
-}
-
 variable "enable_jumpbox" {
   type        = bool
   default     = false
   description = "Deploy the optional Bastion + jumpbox VM for in-VNet smoke testing."
 }
+
 variable "jumpbox_admin_password" {
   type        = string
   default     = null
@@ -206,18 +195,6 @@ variable "jumpbox_vm_size" {
   type        = string
   default     = "Standard_B2s_v2"
   description = "VM size for the jumpbox. Default B2s_v2 works in koreacentral; some regions restrict it (e.g. eastus2 -> use Standard_D2s_v7). Override per region in tfvars."
-}
-
-variable "openai_api_version" {
-  type        = string
-  default     = "2025-01-01-preview"
-  description = "Azure OpenAI data-plane REST API version that CLIENTS send as ?api-version= (e.g. smoke-test scripts). Phase 1 APIM passes it through and does not enforce it in-gateway; a later phase may pin it via a set-query-parameter policy. Not consumed by Terraform resources today."
-}
-
-variable "openai_openapi_spec_url" {
-  type        = string
-  default     = "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/main/specification/cognitiveservices/data-plane/AzureOpenAI/inference/stable/2024-10-21/inference.json"
-  description = "URL of the Azure OpenAI inference OpenAPI spec imported into APIM to create API operations (chat/completions, embeddings, etc)."
 }
 
 variable "tokens_per_minute" {
@@ -324,20 +301,16 @@ variable "admin_group_object_id" {
   description = "Entra ID security group object id whose members are gateway admins (prereq P1). The BFF gates writes on membership."
 }
 
-variable "route_via_codexproxy" {
-  type        = bool
-  default     = false
-  description = "Phase-2 route flip: when true, APIM /responses points at the sidecar Container App and the policy injects the hop key; when false, /responses stays direct to the canonical AIServices account (managed-identity auth). Kept separate so the sidecar backend can be created and health-checked BEFORE the live route is flipped."
-  validation {
-    condition     = !var.route_via_codexproxy || var.codexproxy_image != ""
-    error_message = "route_via_codexproxy=true requires codexproxy_image."
-  }
-}
-
 variable "codexproxy_image" {
   type        = string
   default     = ""
   description = "Full image reference for the Codex proxy sidecar, e.g. acrllmgwxxxx.azurecr.io/codexproxy:latest. Empty disables the Container App."
+}
+
+variable "searchmcp_image" {
+  type        = string
+  default     = ""
+  description = "Full image reference for the Search MCP sidecar, e.g. acrllmgwxxxx.azurecr.io/searchmcp:latest. Empty disables the Container App."
 }
 
 variable "rate_tiers" {

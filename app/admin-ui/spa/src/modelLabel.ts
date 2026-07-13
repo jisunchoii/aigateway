@@ -19,7 +19,7 @@ export function modelsByPrice(config: RuntimeConfig): string[] {
   });
 }
 
-/** Checkbox/label text for a model id, e.g. "gpt-5.4 (GPT-5.4 · in $2.50 / out $15 per 1M)".
+/** Checkbox/label text for a model id, e.g. "gpt-5.6-sol (GPT-5.6 Sol - in $2.50 / out $15 per 1M)".
  *  The display label is only appended when it adds information (not equal to the id), and the
  *  price only when configured — so it degrades to just the id when neither is present.
  *  Prices are stored per 1K tokens; shown per 1M (×1000) for human readability. */

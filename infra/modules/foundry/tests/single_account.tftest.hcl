@@ -80,6 +80,21 @@ run "greenfield_single_account_defaults" {
   }
 
   assert {
+    condition     = azapi_resource.project_account[0].type == "Microsoft.CognitiveServices/accounts@2025-10-01-preview"
+    error_message = "The canonical account must use the live-supported 2025-10-01-preview API."
+  }
+
+  assert {
+    condition     = try(azapi_resource.project_account[0].identity[0].type == "SystemAssigned", false)
+    error_message = "The canonical account identity must use the AzAPI top-level identity block."
+  }
+
+  assert {
+    condition     = !contains(keys(azapi_resource.project_account[0].body), "identity")
+    error_message = "The canonical account identity must not be placed inside the ARM body."
+  }
+
+  assert {
     condition     = azapi_resource.project_account[0].body.properties.customSubDomainName == "aisproj-abc123"
     error_message = "The canonical custom subdomain must follow the managed account name."
   }
@@ -95,6 +110,16 @@ run "greenfield_single_account_defaults" {
   }
 
   assert {
+    condition     = try(azapi_resource.project_account[0].body.properties.associatedProjects == ["codexproj"], false)
+    error_message = "The canonical account must keep the configured project association."
+  }
+
+  assert {
+    condition     = try(azapi_resource.project_account[0].body.properties.defaultProject == "codexproj", false)
+    error_message = "The canonical project must remain the account default."
+  }
+
+  assert {
     condition     = azapi_resource.project_account[0].body.properties.networkAcls.defaultAction == "Deny"
     error_message = "Fresh deployments must deny public network ACLs by default."
   }
@@ -107,6 +132,21 @@ run "greenfield_single_account_defaults" {
   assert {
     condition     = azapi_resource.project[0].parent_id == azapi_resource.project_account[0].id
     error_message = "The project must be a child of the canonical account."
+  }
+
+  assert {
+    condition     = azapi_resource.project[0].type == "Microsoft.CognitiveServices/accounts/projects@2025-10-01-preview"
+    error_message = "The project must use the live-supported 2025-10-01-preview API."
+  }
+
+  assert {
+    condition     = try(azapi_resource.project[0].identity[0].type == "SystemAssigned", false)
+    error_message = "The project identity must use the AzAPI top-level identity block."
+  }
+
+  assert {
+    condition     = !contains(keys(azapi_resource.project[0].body), "identity")
+    error_message = "The project identity must not be placed inside the ARM body."
   }
 
   assert {

@@ -115,19 +115,7 @@ az containerapp job start \
 |---|---|
 | `x-ai-gateway-requested-model` | 클라이언트가 요청한 원래 모델 |
 | `x-ai-gateway-effective-model` | 실제로 호출된 모델 |
-| `x-ai-gateway-downgrade-level` | `0` budget 전환 없음(compat alias rewrite 가능), `1` 80% 임계, `2` 100% 임계 |
-
-### GPT-5.6 live migration flags
-
-두 compatibility 변수는 fresh/final 기능이 아니라 live cutover 전용입니다.
-
-| 단계 | `legacy_gpt_compat_enabled` | `admin_ui_legacy_gpt_aliases_enabled` | 작업 |
-|---|---:|---:|---|
-| Task 7 | `true` | `true` | canonical route 전환 전에 적용. Legacy GPT 요청과 stale allowlist를 `gpt-5.6-sol`로 호환하고 Admin UI에서 기존 문서를 편집 가능하게 유지 |
-| Task 8 | `true` | `false` | Cosmos global/consumer 문서와 client를 migration하고 config-sync 실행 후 Admin UI legacy alias만 제거. Straggler policy 호환은 유지 |
-| Task 9 | `false` | `false` | legacy requested-model telemetry가 0인지 확인한 뒤 PNA lockdown과 함께 policy 호환 제거 |
-
-Compatibility mode에서도 config-sync가 APIM runtime allowed-model named value를 소유합니다. Terraform은 이를 덮어쓰지 않으며, policy가 GPT-family allowlist equivalence를 적용한 뒤 budget downgrade target을 선택하고 최종 GPT-family target만 `gpt-5.6-sol`로 canonicalize합니다. 응답/metric의 requested model은 원 요청을, effective model은 실제 backend deployment를 유지합니다.
+| `x-ai-gateway-downgrade-level` | `0` budget 전환 없음, `1` 80% 임계, `2` 100% 임계 |
 
 ### Application Insights 쿼리
 

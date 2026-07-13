@@ -2,7 +2,7 @@ import pytest
 
 from bff.consumerconfig import ConsumerConfigStore
 
-ALIASES = ["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"]
+ALIASES = ["gpt-5.6-sol", "FW-GLM-5.2", "grok-4.3", "DeepSeek-V4-Pro"]
 
 
 class FakeContainer:
@@ -34,7 +34,7 @@ def test_get_returns_none_when_consumer_has_no_doc():
 def test_remove_deletes_config_doc():
     c = FakeContainer()
     s = ConsumerConfigStore(c)
-    s.put("consumer-a", {"allowed_models": ["gpt-5.4"]})
+    s.put("consumer-a", {"allowed_models": ["gpt-5.6-sol"]})
     assert s.get("consumer-a") is not None
     s.remove("consumer-a")
     assert s.get("consumer-a") is None
@@ -48,13 +48,13 @@ def test_remove_absent_is_noop():
 def test_put_then_get_roundtrip():
     c = FakeContainer()
     s = ConsumerConfigStore(c)
-    s.put("consumer-a", {"allowed_models": ["gpt-5.4"], "tokens_per_minute": 5000,
+    s.put("consumer-a", {"allowed_models": ["gpt-5.6-sol"], "tokens_per_minute": 5000,
                      "daily_budget": 100})
     doc = s.get("consumer-a")
     assert doc["id"] == "consumer:consumer-a"
     assert doc["doc_type"] == "consumer_config"
     assert doc["consumer"] == "consumer-a"
-    assert doc["allowed_models"] == ["gpt-5.4"]
+    assert doc["allowed_models"] == ["gpt-5.6-sol"]
     assert doc["tokens_per_minute"] == 5000
     assert doc["daily_budget"] == 100
 
@@ -105,7 +105,7 @@ def test_put_rejects_bool_as_daily_budget_usd():
 def test_put_rejects_nonlist_allowed_models():
     s = ConsumerConfigStore(FakeContainer())
     with pytest.raises(ValueError, match="list"):
-        s.put("consumer-a", {"allowed_models": "gpt-5.4"})
+        s.put("consumer-a", {"allowed_models": "gpt-5.6-sol"})
 
 
 def test_put_ignores_reserved_keys_in_fields():
@@ -126,13 +126,13 @@ def test_put_partial_only_budget_ok():
 
 
 def test_global_defaults_reads_global_doc():
-    c = FakeContainer(seed={"global": {"id": "global", "allowed_models": ["gpt-5.4"],
+    c = FakeContainer(seed={"global": {"id": "global", "allowed_models": ["gpt-5.6-sol"],
                                        "tokens_per_minute": 1000, "token_quota": 50000,
                                        "token_quota_period": "Daily"}})
     s = ConsumerConfigStore(c)
     g = s.global_defaults()
     assert g["tokens_per_minute"] == 1000
-    assert g["allowed_models"] == ["gpt-5.4"]
+    assert g["allowed_models"] == ["gpt-5.6-sol"]
 
 
 def test_global_defaults_empty_when_no_global_doc():

@@ -113,11 +113,11 @@ def _normalize_tools(tools, model):
             # GATE: keep only hosted tools this model actually runs; strip the rest so the
             # request still succeeds (backend would 400 the whole call otherwise).
             if ttype in supported:
-                if ttype in ("web_search", "web_search_preview"):
+                if ttype.startswith("web_search"):
                     has_web_search = True
                 out.append(t)
             else:
-                log("stripped unsupported hosted tool '%s' for model %s" % (ttype, model))
+                log("stripped hosted tool '%s' by policy for model %s" % (ttype, model))
         elif ttype == "function":
             out.append(t)                            # client-executed function: always passes
         else:
@@ -232,22 +232,23 @@ REASONING_MODES = {
 # a model can't run and lets the rest (function/shell/apply_patch/namespace) through.
 # local_shell/custom/namespace are Codex tool SHAPES handled separately below, not hosted tools.
 _HOSTED_TOOL_TYPES = frozenset({
-    "web_search", "web_search_preview", "code_interpreter", "file_search",
+    "web_search", "web_search_2025_08_26",
+    "web_search_preview", "web_search_preview_2025_03_11",
+    "code_interpreter", "file_search",
     "image_generation", "mcp", "computer", "computer_use_preview", "tool_search",
+    "shell", "programmatic_tool_calling",
 })
 
-# Per-model set of hosted tools verified to WORK (probe_hosted_tools.py; SSOT).
-# "work" = HTTP 200, or a config-only 400 (missing vector store / imagegen header / dead MCP
-# server) which means the type is accepted and only runtime args are absent. NOT working =
-# 400 "not supported with <model>", invalid_value, or a repeatable 500 (grok+code_interpreter).
-# A model absent from this map has ALL hosted tools stripped (function/shell still run, so
-# Codex keeps working). Re-run the probe when models, api-version, or region change.
+# Policy allow-list for server-executed hosted tools.
+#
+# Non-OpenAI models are intentionally absent even when Foundry accepts a hosted tool type.
+# With reasoning enabled, hosted web search can run an opaque server-side agentic loop inside
+# one response, so neither Codex nor this proxy can bound or inspect each search iteration.
+# OSS models instead use client-executed function/MCP tools, which return control to Codex
+# between calls. A model absent from this map has all hosted tools stripped while ordinary
+# function, shell, apply_patch, and namespace tools continue to work.
 HOSTED_TOOL_SUPPORT = {
-    "FW-GLM-5.2":      {"web_search", "code_interpreter", "file_search", "image_generation", "mcp"},
-    "DeepSeek-V4-Pro": {"web_search", "code_interpreter", "file_search", "image_generation", "mcp"},
-    "grok-4.3":        {"web_search", "file_search", "image_generation", "mcp"},  # code_interpreter: repeatable 500
-    "gpt-5.6-sol":     {"web_search", "code_interpreter", "file_search", "image_generation",
-                        "mcp", "computer_use_preview"},  # recorded for completeness; gpt bypasses the sidecar
+    "gpt-5.6-sol": _HOSTED_TOOL_TYPES,
 }
 
 
@@ -564,8 +565,7 @@ def selftest():
     normalize_request(b3)
     assert "reasoning" not in b3
 
-    # hosted-tool gate: GLM keeps web_search (+ its sources include injected), strips
-    # computer_use (model can't run it) and an unknown future type; shell/function survive.
+    # OSS models strip all server-executed hosted tools; client-executed functions survive.
     bg = {"model": "FW-GLM-5.2", "tools": [
         {"type": "web_search"},
         {"type": "computer_use_preview", "environment": "browser"},
@@ -574,18 +574,24 @@ def selftest():
         {"type": "function", "name": "keep_me", "parameters": {"type": "object"}},
     ]}
     normalize_request(bg)
-    assert [t.get("type") for t in bg["tools"]] == ["web_search", "function", "function"]
+    assert [t.get("type") for t in bg["tools"]] == ["function", "function"]
     assert [t.get("name") for t in bg["tools"] if t["type"] == "function"] == ["shell", "keep_me"]
-    assert bg["include"] == ["web_search_call.action.sources"]  # injected so Codex sees results
+    assert "include" not in bg
 
-    # grok strips code_interpreter (repeatable 500) but keeps web_search + file_search
+    # Grok follows the same client-executed-tools-only policy.
     bgr = {"model": "grok-4.3", "tools": [
         {"type": "code_interpreter", "container": {"type": "auto"}},
         {"type": "web_search"},
         {"type": "file_search", "vector_store_ids": ["vs_x"]},
     ]}
     normalize_request(bgr)
-    assert [t["type"] for t in bgr["tools"]] == ["web_search", "file_search"]
+    assert bgr["tools"] == []
+
+    # Native OpenAI models retain hosted web search and receive source details for Codex.
+    bgo = {"model": "gpt-5.6-sol", "tools": [{"type": "web_search"}]}
+    normalize_request(bgo)
+    assert bgo["tools"] == [{"type": "web_search"}]
+    assert bgo["include"] == ["web_search_call.action.sources"]
 
     # unknown model (not in HOSTED_TOOL_SUPPORT): ALL hosted tools stripped, function survives
     bu = {"model": "Some-New-Model", "tools": [

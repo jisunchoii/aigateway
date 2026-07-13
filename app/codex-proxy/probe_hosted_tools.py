@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Probe which hosted tools each Foundry model actually runs, and print the
-HOSTED_TOOL_SUPPORT literal for foundry_codex_proxy.py.
+"""Probe which hosted tools each Foundry model endpoint currently accepts.
 
 WHY probe instead of trusting the tool list: the backend advertises a shared set of hosted
 tool types, but EXECUTION is per-model. A type can be "accepted" (HTTP 200 or a config-only
 400) yet unrunnable on another model (400 "not supported with <model>", invalid_value, or a
 repeatable 500 like grok+code_interpreter). Only a live call tells them apart. This fills the
-matrix from ground truth; re-run it when models, api-version, or region change.
+observed matrix from ground truth; re-run it when models, api-version, or region change.
+
+This is diagnostic output, not the proxy policy. The proxy intentionally strips all hosted
+tools from non-OpenAI models so web search and other tools execute as client-visible MCP
+function calls instead of opaque server-side agentic loops.
 
 The classification also injects web_search_call.action.sources so a web_search probe reflects
 the same include the proxy sends in production.
@@ -34,12 +37,19 @@ import foundry_codex_proxy as proxy
 # backend answer "type accepted, args missing" (supported) vs "type not supported" (unsupported).
 PROBE_TOOLS = {
     "web_search": {"type": "web_search"},
+    "web_search_2025_08_26": {"type": "web_search_2025_08_26"},
+    "web_search_preview": {"type": "web_search_preview"},
+    "web_search_preview_2025_03_11": {"type": "web_search_preview_2025_03_11"},
     "code_interpreter": {"type": "code_interpreter", "container": {"type": "auto"}},
     "file_search": {"type": "file_search", "vector_store_ids": ["vs_probe_nonexistent"]},
     "image_generation": {"type": "image_generation"},
     "mcp": {"type": "mcp", "server_label": "probe", "server_url": "https://example.com/mcp"},
+    "computer": {"type": "computer"},
     "computer_use_preview": {"type": "computer_use_preview", "display_width": 800,
                              "display_height": 600, "environment": "browser"},
+    "tool_search": {"type": "tool_search", "execution": "server"},
+    "shell": {"type": "shell"},
+    "programmatic_tool_calling": {"type": "programmatic_tool_calling"},
 }
 
 # A hosted tool is SUPPORTED if the type is accepted. These substrings in a 400 mean the type
@@ -124,8 +134,8 @@ def main():
                 supported.add(name)
         matrix[model] = supported
 
-    # Emit a paste-ready literal for HOSTED_TOOL_SUPPORT.
-    print("HOSTED_TOOL_SUPPORT = {")
+    # Report backend acceptance separately from the proxy's conservative policy allow-list.
+    print("OBSERVED_HOSTED_TOOL_ACCEPTANCE = {")
     for model, tools in matrix.items():
         items = ", ".join('"%s"' % t for t in sorted(tools))
         print('    "%s": {%s},' % (model, items))
