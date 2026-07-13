@@ -24,6 +24,10 @@ app/admin-ui/bff/static/
 # Internal one-off scripts / dev tooling — kept on disk, not shipped to customers
 internal/
 
+# Internal agent planning and review artifacts
+.superpowers/
+docs/superpowers/
+
 # honkit local preview build output
 docs/_book/
 .gitbook-local/
