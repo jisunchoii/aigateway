@@ -17,7 +17,7 @@ description: "향후 지원 계획 — Entra ID 인증, Claude Code, Codex/Respo
 우선순위는 **Entra ID 인증 운영화 → Claude Code** 순서가 안전합니다. Entra ID 인증을 먼저 안정화하면 Claude Code도 `Authorization: Bearer <token>` 기반 흐름으로 설계하기 쉬워집니다.
 
 {% hint style="success" %}
-**Codex는 네 canonical 모델로 지원됩니다.** Codex CLI는 Responses API 전용(`wire_api = "responses"`)이며, `/openai/v1/responses` 경로가 Codex proxy sidecar를 거쳐 같은 AIServices 계정 아래 `codexproj` project의 Responses API(`/api/projects/codexproj/openai/v1/responses`)로 연결됩니다. `gpt-5.6-sol`은 native hosted tool을 사용하고, OSS 모델의 웹 검색은 bounded [Search MCP](07-connect-clients/codex-cli.md#6-oss-hosted-tool과-search-mcp)를 사용합니다.
+**Codex는 지원 모델 네 개로 제공됩니다.** Codex CLI는 Responses API 전용(`wire_api = "responses"`)이며, `/openai/v1/responses` 경로가 Codex proxy sidecar를 거쳐 같은 AIServices 계정 아래 `codexproj` project의 Responses API(`/api/projects/codexproj/openai/v1/responses`)로 연결됩니다. `gpt-5.6-sol`은 native hosted tool을 사용하고, OSS 모델의 웹 검색은 bounded [Search MCP](07-connect-clients/codex-cli.md#6-oss-hosted-tool과-search-mcp)를 사용합니다.
 {% endhint %}
 
 {% hint style="info" %}

@@ -52,7 +52,7 @@ Azure API Management(APIM)을 중심으로 하나의 project-enabled AIServices 
 
 ## 배포 개요
 
-자세한 절차는 [GitBook 배포](docs/03-deploy.md)을 기준으로 합니다. README는 흐름만 요약합니다. 기존 단일 문서 형식의 **legacy** runbook이 필요하면 [단계별 배포 가이드](docs/step-by-step-deployment-guide.md)를 참고하되, 현재 canonical 값과 경로는 GitBook 문서를 우선하세요.
+자세한 절차는 [GitBook 배포](docs/03-deploy.md)을 기준으로 합니다. README는 흐름만 요약합니다. 기존 단일 문서 형식의 **legacy** runbook이 필요하면 [단계별 배포 가이드](docs/step-by-step-deployment-guide.md)를 참고하되, 현재 기준값과 경로는 GitBook 문서를 우선하세요.
 
 ### 1. Terraform state backend 준비
 
@@ -86,10 +86,10 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 | `location` | 배포 리전 |
 | `apim_public` | VS Code/Copilot CLI 같은 외부 도구에서 APIM을 호출해야 하면 `true` |
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
-| `model_deployments` | canonical AIServices account에 둘 deployment 이름/모델/sku/capacity |
+| `model_deployments` | 기준 AIServices 계정에 배포할 모델 이름/모델/sku/capacity |
 | `monthly_budget_amount`, `budget_alert_email` | Azure Cost Management 알림 예산 |
 
-기존 state 업그레이드는 먼저 [모델 백엔드 기존 계정 재사용](docs/04-reuse-foundry.md)의 이력 분류를 따릅니다. 현재 `reuse_foundry=false` managed 이력은 그대로 유지합니다. Sidecar-era `reuse_foundry=true` state가 `project_account`를 이미 소유한다면 그 계정을 exact name으로 managed canonical 계정으로 승격하고 `reuse_foundry=false`로 바꿉니다. 기존 APIM 역할 할당은 rollback fallback이므로 새 주소로 `state mv`하지 않습니다.
+모델 백엔드는 세 가지 경우로 나뉩니다. 모델을 새로 배포하면 `reuse_foundry=false`를 사용합니다. 기존 모델을 활용할 때는 `reuse_foundry=true`를 사용하며, 프로젝트가 없으면 Terraform이 새로 만들고 프로젝트가 이미 있으면 apply 전에 기존 프로젝트를 import합니다. 자세한 절차는 [모델 백엔드 기존 계정 재사용](docs/04-reuse-foundry.md)을 따릅니다.
 
 ### 3. 게이트웨이 core 배포
 
@@ -186,7 +186,7 @@ config_sync_job_name="$(terraform output -raw config_sync_job_name)"
 az containerapp job start -g "$resource_group_name" -n "$config_sync_job_name"
 ```
 
-`seed-pricing-jumpbox.sh`에는 canonical 모델의 per-1K 단가가 포함되어 있습니다. Azure가 공식 단가를 공개한 모델은 Azure 단가를 우선 사용하고, Azure 단가가 없는 Fireworks 모델은 Fireworks 공개 단가를 임시 참고값으로 사용할 수 있습니다. provider 공개 단가는 지역, SKU, 계약 조건이 반영된 실제 Azure 청구 단가와 다를 수 있으므로 운영 전에 확인하고 수정해야 합니다. Budget 계산은 Cosmos `pricing` 문서의 값을 사용하며, 해당 문서에 단가가 없는 모델만 `$0`으로 집계됩니다.
+`seed-pricing-jumpbox.sh`에는 지원 모델의 per-1K 단가가 포함되어 있습니다. Azure가 공식 단가를 공개한 모델은 Azure 단가를 우선 사용하고, Azure 단가가 없는 Fireworks 모델은 Fireworks 공개 단가를 임시 참고값으로 사용할 수 있습니다. provider 공개 단가는 지역, SKU, 계약 조건이 반영된 실제 Azure 청구 단가와 다를 수 있으므로 운영 전에 확인하고 수정해야 합니다. Budget 계산은 Cosmos `pricing` 문서의 값을 사용하며, 해당 문서에 단가가 없는 모델만 `$0`으로 집계됩니다.
 
 운영 중 Admin UI에서 consumer 정책을 저장하면 BFF가 config-sync job을 best-effort로 즉시 시작합니다. 실패하더라도 worker cron(`config_sync_cron`, 기본 5분)이 보완합니다.
 

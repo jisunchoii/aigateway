@@ -136,7 +136,7 @@ downgrade_ladder = gpt-5.6-sol → DeepSeek-V4-Pro → grok-4.3
 `active_downgrade`는 Admin UI가 직접 쓰는 값이 아니라 config-sync worker가 Log Analytics 사용량과 pricing 문서를 기반으로 계산합니다.
 
 {% hint style="info" %}
-Admin UI가 보여주는 모델 목록은 Terraform이 `model_deployments`에서 만든 `ALIAS_MODELS_JSON`으로 고정되고, config-sync는 Cosmos `allowed_models`를 APIM runtime named value로만 동기화합니다. 새 canonical 모델을 추가할 때는 Terraform과 Cosmos/runtime 갱신을 둘 다 수행하세요.
+Admin UI가 보여주는 모델 목록은 Terraform이 `model_deployments`에서 만든 `ALIAS_MODELS_JSON`으로 고정되고, config-sync는 Cosmos `allowed_models`를 APIM runtime named value로만 동기화합니다. 새 지원 모델을 추가할 때는 Terraform과 Cosmos/runtime 갱신을 둘 다 수행하세요.
 {% endhint %}
 
 ## 전환 확인

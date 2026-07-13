@@ -4,7 +4,7 @@ description: VS Code BYOK — chatLanguageModels.json으로 APIM custom endpoint
 
 # VS Code BYOK
 
-VS Code의 custom language model 설정에 APIM 게이트웨이를 등록합니다. VS Code는 `requestHeaders`로 `Ocp-Apim-Subscription-Key`를 보낼 수 있으므로 `/vscode/models` 경로를 사용합니다. 이 경로는 canonical 네 모델(`gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`)을 같은 방식으로 사용합니다.
+VS Code의 custom language model 설정에 APIM 게이트웨이를 등록합니다. VS Code는 `requestHeaders`로 `Ocp-Apim-Subscription-Key`를 보낼 수 있으므로 `/vscode/models` 경로를 사용합니다. 이 경로는 지원 모델 네 개(`gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`)를 같은 방식으로 사용합니다.
 
 ## 1. 선택 기준
 

@@ -4,7 +4,7 @@ description: "직접 API 호출 — curl 또는 REST Client로 통합 /openai/v1
 
 # 직접 API 호출
 
-curl, REST Client, 애플리케이션 코드에서 APIM 게이트웨이를 직접 호출합니다. 모든 canonical 모델은 같은 `/openai/v1/chat/completions` 경로와 `api-key` 헤더를 사용하며, 요청 body의 `model`로 배포를 선택합니다.
+curl, REST Client, 애플리케이션 코드에서 APIM 게이트웨이를 직접 호출합니다. 모든 지원 모델은 같은 `/openai/v1/chat/completions` 경로와 `api-key` 헤더를 사용하며, 요청 body의 `model`로 배포를 선택합니다.
 
 ## 1. 선택 기준
 

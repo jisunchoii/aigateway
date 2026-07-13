@@ -119,7 +119,7 @@ variable "model_deployments" {
       capacity      = 500
     }
   }
-  description = "Canonical model deployments. Keys are client-visible deployment names and drive APIM/Admin UI catalogs."
+  description = "Supported model deployment map. In new-deployment mode Terraform creates these deployments; in reuse mode they describe the deployments that must already exist."
 
   validation {
     condition = alltrue([
@@ -133,13 +133,13 @@ variable "model_deployments" {
 variable "reuse_foundry" {
   type        = bool
   default     = false
-  description = "External-final brownfield only: when true, read an existing canonical AIServices account instead of managing it. Preflight/import any existing canonical project, gateway private endpoint, and APIM role assignments. Sidecar-era state that already owns project_account/project/project_models must set this false and preserve that managed account by exact name."
+  description = "When false, create and manage the AIServices account, project, and model deployments. When true, reuse an existing account and deployments; create a missing project or import an existing project before apply."
 }
 
 variable "existing_foundry_name" {
   type        = string
   default     = ""
-  description = "Exact name of the external already-final AIServices account selected for reuse. Required when reuse_foundry = true; verify its full resource ID rather than matching by name alone."
+  description = "Exact name of the existing AIServices account selected for reuse. Required when reuse_foundry = true; verify the full resource ID rather than matching by name alone."
   validation {
     condition     = !var.reuse_foundry || length(var.existing_foundry_name) > 0
     error_message = "existing_foundry_name is required when reuse_foundry = true."
@@ -149,7 +149,7 @@ variable "existing_foundry_name" {
 variable "existing_foundry_rg" {
   type        = string
   default     = ""
-  description = "Exact resource group of the external already-final AIServices account. Required when reuse_foundry = true and limited to the same subscription."
+  description = "Resource group of the existing AIServices account selected for reuse. Required when reuse_foundry = true; the account must be in the same subscription."
   validation {
     condition     = !var.reuse_foundry || length(var.existing_foundry_rg) > 0
     error_message = "existing_foundry_rg is required when reuse_foundry = true."
@@ -159,19 +159,19 @@ variable "existing_foundry_rg" {
 variable "foundry_account_name" {
   type        = string
   default     = ""
-  description = "Managed canonical account name override. For managed live or sidecar-era state, set this to the exact existing project_account name captured from Terraform state so the preserved address remains in place."
+  description = "Optional name for the AIServices account that Terraform creates and manages. Leave empty to use the generated name."
 }
 
 variable "foundry_project_name" {
   type        = string
   default     = "codexproj"
-  description = "Canonical child Foundry project name."
+  description = "Foundry project name. In reuse mode Terraform creates this project when absent, or manages an existing project after it is imported."
 }
 
 variable "foundry_public_network_access_enabled" {
   type        = bool
   default     = false
-  description = "Temporary migration escape hatch. Final and fresh deployments keep this false."
+  description = "Temporary private-endpoint validation option. Keep false for normal deployments."
 }
 
 variable "enable_jumpbox" {

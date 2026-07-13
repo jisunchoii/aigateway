@@ -1,10 +1,10 @@
 ---
-description: "모델 백엔드 신규 생성 — Terraform이 project-enabled AIServices account/project와 canonical 모델 배포를 새로 만드는 경로"
+description: "모델 백엔드 신규 생성 — Terraform이 project-enabled AIServices account/project와 지원 모델 배포를 새로 만드는 경로"
 ---
 
 # 모델 백엔드 신규 생성
 
-이 페이지는 Terraform이 **project-enabled AIServices account/project와 canonical 모델 배포를 새로 만드는 greenfield 경로**를 설명합니다. 모델 백엔드는 APIM과 따로 나중에 붙는 리소스가 아니라, [APIM 게이트웨이 배포](case-apim-core-first.md) 또는 [All-in-one 배포](case-all-in-one.md)의 첫 `terraform apply`에서 함께 생성됩니다.
+이 페이지는 Terraform이 **project-enabled AIServices account/project와 지원 모델 배포를 새로 만드는 경로**를 설명합니다. 모델 백엔드는 APIM과 따로 나중에 붙는 리소스가 아니라, [APIM 게이트웨이 배포](case-apim-core-first.md) 또는 [All-in-one 배포](case-all-in-one.md)의 첫 `terraform apply`에서 함께 생성됩니다.
 
 ## 1. 선택 기준
 
@@ -23,11 +23,11 @@ description: "모델 백엔드 신규 생성 — Terraform이 project-enabled AI
 
 | 리소스 | 설명 |
 |---|---|
-| AIServices 계정 | `allowProjectManagement=true`가 켜진 canonical account |
+| AIServices 계정 | `allowProjectManagement=true`가 켜진 기준 모델 계정 |
 | Foundry project | `codexproj` child project |
 | 모델 배포 | `model_deployments` 기준으로 `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` 생성 |
-| Private Endpoint | APIM VNet에서 canonical account로 private 연결 |
-| RBAC | APIM managed identity에 canonical account 호출 권한 부여 |
+| Private Endpoint | APIM VNet에서 기준 모델 계정으로 private 연결 |
+| RBAC | APIM managed identity에 기준 모델 계정 호출 권한 부여 |
 
 {% hint style="info" %}
 신규 backend 계정은 public access와 key auth를 끄고, APIM managed identity + RBAC 경로로만 호출합니다.
@@ -45,7 +45,7 @@ description: "모델 백엔드 신규 생성 — Terraform이 project-enabled AI
 
 | 확인할 내용 | 공식 문서 |
 |---|---|
-| GPT-5.6 canonical deployment 세부 정보 | [Foundry Models sold by Azure — GPT-5.6](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56) |
+| GPT-5.6 deployment 세부 정보 | [Foundry Models sold by Azure — GPT-5.6](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56) |
 | Responses 지원 모델 확인 | [Responses API supported models](https://learn.microsoft.com/azure/foundry/openai/how-to/responses#supported-models) |
 | Private Endpoint / DNS 요구사항 | [Configure private link for Azure AI Foundry resources](https://learn.microsoft.com/azure/foundry/how-to/configure-private-link) |
 | APIM managed identity backend 인증 | [Authenticate with managed identity](https://learn.microsoft.com/azure/api-management/api-management-authenticate-authorize-ai-apis#authenticate-with-managed-identity) |
@@ -101,9 +101,9 @@ model_deployments = {
 | 변수 | 의미 |
 |---|---|
 | `reuse_foundry` | `false`면 신규 backend 계정과 모델 배포를 생성 |
-| `foundry_project_name` | canonical child project 이름 (`codexproj`) |
+| `foundry_project_name` | 기준 child project 이름 (`codexproj`) |
 | `foundry_public_network_access_enabled` | `false`면 private-only account로 배포 |
-| `model_deployments` | canonical 네 deployment 정의. map key가 곧 APIM/Admin UI 모델 이름 |
+| `model_deployments` | 지원 모델 deployment 네 개 정의. map key가 곧 APIM/Admin UI 모델 이름 |
 
 ## 5. APIM 배포와의 관계
 

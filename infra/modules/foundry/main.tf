@@ -52,13 +52,13 @@ variable "deployments" {
     sku_name      = string
     capacity      = number
   }))
-  description = "Unified deployment catalog for the canonical project-enabled AIServices account."
+  description = "Supported model deployments. Reuse mode expects these deployments to exist and does not manage them."
 }
 
 variable "reuse_existing" {
   type        = bool
   default     = false
-  description = "External-final brownfield only. Read an existing project-enabled AIServices account and skip deployment management; the project and PE remain Terraform-managed and existing matching resources must be imported before apply."
+  description = "Read an existing AIServices account and skip model deployment management. Terraform creates a missing project, PE, and RBAC; import matching existing resources before apply."
 }
 
 variable "existing_account_name" {
@@ -76,22 +76,22 @@ variable "existing_account_rg" {
 variable "account_name" {
   type        = string
   default     = ""
-  description = "Managed project-enabled AIServices account name. Defaults to aisproj- followed by the generated random suffix to preserve the project-enabled custom subdomain pattern."
+  description = "Name of the project-enabled AIServices account created by Terraform. Defaults to aisproj- followed by the generated random suffix."
 }
 
 variable "project_name" {
   type        = string
   default     = "codexproj"
-  description = "Child Foundry project used by Responses clients."
+  description = "Foundry project used by Responses clients. In reuse mode, set this to the new or existing project name."
 }
 
 variable "public_network_access_enabled" {
   type        = bool
   default     = false
-  description = "Migration escape hatch. Keep false for fresh/final deployments; set true only while validating a newly attached private endpoint."
+  description = "Temporary private-endpoint validation option. Keep false for normal deployments."
 }
 
-# Brownfield: reference an existing AIServices account instead of creating one.
+# Reuse an existing AIServices account instead of creating one.
 data "azurerm_cognitive_account" "existing" {
   count               = var.reuse_existing ? 1 : 0
   name                = var.existing_account_name
@@ -105,7 +105,7 @@ data "azurerm_cognitive_account" "existing" {
 
     postcondition {
       condition     = self.project_management_enabled == true
-      error_message = "Reused AIServices account must already have project management enabled before this module can attach the canonical child project."
+      error_message = "Reused AIServices account must already have project management enabled before this module can create or attach the Foundry project."
     }
 
     postcondition {
@@ -248,27 +248,27 @@ resource "azurerm_private_endpoint" "project_account" {
 
 output "id" {
   value       = local.account_id
-  description = "Canonical project-enabled AIServices account resource ID."
+  description = "AIServices account resource ID used by the gateway."
 }
 
 output "name" {
   value       = local.account_name
-  description = "Canonical project-enabled AIServices account name."
+  description = "AIServices account name used by the gateway."
 }
 
 output "endpoint" {
   value       = local.account_endpoint
-  description = "Canonical AIServices control endpoint."
+  description = "AIServices control endpoint used by the gateway."
 }
 
 output "endpoint_openai_v1" {
   value       = local.account_openai_v1
-  description = "Canonical OpenAI/v1 inference base."
+  description = "OpenAI/v1 inference base used by the gateway."
 }
 
 output "endpoint_openai_host" {
   value       = local.account_openai_host
-  description = "Canonical OpenAI host."
+  description = "OpenAI host used by the gateway."
 }
 
 output "deployment_names" {
@@ -278,10 +278,10 @@ output "deployment_names" {
 
 output "project_account_id" {
   value       = local.account_id
-  description = "Compatibility alias for the canonical account ID."
+  description = "Compatibility alias for the gateway AIServices account ID."
 }
 
 output "project_responses_base" {
   value       = local.project_responses_base
-  description = "Canonical project OpenAI/v1 base used by the Codex proxy."
+  description = "Foundry project OpenAI/v1 base used by the Codex proxy."
 }

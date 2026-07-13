@@ -116,7 +116,7 @@ model_deployments = {
 }
 ```
 
-`reuse_foundry=true`는 state에 managed `project_account`가 없는 **external-final 계정**에만 사용합니다. 이 경로에서는 canonical deployment가 기존 계정에 이미 있어야 하고, 기존 `codexproj`/gateway PE/APIM 역할은 exact account ID·principal ID·role·resource ID를 확인한 뒤 import합니다. Sidecar-era state가 `project_account`/`project`/`project_models`를 이미 소유하면 [기존 state 분류](../04-reuse-foundry.md#기존-state-분류)에 따라 `reuse_foundry=false`와 exact `foundry_account_name`을 사용하며 APIM 역할을 `state mv`하지 않습니다.
+`reuse_foundry=true`에서는 지원 모델 deployment가 기존 계정에 이미 있어야 합니다. 프로젝트가 없다면 `foundry_project_name`에 새 프로젝트 이름을 입력하면 Terraform이 생성합니다. 프로젝트가 이미 있다면 기존 이름을 입력하고 `module.foundry.azapi_resource.project[0]`으로 import합니다. 기존 Private Endpoint나 APIM 역할 할당도 재사용하려면 정확한 resource ID로 import합니다.
 
 ```
 reuse_foundry         = true
@@ -172,7 +172,7 @@ enable_jumpbox = false
 | ---------------------------------------------------------------- | ------------------------------- |
 | `owner`, `cost_center`, `apim_publisher_*`, `budget_alert_email` | 기본값이 없어 파일에 넣어야 하는 공통 값         |
 | `reuse_foundry`                                                  | 모델 백엔드 신규 생성/기존 계정 재사용 선택       |
-| `model_deployments`                                              | canonical 네 모델 또는 운영자가 승인한 동일 schema deployment 정의 |
+| `model_deployments`                                              | 지원 모델 네 개 또는 운영자가 승인한 동일 schema deployment 정의 |
 | `worker_image`                                                   | 비워 두면 config-sync worker 미배포    |
 | `codexproxy_image`                                               | 비워 두면 Responses backend 미활성화 |
 | `searchmcp_image`                                                | 비워 두면 `/mcp/` API 미배포 |
@@ -209,7 +209,7 @@ terraform plan
 terraform apply
 ```
 
-External-final 계정에 `reuse_foundry=true`를 사용하는 경우 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인하고, [기존 state 분류와 plan 검증](../04-reuse-foundry.md#기존-state-분류)을 따릅니다.
+`reuse_foundry=true`를 사용하는 경우 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인하고, 프로젝트 유무에 따른 [import와 plan 검증](../04-reuse-foundry.md#5-기존-프로젝트와-연결-리소스-import)을 따릅니다.
 
 APIM VNet 주입이 포함된 첫 apply는 약 45분 걸릴 수 있습니다. 완료 후 gateway URL을 확인합니다.
 

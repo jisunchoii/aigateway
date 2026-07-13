@@ -54,20 +54,21 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `model_deployments` | `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` | canonical AIServices deployment map. map key가 곧 APIM/Admin UI 모델 이름 |
-| `foundry_project_name` | `codexproj` | canonical child project 이름 |
-| `foundry_public_network_access_enabled` | `false` | `false`면 private-only canonical account로 유지 |
+| `model_deployments` | `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` | 지원 모델 AIServices deployment map. map key가 곧 APIM/Admin UI 모델 이름 |
+| `foundry_project_name` | `codexproj` | 기준 child project 이름 |
+| `foundry_public_network_access_enabled` | `false` | `false`면 기준 모델 계정을 private-only로 유지 |
 
 ### 기존 Foundry 계정 재사용
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `reuse_foundry` | `false` | State에 managed project account가 없는 external-final 계정 재사용 전용 |
-| `existing_foundry_name` | `""` | 재사용할 external AIServices exact account name. `reuse_foundry=true`면 필수 |
+| `reuse_foundry` | `false` | `false`면 계정·프로젝트·모델을 생성하고, `true`면 기존 계정과 모델을 유지 |
+| `existing_foundry_name` | `""` | 재사용할 기존 AIServices 계정의 정확한 이름. `reuse_foundry=true`면 필수 |
 | `existing_foundry_rg` | `""` | 기존 AIServices 계정의 resource group. `reuse_foundry=true`면 필수 |
+| `foundry_project_name` | `codexproj` | 프로젝트가 없으면 새로 만들 이름, 있으면 import할 기존 프로젝트 이름 |
 
 {% hint style="info" %}
-Sidecar-era state가 `project_account`/`project`/`project_models`를 이미 소유하면 external reuse가 아닙니다. Exact account name을 state에서 캡처하고 `reuse_foundry=false`를 사용합니다. External-final reuse에서는 기존 project/PE/APIM 역할의 exact resource ID와 account/APIM principal/role 일치를 검증한 뒤 import합니다. 자세한 분류는 [기존 계정 재사용](04-reuse-foundry.md#기존-state-분류)을 따릅니다.
+기존 계정에 프로젝트가 없으면 Terraform이 `foundry_project_name`으로 생성합니다. 프로젝트가 이미 있으면 같은 이름을 설정하고 기존 프로젝트를 import합니다. 두 경우 모두 기존 모델 deployment는 Terraform이 생성하거나 수정하지 않습니다.
 {% endhint %}
 
 ### 클라이언트 인증
@@ -139,8 +140,8 @@ large  = { tpm = 300000, quota = 1000000000, period = "Monthly" }
 | `apim_gateway_url` | Copilot CLI, 직접 API 호출 base URL |
 | `apim_private_ip` | VNet 내부 진단에서 APIM private IP 확인 |
 | `vscode_base_url` | VS Code BYOK custom model URL |
-| `model_account_name` | canonical AIServices 계정 이름 확인 |
-| `model_openai_v1_endpoint` | canonical `/openai/v1` backend base 확인 |
+| `model_account_name` | 기준 AIServices 계정 이름 확인 |
+| `model_openai_v1_endpoint` | 기준 모델 계정의 `/openai/v1` backend base 확인 |
 | `registry_name` | `az acr build --registry` 입력값 |
 | `registry_login_server` | `worker_image`, `admin_ui_image` 구성 |
 | `config_store_endpoint` | Cosmos DB seed script 입력값 |

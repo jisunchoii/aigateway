@@ -4,7 +4,7 @@ description: "All-in-one 배포 — 신규 환경에 APIM, 모델 백엔드, Adm
 
 # All-in-one 배포
 
-이 페이지는 신규 데모/검증 환경에서 **APIM 게이트웨이, 모델 백엔드, Admin UI, config-sync worker**를 한 흐름으로 배포하는 greenfield 경로를 설명합니다. 이름은 All-in-one이지만, ACR과 컨테이너 이미지의 순환 의존성 때문에 신규 환경에서는 보통 **최소 2번의 Terraform apply**가 필요합니다.
+이 페이지는 신규 데모/검증 환경에서 **APIM 게이트웨이, 모델 백엔드, Admin UI, config-sync worker**를 한 흐름으로 배포하는 경로를 설명합니다. 이름은 All-in-one이지만, ACR과 컨테이너 이미지의 순환 의존성 때문에 신규 환경에서는 보통 **최소 2번의 Terraform apply**가 필요합니다.
 
 ## 1. 선택 기준
 
@@ -147,7 +147,7 @@ terraform plan
 terraform apply
 ```
 
-External-final 계정을 `reuse_foundry=true`로 선택한 별도 배포라면 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인하고, [기존 state 분류와 plan 검증](../04-reuse-foundry.md#기존-state-분류)을 따릅니다.
+기존 계정을 `reuse_foundry=true`로 선택했다면 기존 AIServices 계정과 모델 deployment가 생성 또는 변경 대상이 아닌지 확인합니다. 프로젝트가 이미 있다면 apply 전에 기존 프로젝트를 import하고, 없다면 Terraform이 새 프로젝트를 생성하는지 plan에서 확인합니다. 자세한 절차는 [기존 계정 재사용](../04-reuse-foundry.md)을 따릅니다.
 
 1차 apply는 APIM VNet 주입 때문에 약 45분 걸릴 수 있습니다. 완료 후 주요 출력값을 확인합니다.
 
