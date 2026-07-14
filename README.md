@@ -85,6 +85,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 |---|---|
 | `location` | 배포 리전 |
 | `apim_public` | VS Code/Copilot CLI 같은 외부 도구에서 APIM을 호출해야 하면 `true` |
+| `admin_ui_public` | Admin UI를 외부 브라우저에서 열어야 하면 첫 apply 전에 `true` |
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
 | `reuse_foundry_project` | 기존 Foundry 프로젝트를 Terraform 비관리 상태로 재사용할지 |
 | `model_deployments` | 기준 AIServices 계정에 배포할 모델 이름/모델/sku/capacity |
@@ -94,7 +95,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 
 ### 3. 게이트웨이 core 배포
 
-처음에는 `worker_image`와 `admin_ui_image`를 비워 둔 상태로 APIM, 네트워크, Cosmos, ACR 등을 먼저 만듭니다.
+처음에는 `worker_image`, `admin_ui_image`, `codexproxy_image`, `searchmcp_image`를 모두 비워 둔 상태로 APIM, 네트워크, Cosmos, ACR 등을 먼저 만듭니다. 이미지 변수가 비어 있어도 ACR은 생성되고, 해당 Container App 또는 Job만 건너뜁니다. Admin UI를 배포할 예정이면 Container Apps 환경이 생성되기 전인 이 첫 apply에서 `admin_ui_public` 값을 확정해야 합니다.
 
 ```bash
 cd infra
@@ -111,14 +112,32 @@ ACR이 생성된 뒤 Azure Container Registry 원격 빌드를 사용합니다. 
 
 ```bash
 cd infra
-reg=$(terraform output -raw registry_name)
-acr=$(terraform output -raw registry_login_server)
+reg="$(terraform output -raw registry_name)"
+acr="$(terraform output -raw registry_login_server)"
+tag="$(git rev-parse --short=12 HEAD)"
 
-az acr build --registry "$reg" --image config-sync-worker:latest ../app/config-sync-worker
-az acr build --registry "$reg" --image admin-ui:latest ../app/admin-ui
-az acr build --registry "$reg" --image codexproxy:latest ../app/codex-proxy
-az acr build --registry "$reg" --image searchmcp:latest ../app/search-mcp
+az acr show --name "$reg" \
+  --query "{name:name,loginServer:loginServer,provisioningState:provisioningState}" \
+  -o table
+az acr repository list --name "$reg" -o table
+
+az acr build --registry "$reg" --image "config-sync-worker:${tag}" ../app/config-sync-worker
+az acr build --registry "$reg" --image "admin-ui:${tag}" ../app/admin-ui
+az acr build --registry "$reg" --image "codexproxy:${tag}" ../app/codex-proxy
+az acr build --registry "$reg" --image "searchmcp:${tag}" ../app/search-mcp
+
+for image in config-sync-worker admin-ui codexproxy searchmcp; do
+  az acr repository update \
+    --name "$reg" \
+    --image "${image}:${tag}" \
+    --write-enabled false \
+    --output none
+done
+
+az acr repository list --name "$reg" -o table
 ```
+
+첫 번째 build 전에는 repository 목록이 비어 있어도 정상입니다. 필요한 workload만 배포하려면 해당 build 명령만 실행하고 `for image in ...` 목록도 같은 repository만 남깁니다. 태그 잠금은 같은 URI의 이미지가 덮어써지는 것을 막습니다. [ACR 이미지 잠금](https://learn.microsoft.com/azure/container-registry/container-registry-image-lock)
 
 ### 5. Admin UI용 Entra 객체 준비
 
@@ -143,16 +162,15 @@ spa_client_id         = "<spa app id>"
 https://login.microsoftonline.com/<tenant id>/adminconsent?client_id=<spa app id>
 ```
 
-### 6. Worker/Admin UI 활성화
+### 6. Container Apps와 Job 활성화
 
-`terraform.tfvars`에 이미지와 Admin UI 값을 넣습니다.
+`terraform.tfvars`의 빈 이미지 값을 교체합니다. 아래 예시는 네 이미지를 모두 빌드한 경우입니다. 일부만 빌드했다면 성공적으로 빌드하고 잠근 image 변수만 교체하고 나머지는 `""`로 유지합니다. 첫 apply에서 확정한 `admin_ui_public` 값은 수정하지 않습니다.
 
 ```hcl
-worker_image          = "<registry_login_server>/config-sync-worker:latest"
-admin_ui_image        = "<registry_login_server>/admin-ui:latest"
-codexproxy_image      = "<registry_login_server>/codexproxy:latest"
-searchmcp_image       = "<registry_login_server>/searchmcp:latest"
-admin_ui_public       = true
+worker_image          = "<registry_login_server>/config-sync-worker:<git-sha>"
+admin_ui_image        = "<registry_login_server>/admin-ui:<git-sha>"
+codexproxy_image      = "<registry_login_server>/codexproxy:<git-sha>"
+searchmcp_image       = "<registry_login_server>/searchmcp:<git-sha>"
 ```
 
 적용합니다.

@@ -260,6 +260,16 @@ resource "azurerm_role_assignment" "codexproxy_acr_pull" {
   principal_id         = var.codexproxy_principal_id
 }
 
+resource "time_sleep" "codexproxy_acr_pull_settle" {
+  count           = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
+  depends_on      = [azurerm_role_assignment.codexproxy_acr_pull]
+  create_duration = "90s"
+
+  triggers = {
+    role_assignment_id = azurerm_role_assignment.codexproxy_acr_pull[0].id
+  }
+}
+
 resource "azurerm_container_app_environment" "cp" {
   name                           = "cae-${var.name_suffix}"
   resource_group_name            = var.resource_group_name
@@ -511,6 +521,8 @@ resource "azurerm_container_app" "admin_ui" {
 # routes here and authenticates with the hop key. The proxy calls the canonical child-project
 # backend with its managed identity (ManagedIdentityCredential), no keys.
 resource "azurerm_container_app" "codexproxy" {
+  depends_on = [time_sleep.codexproxy_acr_pull_settle]
+
   count                        = local.codexproxy_enabled ? 1 : 0
   name                         = "ca-codexproxy-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
@@ -586,6 +598,8 @@ resource "azurerm_container_app" "codexproxy" {
 }
 
 resource "azurerm_container_app" "searchmcp" {
+  depends_on = [time_sleep.codexproxy_acr_pull_settle]
+
   count                        = local.searchmcp_enabled ? 1 : 0
   name                         = "ca-searchmcp-${var.name_suffix}"
   resource_group_name          = var.resource_group_name

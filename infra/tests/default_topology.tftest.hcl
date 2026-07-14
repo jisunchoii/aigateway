@@ -276,6 +276,25 @@ run "searchmcp_image_enables_container_app_wiring" {
     )
     error_message = "Both sidecars must reference PROXY_KEY as a Container App secret and include a non-secret revision marker so key rotation restarts them."
   }
+
+  assert {
+    condition = (
+      can(module.control_plane.searchmcp_contract) &&
+      length(regexall(
+        "(?s)resource \"time_sleep\" \"codexproxy_acr_pull_settle\" \\{.*?depends_on\\s*=\\s*\\[azurerm_role_assignment\\.codexproxy_acr_pull\\].*?create_duration\\s*=\\s*\"90s\"",
+        file("modules/control_plane/main.tf")
+      )) == 1 &&
+      length(regexall(
+        "resource \"azurerm_container_app\" \"codexproxy\" \\{\\s*depends_on\\s*=\\s*\\[time_sleep\\.codexproxy_acr_pull_settle\\]",
+        file("modules/control_plane/main.tf")
+      )) == 1 &&
+      length(regexall(
+        "resource \"azurerm_container_app\" \"searchmcp\" \\{\\s*depends_on\\s*=\\s*\\[time_sleep\\.codexproxy_acr_pull_settle\\]",
+        file("modules/control_plane/main.tf")
+      )) == 1
+    )
+    error_message = "Both sidecars must wait for AcrPull creation and RBAC propagation before Azure attempts their first private-image revision."
+  }
 }
 
 run "existing_foundry_project_is_reused_read_only" {

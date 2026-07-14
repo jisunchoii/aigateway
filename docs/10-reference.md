@@ -77,7 +77,7 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `client_auth_mode` | `subscription-key` | `subscription-key` 또는 `entra-id` |
-| `entra_tenant_id` | `""` | `entra-id` 모드에서 JWT issuer 검증에 사용 |
+| `entra_tenant_id` | `""` | `entra-id` gateway JWT 검증과 Admin UI BFF/SPA 로그인 tenant에 사용 |
 | `entra_api_audience` | `""` | `entra-id` 모드에서 JWT `aud` 기대값 |
 | `entra_team_claim` | `groups` | JWT에서 consumer/team ID를 읽을 claim 이름 |
 
@@ -85,19 +85,21 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 `groups` claim은 대규모 조직에서 누락될 수 있습니다. 운영 환경에서 Entra ID 인증을 쓰려면 [향후 지원 계획](09-future.md)의 consumerId claim 설계를 먼저 확인하세요.
 {% endhint %}
 
-### Admin UI와 config-sync
+### 컨테이너 workload
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `worker_image` | `""` | config-sync worker image. 비어 있으면 job 미배포 |
 | `config_sync_cron` | `*/5 * * * *` | config-sync Container Apps Job cron |
 | `admin_ui_image` | `""` | Admin UI image. 비어 있으면 Admin UI 미배포 |
-| `admin_ui_public` | `false` | `true`면 Admin UI public FQDN 노출 |
-| `codexproxy_image` | `""` | Codex proxy image. 비어 있으면 `/openai/v1/responses` backend 미활성화 |
+| `admin_ui_public` | `false` | `true`면 Admin UI public FQDN 노출. 스택의 첫 apply 후 변경은 ACA 환경 재생성 가능 |
+| `codexproxy_image` | `""` | Codex proxy image. 비어 있으면 partner/OSS `/responses`는 `503`; GPT-5.6 native Responses는 유지 |
 | `searchmcp_image` | `""` | Search MCP image. 비어 있으면 `/mcp/` API 미배포 |
 | `bff_api_audience` | `""` | Admin UI BFF JWT audience |
 | `spa_client_id` | `""` | SPA app registration client ID |
 | `admin_group_object_id` | `""` | Admin UI 쓰기 권한을 가진 Entra security group object ID |
+
+`admin_ui_image`를 설정할 때는 `entra_tenant_id`, `admin_group_object_id`, `bff_api_audience`, `spa_client_id` 네 값을 모두 입력합니다.
 
 ### 예산과 rate limit
 
@@ -144,11 +146,12 @@ large  = { tpm = 300000, quota = 1000000000, period = "Monthly" }
 | `model_account_name` | 기준 AIServices 계정 이름 확인 |
 | `model_openai_v1_endpoint` | 기준 모델 계정의 `/openai/v1` backend base 확인 |
 | `registry_name` | `az acr build --registry` 입력값 |
-| `registry_login_server` | `worker_image`, `admin_ui_image` 구성 |
+| `registry_login_server` | `worker_image`, `admin_ui_image`, `codexproxy_image`, `searchmcp_image` URI prefix |
 | `config_store_endpoint` | Cosmos DB seed script 입력값 |
 | `config_store_account_name` | Azure Portal/CLI에서 Cosmos DB 계정 찾기 |
 | `config_sync_job_name` | config-sync worker 수동 실행 |
 | `admin_ui_fqdn` | Admin UI 접속 URL |
+| `search_mcp_url` | Search MCP가 활성화됐을 때 APIM `/mcp/` URL |
 
 자주 쓰는 조합:
 
@@ -159,7 +162,10 @@ terraform output -raw vscode_base_url
 
 # ACR remote build
 reg="$(terraform output -raw registry_name)"
-az acr build --registry "$reg" --image admin-ui:latest ../app/admin-ui
+tag="$(git rev-parse --short=12 HEAD)"
+az acr build --registry "$reg" --image "admin-ui:${tag}" ../app/admin-ui
+az acr repository update --name "$reg" --image "admin-ui:${tag}" --write-enabled false --output none
+az acr repository list --name "$reg" -o table
 
 # config-sync 즉시 실행
 rg="$(terraform output -raw resource_group_name)"
@@ -168,7 +174,7 @@ az containerapp job start -g "$rg" -n "$job"
 ```
 
 {% hint style="info" %}
-`config_sync_job_name`은 `worker_image=""`이면 `null`이고, `admin_ui_fqdn`은 `admin_ui_image=""`이면 `null`입니다. 이미지를 빌드해 변수에 넣고 `terraform apply`한 뒤 다시 확인하세요.
+`config_sync_job_name`은 `worker_image=""`이면 `null`, `admin_ui_fqdn`은 `admin_ui_image=""`이면 `null`, `search_mcp_url`은 `searchmcp_image=""`이면 `null`입니다. `codexproxy_image=""`이면 GPT-5.6 native Responses는 유지되지만 partner/OSS `/responses`는 `503`입니다. 이미지를 빌드해 변수에 넣고 `terraform apply`한 뒤 다시 확인하세요.
 {% endhint %}
 
 ## 4. 문제 해결
@@ -183,6 +189,7 @@ az containerapp job start -g "$rg" -n "$job"
 | 모델 호출 429 | rate tier 또는 token quota 초과 | Admin UI에서 tier 상향 또는 quota 조정 |
 | 요청 모델과 응답 모델이 다름 | budget 기반 모델 전환 | `x-ai-gateway-*` 응답 헤더 확인 |
 | partner 모델만 배포/호출 실패 | Marketplace 약관 미동의 | Azure Portal에서 모델 약관 동의 |
+| ACR은 보이지만 repository가 비어 있음 | 아직 `az acr build`/push를 실행하지 않음 | Git SHA 태그로 필요한 이미지를 build한 뒤 `az acr repository list` 재확인 |
 | apply 직후 401/403 | Private Endpoint DNS 또는 RBAC 전파 지연 | 3~5분 후 재시도 |
 | `terraform destroy`가 멈춤 | VNet 주입 APIM Named Value 삭제 지연 | 데모 환경이면 RG 삭제 고려 |
 

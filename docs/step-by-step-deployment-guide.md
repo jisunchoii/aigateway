@@ -184,8 +184,9 @@ module "foundry" { source = "./modules/foundry" ... deployments = var.foundry_de
 
 ## 2. 게이트웨이 코어 (1차 apply)
 
-첫 apply에서는 `worker_image`와 `admin_ui_image`를 **비워둡니다**(기본값 `""`). 이미지가 아직 없고,
-워커 Job/Admin UI 앱은 이 변수로 카운트 게이트되어 있어 자동으로 건너뜁니다.
+첫 apply에서는 `worker_image`, `admin_ui_image`, `codexproxy_image`, `searchmcp_image`를
+**모두 비워둡니다**(기본값 `""`). 이미지가 아직 없고, 각 Container App/Job은 해당 변수로
+카운트 게이트되어 있어 자동으로 건너뜁니다. ACR은 이미지 변수와 무관하게 생성됩니다.
 
 `infra/terraform.tfvars` 최소 구성:
 
@@ -198,14 +199,20 @@ cost_center          = "CC-DEMO"
 apim_publisher_name  = "Platform Team"
 apim_publisher_email = "you@example.com"
 apim_sku_name        = "Developer_1"       # Internal VNet 지원 SKU (또는 Premium_1)
+admin_ui_public      = true                # 외부 Admin UI가 필요하면 첫 apply부터 true
 
 # 경로 B(기존 모델 재사용)일 때만, 경로 A에서는 생략/무시
-# existing_model_account_name = "<기존 계정 이름>"
-# existing_model_account_rg   = "<기존 계정 RG>"
+# existing_foundry_name = "<기존 계정 이름>"
+# existing_foundry_rg   = "<기존 계정 RG>"
 
 monthly_budget_amount = 200
 budget_alert_email    = "you@example.com"
 budget_start_date     = "2026-07-01T00:00:00Z"   # 과거 날짜 금지(첫 apply 시점 기준 당월 1일)
+
+worker_image     = ""
+admin_ui_image   = ""
+codexproxy_image = ""
+searchmcp_image  = ""
 ```
 
 ```powershell
@@ -240,7 +247,12 @@ terraform output
 ## 3. Entra 객체 생성 (Admin UI용)
 
 Terraform으로 만들 수 없는 디렉터리 객체입니다. 게이트웨이 코어가 떠 있는 동안 병행 생성 가능합니다.
-세 가지를 만듭니다.
+관리자 그룹, BFF 앱, SPA 앱을 만들고 현재 tenant ID까지 네 값을 기록합니다.
+
+```powershell
+$tenantId = (az account show --query tenantId -o tsv).Trim()
+Write-Host "entra_tenant_id = $tenantId"
+```
 
 ### 3.1 관리자 보안 그룹 (`admin_group_object_id`)
 
@@ -297,7 +309,7 @@ az ad app permission grant --id $spaAppId --api $bffAppId --scope "access_as_use
 Write-Host "spa_client_id = $spaAppId"
 ```
 
-세 출력값(`admin_group_object_id`, `bff_api_audience`, `spa_client_id`)을 기록해 둡니다.
+네 출력값(`entra_tenant_id`, `admin_group_object_id`, `bff_api_audience`, `spa_client_id`)을 기록해 둡니다.
 
 ---
 
@@ -309,30 +321,90 @@ Write-Host "spa_client_id = $spaAppId"
 cd infra
 $acr = terraform output -raw registry_login_server
 $reg = terraform output -raw registry_name
-az acr build --registry $reg --image config-sync-worker:latest ../app/config-sync-worker
-az acr build --registry $reg --image admin-ui:latest ../app/admin-ui
+$tag = (git rev-parse --short=12 HEAD).Trim()
+
+az acr show --name $reg `
+  --query "{name:name,loginServer:loginServer,provisioningState:provisioningState}" `
+  -o table
+az acr repository list --name $reg -o table
+
+$images = @(
+  @{ Name = "config-sync-worker"; Context = "../app/config-sync-worker" }
+  @{ Name = "admin-ui"; Context = "../app/admin-ui" }
+  @{ Name = "codexproxy"; Context = "../app/codex-proxy" }
+  @{ Name = "searchmcp"; Context = "../app/search-mcp" }
+)
+
+foreach ($image in $images) {
+  $name = $image.Name
+  $context = $image.Context
+  $imageRef = "${name}:$tag"
+
+  $runId = [string](az acr build `
+    --registry $reg `
+    --image $imageRef `
+    --no-logs `
+    --no-wait `
+    --query runId `
+    -o tsv `
+    $context)
+  $runId = $runId.Trim()
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runId)) {
+    throw "Failed to queue ACR build: $imageRef"
+  }
+
+  $deadline = (Get-Date).AddMinutes(30)
+  do {
+    $status = [string](az acr task show-run `
+      --registry $reg `
+      --run-id $runId `
+      --query status `
+      -o tsv)
+    $status = $status.Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Failed to read ACR build status: $runId" }
+    if ($status -eq "Succeeded") { break }
+    if ($status -in @("Failed", "Canceled", "Error", "Timeout")) {
+      throw "ACR build ended with status ${status}: $imageRef"
+    }
+    if ((Get-Date) -ge $deadline) { throw "Timed out waiting for ACR build: $imageRef" }
+    Start-Sleep -Seconds 5
+  } while ($true)
+
+  az acr repository show --name $reg --image $imageRef --output none
+  if ($LASTEXITCODE -ne 0) { throw "ACR image tag was not created: $imageRef" }
+
+  az acr repository update --name $reg --image $imageRef --write-enabled false --output none
+  if ($LASTEXITCODE -ne 0) { throw "Failed to lock ACR image: $imageRef" }
+
+  $writeEnabled = [string](az acr repository show `
+    --name $reg `
+    --image $imageRef `
+    --query "changeableAttributes.writeEnabled" `
+    -o tsv)
+  $writeEnabled = $writeEnabled.Trim().ToLowerInvariant()
+  if ($LASTEXITCODE -ne 0 -or $writeEnabled -ne "false") {
+    throw "ACR image is not locked: $imageRef"
+  }
+}
+
+az acr repository list --name $reg -o table
 Write-Host "image base = $acr"
 ```
 
-> **한글(cp949) 콘솔 주의:** `az acr build`가 로그 스트리밍 중 `UnicodeEncodeError: 'cp949'
-> codec can't encode character '\u2713'`로 죽을 수 있습니다. **빌드 자체는 서버에서 성공**하므로
-> 무시하고, 결과만 확인하면 됩니다:
->
-> ```powershell
-> az acr task list-runs --registry $reg --top 5 -o table          # Status=Succeeded 확인
-> az acr repository show-tags --name $reg --repository admin-ui -o tsv
-> ```
+필요한 workload만 배포하려면 `$images` 배열에서 나머지 항목을 제거합니다. `--no-logs --no-wait`로 cp949 로그 오류 없이 run을 등록하고, 30분 안에 `Succeeded`가 되는지 직접 확인한 뒤 태그 생성과 overwrite 방지 잠금을 검증합니다. 첫 build 전 repository 목록이 비어 있는 것은 정상입니다. [ACR Tasks 빠른 시작](https://learn.microsoft.com/azure/container-registry/container-registry-quickstart-task-cli), [ACR 이미지 잠금](https://learn.microsoft.com/azure/container-registry/container-registry-image-lock)
 
 ---
 
-## 5. 워커 + Admin UI 활성화 (2차 apply)
+## 5. Container Apps + Job 활성화 (2차 apply)
 
-`infra/terraform.tfvars`에 이미지 참조와 Entra 변수 3개를 추가하고 다시 apply:
+`infra/terraform.tfvars`의 이미지 빈 값을 전체 URI로 교체하고 Entra 변수 4개를 추가한 뒤 다시 apply합니다. 아래 예시는 네 이미지를 모두 빌드한 경우입니다. `$images` 배열에서 제외한 workload의 변수는 `""`로 유지하고, `admin_ui_public`은 첫 apply에서 결정한 값을 유지합니다.
 
 ```hcl
-worker_image          = "<registry_login_server>/config-sync-worker:latest"
-admin_ui_image        = "<registry_login_server>/admin-ui:latest"
-admin_ui_public       = true                       # 외부 FQDN(여전히 Entra 게이트). false=VNet 전용
+worker_image          = "<registry_login_server>/config-sync-worker:<git-sha>"
+admin_ui_image        = "<registry_login_server>/admin-ui:<git-sha>"
+codexproxy_image      = "<registry_login_server>/codexproxy:<git-sha>"
+searchmcp_image       = "<registry_login_server>/searchmcp:<git-sha>"
+entra_tenant_id       = "<3장 출력값>"
 admin_group_object_id = "<3.1 출력값>"
 bff_api_audience      = "api://<3.2 출력값>"
 spa_client_id         = "<3.3 출력값>"
@@ -342,12 +414,14 @@ spa_client_id         = "<3.3 출력값>"
 terraform apply
 $fqdn = terraform output -raw admin_ui_fqdn
 Write-Host "Admin UI = https://$fqdn"
+terraform output search_mcp_url
 ```
 
-> **CAE 교체(replace) 안내:** `admin_ui_public = true`는 Container Apps Environment의
-> `internal_load_balancer_enabled`를 `true`에서 `false`로 바꿔 **환경 자체가 재생성(replace)**됩니다.
-> 1차 apply에서는 앱이 아직 없으므로(이미지 빈 값) 안전합니다. 이미 앱이 떠 있는 환경에서
-> 이 값을 바꾸면 다운타임이 생기므로, 이 2단계 흐름대로 1차에서 비워두고 2차에서 채우세요.
+`codexproxy_image`가 비어 있으면 GPT-5.6 native Responses는 유지되지만 partner/OSS `/responses`는 `503`입니다. `searchmcp_image`가 비어 있으면 Search MCP 앱과 APIM `/mcp/` API가 생성되지 않아 `/mcp/`는 `404`입니다.
+
+> **CAE 교체(replace) 주의:** `admin_ui_public`은 Container Apps Environment를 처음 만들 때
+> 결정합니다. 이 가이드처럼 첫 apply부터 `true`로 설정하고 2차 apply에서 같은 값을 유지하세요.
+> 첫 apply를 `false`로 마친 뒤 `true`로 바꾸면 환경과 앱이 재생성되어 다운타임이 생길 수 있습니다.
 
 ### 5.1 SPA 리디렉션 URI 추가 (FQDN 확정 후)
 
@@ -485,9 +559,9 @@ backend 리소스 그룹을 삭제하면 해당 backend로 더 이상 `terraform
 | `foundry_deployments` | A·B | OSS/파트너 모델. **A=값으로 배포 생성** / B=키만 alias로 사용 |
 | `allowed_models` | A·B | 호출 허용 배포 이름 목록(그 외 403) |
 | `existing_model_account_name` / `existing_model_account_rg` | B | 재사용할 기존 AIServices 계정 좌표(경로 A에서는 무시) |
-| `worker_image` / `admin_ui_image` | A·B | 2차 apply에서 채움(1차는 빈 값) |
+| `worker_image` / `admin_ui_image` / `codexproxy_image` / `searchmcp_image` | A·B | 필요한 workload를 빌드한 뒤 2차 apply에서 채움(1차는 빈 값) |
 | `admin_ui_public` | A·B | Admin UI 외부 FQDN 노출 여부 |
-| `admin_group_object_id` / `bff_api_audience` / `spa_client_id` | A·B | Entra 연동 3종 |
+| `entra_tenant_id` / `admin_group_object_id` / `bff_api_audience` / `spa_client_id` | A·B | Admin UI Entra 연동 4종 |
 | `enable_jumpbox` / `jumpbox_admin_password` / `jumpbox_vm_size` | A·B | Cosmos 시드용 점프박스(Windows VM+Bastion). eastus2는 `Standard_D2s_v7` 권장 |
 
 ---

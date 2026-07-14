@@ -1,10 +1,10 @@
 ---
-description: "All-in-one 배포 — 신규 환경에 APIM, 모델 백엔드, Admin UI, config-sync worker를 함께 배포"
+description: "All-in-one 배포 — 신규 환경에 APIM, 모델 백엔드와 네 컨테이너 workload를 함께 배포"
 ---
 
 # All-in-one 배포
 
-이 페이지는 신규 데모/검증 환경에서 **APIM 게이트웨이, 모델 백엔드, Admin UI, config-sync worker**를 한 흐름으로 배포하는 경로를 설명합니다. 이름은 All-in-one이지만, ACR과 컨테이너 이미지의 순환 의존성 때문에 신규 환경에서는 보통 **최소 2번의 Terraform apply**가 필요합니다.
+이 페이지는 신규 데모/검증 환경에서 **APIM 게이트웨이, 모델 백엔드, Admin UI, config-sync worker, Codex proxy, Search MCP**를 한 흐름으로 배포하는 경로를 설명합니다. 이름은 All-in-one이지만, ACR과 컨테이너 이미지의 순환 의존성 때문에 신규 환경에서는 보통 **최소 2번의 Terraform apply**가 필요합니다.
 
 ## 1. 선택 기준
 
@@ -12,7 +12,7 @@ description: "All-in-one 배포 — 신규 환경에 APIM, 모델 백엔드, Adm
 **이 경로가 맞는 경우**
 
 - 새 project-enabled AIServices account/project와 모델 deployment를 만들 수 있다.
-- Admin UI와 config-sync worker까지 한 흐름으로 준비하고 싶다.
+- Admin UI, config-sync worker, Codex proxy, Search MCP까지 한 흐름으로 준비하고 싶다.
 - 기존 운영 Foundry 계정을 보존해야 하는 제약이 없다.
 - 데모, 랩, PoC처럼 전체 스택을 빠르게 띄우는 환경이다.
 {% endhint %}
@@ -44,11 +44,11 @@ description: "All-in-one 배포 — 신규 환경에 APIM, 모델 백엔드, Adm
 | Backend bootstrap | Terraform state 저장소 준비 | `infra/providers.tf` backend 설정 |
 | 1차 tfvars | 모델, APIM, 기본값 입력 / 이미지 변수 비움 | APIM과 ACR을 만들 준비 |
 | 1차 apply | APIM, 모델 백엔드, Cosmos, ACR 생성 | gateway와 ACR 준비 |
-| Image build | Admin UI와 worker 이미지를 ACR에 push | 이미지 URI 확보 |
+| Image build | 네 workload 이미지를 Git SHA 태그로 ACR에 build/push하고 태그 잠금 | repository와 overwrite 방지된 이미지 URI 확보 |
 | Entra 준비 | 새 admin 그룹 또는 기존 그룹, BFF/SPA 앱 준비 | Admin UI 인증값 확보 |
-| 2차 tfvars/apply | 이미지와 Entra 값을 입력하고 apply | Admin UI와 worker 배포 |
+| 2차 tfvars/apply | 이미지와 Entra 값을 입력하고 apply | Admin UI, worker, Codex proxy, Search MCP 배포 |
 | Redirect/seed/sync | SPA redirect URI, Cosmos seed, worker 실행 | UI 로그인과 동적 정책 활성화 |
-| Verify | gateway와 Admin UI 확인 | 배포 완료 |
+| Verify | `/responses`, `/mcp/`, Admin UI 확인 | 배포 완료 |
 
 ## 4. 1차 tfvars
 
@@ -108,7 +108,7 @@ monthly_budget_amount = 200
 budget_alert_email    = "<email>"
 budget_start_date     = "2026-07-01"   # 과거 날짜 금지(첫 apply 시점 기준 당월 1일)
 
-# 1차 apply에서는 ACR이 아직 없으므로 비워 둠
+# 1차 apply에서는 ACR에 이미지가 아직 없으므로 네 값을 모두 비워 둠
 worker_image         = ""
 admin_ui_image       = ""
 codexproxy_image     = ""
@@ -161,17 +161,35 @@ terraform output resource_group_name
 
 ## 6. 이미지 빌드
 
-ACR이 준비되면 `infra/` 디렉터리에서 Admin UI, config-sync worker, Codex proxy 이미지를 빌드합니다.
+ACR이 준비되면 `infra/` 디렉터리에서 Admin UI, config-sync worker, Codex proxy, Search MCP 이미지를 빌드하고 각 태그를 잠급니다.
 
 ```bash
 reg="$(terraform output -raw registry_name)"
 acr="$(terraform output -raw registry_login_server)"
+tag="$(git rev-parse --short=12 HEAD)"
 
-az acr build --registry "$reg" --image config-sync-worker:latest ../app/config-sync-worker
-az acr build --registry "$reg" --image admin-ui:latest ../app/admin-ui
-az acr build --registry "$reg" --image codexproxy:latest ../app/codex-proxy
-az acr build --registry "$reg" --image searchmcp:latest ../app/search-mcp
+az acr show --name "$reg" \
+  --query "{name:name,loginServer:loginServer,provisioningState:provisioningState}" \
+  -o table
+az acr repository list --name "$reg" -o table
+
+az acr build --registry "$reg" --image "config-sync-worker:${tag}" ../app/config-sync-worker
+az acr build --registry "$reg" --image "admin-ui:${tag}" ../app/admin-ui
+az acr build --registry "$reg" --image "codexproxy:${tag}" ../app/codex-proxy
+az acr build --registry "$reg" --image "searchmcp:${tag}" ../app/search-mcp
+
+for image in config-sync-worker admin-ui codexproxy searchmcp; do
+  az acr repository update \
+    --name "$reg" \
+    --image "${image}:${tag}" \
+    --write-enabled false \
+    --output none
+done
+
+az acr repository list --name "$reg" -o table
 ```
+
+첫 build 전 repository 목록이 비어 있는 것은 정상입니다. ACR repository는 image build/push가 성공한 뒤 생성됩니다. Git SHA 태그도 기본적으로 mutable이므로 위 명령처럼 build 후 잠급니다. [ACR Tasks 빠른 시작](https://learn.microsoft.com/azure/container-registry/container-registry-quickstart-task-cli), [ACR 이미지 잠금](https://learn.microsoft.com/azure/container-registry/container-registry-image-lock)
 
 ## 7. Entra ID 객체 준비
 
@@ -199,14 +217,13 @@ spa_client_id         = "<spa app id>"
 
 ## 8. 2차 tfvars와 apply
 
-1차 apply에서 만들어진 ACR login server와 Entra 값을 tfvars에 입력합니다.
+1차 apply에서 만들어진 ACR login server와 Entra 값을 tfvars에 입력합니다. Step 4에서 확정한 `admin_ui_public` 값은 수정하지 않습니다.
 
 ``` 
-worker_image          = "<registry_login_server>/config-sync-worker:latest"
-admin_ui_image        = "<registry_login_server>/admin-ui:latest"
-codexproxy_image      = "<registry_login_server>/codexproxy:latest"
-searchmcp_image       = "<registry_login_server>/searchmcp:latest"
-admin_ui_public       = true   # Step 4에서 이미 설정했다면 값 유지(변경 금지 — 재생성 유발)
+worker_image          = "<registry_login_server>/config-sync-worker:<git-sha>"
+admin_ui_image        = "<registry_login_server>/admin-ui:<git-sha>"
+codexproxy_image      = "<registry_login_server>/codexproxy:<git-sha>"
+searchmcp_image       = "<registry_login_server>/searchmcp:<git-sha>"
 entra_tenant_id       = "<tenant guid>"   # 누락 시 Admin UI 로그인이 AADSTS900023(tenant 'undefined')로 실패
 admin_group_object_id = "<entra security group object id>"
 bff_api_audience      = "api://<bff app id>"
@@ -219,13 +236,16 @@ spa_client_id         = "<spa app id>"
 terraform apply
 ```
 
-완료 후 Admin UI와 worker 출력값을 확인합니다.
+완료 후 Admin UI, worker, Search MCP 출력값을 확인합니다.
 
 ```bash
 terraform output admin_ui_fqdn
 terraform output config_sync_job_name
 terraform output config_store_endpoint
+terraform output search_mcp_url
 ```
+
+이미지 URI를 바꿔 다시 apply하면 Container Apps는 새 revision을 만듭니다. [Azure Container Apps revision](https://learn.microsoft.com/azure/container-apps/revisions)
 
 ## 9. Redirect, seed, sync
 
