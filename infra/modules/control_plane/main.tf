@@ -215,6 +215,20 @@ resource "azurerm_role_assignment" "worker_acr_pull" {
   principal_id         = var.worker_principal_id
 }
 
+# AcrPull role assignments take time to propagate to the Container Apps control plane. Without
+# this settle delay, the first config-sync Job revision can fail with "unable to pull image using
+# Managed identity ... for registry" even though the role assignment already succeeded in ARM.
+# Mirrors time_sleep.codexproxy_acr_pull_settle below.
+resource "time_sleep" "worker_acr_pull_settle" {
+  count           = local.worker_enabled ? 1 : 0
+  depends_on      = [azurerm_role_assignment.worker_acr_pull]
+  create_duration = "90s"
+
+  triggers = {
+    role_assignment_id = azurerm_role_assignment.worker_acr_pull[0].id
+  }
+}
+
 # NOTE: "API Management Service Contributor" is broader than the worker needs (it only writes
 # named values). No built-in role is scoped to named-values-only; a custom role with
 # Microsoft.ApiManagement/service/namedValues/{read,write} would be tighter. Tracked as future hardening.
@@ -230,6 +244,18 @@ resource "azurerm_role_assignment" "admin_ui_acr_pull" {
   scope                = var.acr_id
   role_definition_name = "AcrPull"
   principal_id         = var.admin_ui_principal_id
+}
+
+# Same ACR pull propagation issue as the worker/codexproxy identities above: the Admin UI
+# Container App's first private-image revision can fail without this settle delay.
+resource "time_sleep" "admin_ui_acr_pull_settle" {
+  count           = local.admin_ui_enabled ? 1 : 0
+  depends_on      = [azurerm_role_assignment.admin_ui_acr_pull]
+  create_duration = "90s"
+
+  triggers = {
+    role_assignment_id = azurerm_role_assignment.admin_ui_acr_pull[0].id
+  }
 }
 
 # NOTE: like the worker, this is broader than strictly needed (subscription CRUD only). A custom
@@ -398,6 +424,7 @@ resource "azurerm_private_dns_a_record" "admin_ui_wildcard_internal" {
 
 resource "azurerm_container_app_job" "config_sync" {
   count                        = local.worker_enabled ? 1 : 0
+  depends_on                   = [time_sleep.worker_acr_pull_settle]
   name                         = "job-config-sync-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
   location                     = var.location
@@ -467,6 +494,7 @@ resource "azurerm_container_app_job" "config_sync" {
 
 resource "azurerm_container_app" "admin_ui" {
   count                        = local.admin_ui_enabled ? 1 : 0
+  depends_on                   = [time_sleep.admin_ui_acr_pull_settle]
   name                         = "ca-adminui-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
   container_app_environment_id = azurerm_container_app_environment.admin_ui[0].id
