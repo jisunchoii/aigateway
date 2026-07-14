@@ -27,7 +27,7 @@
 
 ### 0.1 도구
 
-- [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.7
+- [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.11
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
 - Docker는 **불필요** (컨테이너 이미지는 ACR에서 원격 빌드)
 
@@ -199,7 +199,7 @@ cost_center          = "CC-DEMO"
 apim_publisher_name  = "Platform Team"
 apim_publisher_email = "you@example.com"
 apim_sku_name        = "Developer_1"       # Internal VNet 지원 SKU (또는 Premium_1)
-admin_ui_public      = true                # 외부 Admin UI가 필요하면 첫 apply부터 true
+admin_ui_public      = true                # Admin UI 이미지를 배포할 때 전용 환경을 public으로 생성
 
 # 경로 B(기존 모델 재사용)일 때만, 경로 A에서는 생략/무시
 # existing_foundry_name = "<기존 계정 이름>"
@@ -397,7 +397,7 @@ Write-Host "image base = $acr"
 
 ## 5. Container Apps + Job 활성화 (2차 apply)
 
-`infra/terraform.tfvars`의 이미지 빈 값을 전체 URI로 교체하고 Entra 변수 4개를 추가한 뒤 다시 apply합니다. 아래 예시는 네 이미지를 모두 빌드한 경우입니다. `$images` 배열에서 제외한 workload의 변수는 `""`로 유지하고, `admin_ui_public`은 첫 apply에서 결정한 값을 유지합니다.
+`infra/terraform.tfvars`의 이미지 빈 값을 전체 URI로 교체하고 Entra 변수 4개를 추가한 뒤 다시 apply합니다. 아래 예시는 네 이미지를 모두 빌드한 경우입니다. `$images` 배열에서 제외한 workload의 변수는 `""`로 유지합니다. `admin_ui_public`은 이때 생성되는 전용 Admin UI 환경의 공개 여부만 선택합니다.
 
 ```hcl
 worker_image          = "<registry_login_server>/config-sync-worker:<git-sha>"
@@ -419,9 +419,7 @@ terraform output search_mcp_url
 
 `codexproxy_image`가 비어 있으면 GPT-5.6 native Responses는 유지되지만 partner/OSS `/responses`는 `503`입니다. `searchmcp_image`가 비어 있으면 Search MCP 앱과 APIM `/mcp/` API가 생성되지 않아 `/mcp/`는 `404`입니다.
 
-> **CAE 교체(replace) 주의:** `admin_ui_public`은 Container Apps Environment를 처음 만들 때
-> 결정합니다. 이 가이드처럼 첫 apply부터 `true`로 설정하고 2차 apply에서 같은 값을 유지하세요.
-> 첫 apply를 `false`로 마친 뒤 `true`로 바꾸면 환경과 앱이 재생성되어 다운타임이 생길 수 있습니다.
+> **CAE 변경 주의:** `admin_ui_public`은 `admin_ui_image`를 설정할 때 생성되는 전용 Admin UI 환경에만 적용됩니다. 이미 배포된 Admin UI에서 값을 바꾸면 그 전용 환경과 앱이 재생성될 수 있지만, Codex proxy와 Search MCP의 내부 sidecar 환경은 유지됩니다.
 
 ### 5.1 SPA 리디렉션 URI 추가 (FQDN 확정 후)
 
@@ -560,7 +558,7 @@ backend 리소스 그룹을 삭제하면 해당 backend로 더 이상 `terraform
 | `allowed_models` | A·B | 호출 허용 배포 이름 목록(그 외 403) |
 | `existing_model_account_name` / `existing_model_account_rg` | B | 재사용할 기존 AIServices 계정 좌표(경로 A에서는 무시) |
 | `worker_image` / `admin_ui_image` / `codexproxy_image` / `searchmcp_image` | A·B | 필요한 workload를 빌드한 뒤 2차 apply에서 채움(1차는 빈 값) |
-| `admin_ui_public` | A·B | Admin UI 외부 FQDN 노출 여부 |
+| `admin_ui_public` | A·B | Admin UI 이미지 배포 시 전용 환경의 외부 FQDN 노출 여부 |
 | `entra_tenant_id` / `admin_group_object_id` / `bff_api_audience` / `spa_client_id` | A·B | Admin UI Entra 연동 4종 |
 | `enable_jumpbox` / `jumpbox_admin_password` / `jumpbox_vm_size` | A·B | Cosmos 시드용 점프박스(Windows VM+Bastion). eastus2는 `Standard_D2s_v7` 권장 |
 

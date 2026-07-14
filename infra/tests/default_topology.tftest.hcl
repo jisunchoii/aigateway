@@ -375,3 +375,55 @@ run "existing_project_reuse_requires_account_reuse" {
 
   expect_failures = [var.reuse_foundry_project]
 }
+
+run "public_admin_ui_isolated_from_internal_sidecars" {
+  command = plan
+
+  override_resource {
+    target          = module.network.azurerm_subnet.aca
+    override_during = plan
+
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-dev-eus2/providers/Microsoft.Network/virtualNetworks/vnet-aigw-dev-eus2/subnets/snet-aca"
+    }
+  }
+
+  override_resource {
+    target          = module.network.azurerm_subnet.aca_admin
+    override_during = plan
+
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-dev-eus2/providers/Microsoft.Network/virtualNetworks/vnet-aigw-dev-eus2/subnets/snet-aca-admin"
+    }
+  }
+
+  variables {
+    location             = "eastus2"
+    owner                = "test@example.com"
+    cost_center          = "TEST"
+    apim_publisher_name  = "Test"
+    apim_publisher_email = "test@example.com"
+    budget_alert_email   = "test@example.com"
+    budget_start_date    = "2026-07-01T00:00:00Z"
+    foundry_account_name = "aisproj-test"
+    admin_ui_image       = "example.azurecr.io/admin-ui:immutable"
+    admin_ui_public      = true
+    codexproxy_image     = "example.azurecr.io/codexproxy:immutable"
+    searchmcp_image      = "example.azurecr.io/searchmcp:immutable"
+  }
+
+  assert {
+    condition = (
+      module.control_plane.topology.sidecars.environment_name == "cae-${local.name_suffix}" &&
+      module.control_plane.topology.sidecars.subnet_id == module.network.aca_subnet_id &&
+      module.control_plane.topology.sidecars.internal_load_balancer_enabled &&
+      module.control_plane.topology.admin_ui != null &&
+      module.control_plane.topology.admin_ui.environment_name == "cae-admin-${local.name_suffix}" &&
+      module.control_plane.topology.admin_ui.subnet_id == module.network.admin_ui_aca_subnet_id &&
+      !module.control_plane.topology.admin_ui.internal_load_balancer_enabled &&
+      module.control_plane.topology.sidecars.environment_name != module.control_plane.topology.admin_ui.environment_name &&
+      module.control_plane.topology.sidecars.subnet_id != module.control_plane.topology.admin_ui.subnet_id
+    )
+    error_message = "A public Admin UI must use a distinct external CAE while Codex proxy and Search MCP remain in the internal sidecar CAE."
+  }
+}

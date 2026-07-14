@@ -197,7 +197,7 @@ variable "jumpbox_admin_password" {
   sensitive   = true
   description = "Admin password for the jumpbox VM. Required only when enable_jumpbox = true."
   validation {
-    condition     = !var.enable_jumpbox || (var.jumpbox_admin_password != null && length(var.jumpbox_admin_password) >= 12)
+    condition     = !var.enable_jumpbox || try(length(var.jumpbox_admin_password) >= 12, false)
     error_message = "jumpbox_admin_password is required (min 12 chars) when enable_jumpbox = true."
   }
 }
@@ -291,7 +291,13 @@ variable "admin_ui_image" {
 variable "admin_ui_public" {
   type        = bool
   default     = false
-  description = "When true, the Container Apps environment is created EXTERNAL so the Admin UI gets a public FQDN (still gated by Entra OIDC + admin-group). Default false = internal (VNet-only). Immutable after env creation — flipping recreates the env + Admin UI app, so set it at first deploy of a stack."
+  description = "When admin_ui_image is set, true creates its dedicated Admin UI Container Apps environment with a public FQDN (still gated by Entra OIDC + admin group); false keeps that dedicated environment internal. It does not change the always-internal sidecar environment."
+}
+
+variable "admin_ui_aca_subnet_cidr" {
+  type        = string
+  default     = "10.40.5.32/27"
+  description = "CIDR for the dedicated Admin UI Container Apps environment subnet. It must not overlap another VNet subnet and is delegated to Microsoft.App/environments."
 }
 
 variable "bff_api_audience" {

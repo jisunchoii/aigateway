@@ -88,7 +88,7 @@ Stage 1만으로도 APIM subscription key를 수동 발급하면 Chat Completion
 | `codexproxy_image` | partner/OSS `/responses` sidecar 활성화 여부 |
 | `searchmcp_image` | APIM `/mcp/`와 Search MCP 활성화 여부 |
 
-`admin_ui_public`은 이미지가 비어 있는 첫 apply에서도 생성되는 Container Apps 환경의 노출 방식을 결정합니다. 나중에 바꾸면 환경과 앱이 재생성될 수 있으므로 스택의 첫 apply 전에 확정합니다.
+`admin_ui_public`은 `admin_ui_image`를 설정할 때 생성되는 전용 Admin UI 환경의 노출 방식만 결정합니다. Codex proxy와 Search MCP는 이 값과 관계없이 항상 내부 sidecar 환경에 배치됩니다.
 
 `reuse_foundry=true`일 때 Terraform은 기존 모델 deployment를 관리하지 않습니다. 프로젝트가 없으면 `reuse_foundry_project=false`로 새 프로젝트를 만들고, 기존 프로젝트를 유지하려면 `reuse_foundry_project=true`와 정확한 `foundry_project_name`을 설정해 조회만 합니다.
 

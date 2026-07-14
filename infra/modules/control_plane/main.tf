@@ -16,7 +16,11 @@ variable "tags" {
 }
 variable "infra_subnet_id" {
   type        = string
-  description = "Container Apps environment infrastructure subnet ID (delegated to Microsoft.App/environments)."
+  description = "Internal sidecar Container Apps environment infrastructure subnet ID (delegated to Microsoft.App/environments)."
+}
+variable "admin_infra_subnet_id" {
+  type        = string
+  description = "Dedicated Admin UI Container Apps environment infrastructure subnet ID (delegated to Microsoft.App/environments)."
 }
 variable "law_id" {
   type        = string
@@ -107,14 +111,10 @@ variable "admin_ui_public" {
   type        = bool
   default     = false
   description = <<-EOT
-    When false (default) the Container Apps environment is an internal ILB (vnetInternal=true):
-    the Admin UI is reachable only from inside the VNet (jumpbox/VPN). When true the environment
-    is created EXTERNAL (public virtual IP) so the Admin UI gets a public FQDN — still gated by the
-    BFF's Entra OIDC + admin-group check. NOTE: internal<->external is immutable after env creation
-    (MS Learn: container-apps/networking), so flipping this on an existing stack RECREATES the
-    environment + Admin UI app. Outbound stays VNet-integrated (APIM/Cosmos reachable either way);
-    only inbound becomes public. The in-VNet ACA private DNS zone is only needed for the internal
-    case, so it's gated off when public (external envs get public DNS automatically).
+    When admin_ui_image is set, false (default) creates the dedicated Admin UI Container Apps
+    environment as an internal ILB and true creates it as an external environment with a public FQDN.
+    The BFF remains protected by Entra OIDC and the admin-group check. This setting never changes the
+    always-internal sidecar environment used by config-sync, Codex proxy, and Search MCP.
   EOT
 }
 
@@ -199,15 +199,13 @@ variable "codexproxy_project_base" {
 }
 
 locals {
-  worker_enabled     = var.worker_image != ""
-  admin_ui_enabled   = var.admin_ui_image != ""
-  codexproxy_enabled = var.codexproxy_image != ""
-  searchmcp_enabled  = var.searchmcp_image != ""
-  proxy_key_revision = nonsensitive(substr(sha256(var.codexproxy_key), 0, 16))
-  # The in-VNet ACA private DNS zone + wildcard records are only needed to reach an INTERNAL env
-  # by FQDN. An external (public) env gets public DNS automatically, so skip them when public.
-  # Needed whenever an internal-reachable app (Admin UI, Codex proxy) is deployed.
-  aca_private_dns_enabled = (local.admin_ui_enabled || local.codexproxy_enabled || local.searchmcp_enabled) && !var.admin_ui_public
+  worker_enabled               = var.worker_image != ""
+  admin_ui_enabled             = var.admin_ui_image != ""
+  codexproxy_enabled           = var.codexproxy_image != ""
+  searchmcp_enabled            = var.searchmcp_image != ""
+  proxy_key_revision           = nonsensitive(substr(sha256(var.codexproxy_key), 0, 16))
+  sidecars_private_dns_enabled = local.codexproxy_enabled || local.searchmcp_enabled
+  admin_ui_private_dns_enabled = local.admin_ui_enabled && !var.admin_ui_public
 }
 
 resource "azurerm_role_assignment" "worker_acr_pull" {
@@ -270,12 +268,52 @@ resource "time_sleep" "codexproxy_acr_pull_settle" {
   }
 }
 
-resource "azurerm_container_app_environment" "cp" {
+moved {
+  from = azurerm_container_app_environment.cp
+  to   = azurerm_container_app_environment.sidecars
+}
+
+moved {
+  from = azurerm_private_dns_zone.aca
+  to   = azurerm_private_dns_zone.sidecars
+}
+
+moved {
+  from = azurerm_private_dns_zone_virtual_network_link.aca
+  to   = azurerm_private_dns_zone_virtual_network_link.sidecars
+}
+
+moved {
+  from = azurerm_private_dns_a_record.aca_wildcard
+  to   = azurerm_private_dns_a_record.sidecars_wildcard
+}
+
+moved {
+  from = azurerm_private_dns_a_record.aca_wildcard_internal
+  to   = azurerm_private_dns_a_record.sidecars_wildcard_internal
+}
+
+resource "azurerm_container_app_environment" "sidecars" {
   name                           = "cae-${var.name_suffix}"
   resource_group_name            = var.resource_group_name
   location                       = var.location
   log_analytics_workspace_id     = var.law_id
   infrastructure_subnet_id       = var.infra_subnet_id
+  internal_load_balancer_enabled = true
+  tags                           = var.tags
+
+  lifecycle {
+    ignore_changes = [workload_profile]
+  }
+}
+
+resource "azurerm_container_app_environment" "admin_ui" {
+  count                          = local.admin_ui_enabled ? 1 : 0
+  name                           = "cae-admin-${var.name_suffix}"
+  resource_group_name            = var.resource_group_name
+  location                       = var.location
+  log_analytics_workspace_id     = var.law_id
+  infrastructure_subnet_id       = var.admin_infra_subnet_id
   internal_load_balancer_enabled = !var.admin_ui_public
   tags                           = var.tags
 
@@ -284,49 +322,77 @@ resource "azurerm_container_app_environment" "cp" {
   }
 }
 
-# Internal Container Apps env has no public DNS. To reach the BFF by FQDN from inside the VNet
-# (jumpbox/VPN), Azure Private DNS needs a zone named EXACTLY the env default domain with a
-# wildcard A record to the env static IP. (MS Learn: container-apps/private-endpoints-with-dns
-# "Ingress for the virtual network scope".) Gated on the app existing.
-resource "azurerm_private_dns_zone" "aca" {
-  count               = local.aca_private_dns_enabled ? 1 : 0
-  name                = azurerm_container_app_environment.cp.default_domain
+resource "azurerm_private_dns_zone" "sidecars" {
+  count               = local.sidecars_private_dns_enabled ? 1 : 0
+  name                = azurerm_container_app_environment.sidecars.default_domain
   resource_group_name = var.resource_group_name
   tags                = var.tags
 }
 
-resource "azurerm_private_dns_zone_virtual_network_link" "aca" {
-  count                 = local.aca_private_dns_enabled ? 1 : 0
+resource "azurerm_private_dns_zone_virtual_network_link" "sidecars" {
+  count                 = local.sidecars_private_dns_enabled ? 1 : 0
   name                  = "link-aca"
   resource_group_name   = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.aca[0].name
+  private_dns_zone_name = azurerm_private_dns_zone.sidecars[0].name
   virtual_network_id    = var.vnet_id
   registration_enabled  = false
   tags                  = var.tags
 }
 
-# With external ingress on an internal ILB env, app FQDNs are <app>.<defaultDomain> (no
-# ".internal." label), so a bare "*" wildcard (one label before the zone) matches. Both record
-# names point at the env static IP; we keep "*" (covers external app FQDNs) and "*.internal"
-# (covers env-internal app/label FQDNs) so any app in this env resolves to the ILB regardless
-# of its ingress visibility.
-resource "azurerm_private_dns_a_record" "aca_wildcard" {
-  count               = local.aca_private_dns_enabled ? 1 : 0
+resource "azurerm_private_dns_a_record" "sidecars_wildcard" {
+  count               = local.sidecars_private_dns_enabled ? 1 : 0
   name                = "*"
-  zone_name           = azurerm_private_dns_zone.aca[0].name
+  zone_name           = azurerm_private_dns_zone.sidecars[0].name
   resource_group_name = var.resource_group_name
   ttl                 = 300
-  records             = [azurerm_container_app_environment.cp.static_ip_address]
+  records             = [azurerm_container_app_environment.sidecars.static_ip_address]
   tags                = var.tags
 }
 
-resource "azurerm_private_dns_a_record" "aca_wildcard_internal" {
-  count               = local.aca_private_dns_enabled ? 1 : 0
+resource "azurerm_private_dns_a_record" "sidecars_wildcard_internal" {
+  count               = local.sidecars_private_dns_enabled ? 1 : 0
   name                = "*.internal"
-  zone_name           = azurerm_private_dns_zone.aca[0].name
+  zone_name           = azurerm_private_dns_zone.sidecars[0].name
   resource_group_name = var.resource_group_name
   ttl                 = 300
-  records             = [azurerm_container_app_environment.cp.static_ip_address]
+  records             = [azurerm_container_app_environment.sidecars.static_ip_address]
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone" "admin_ui" {
+  count               = local.admin_ui_private_dns_enabled ? 1 : 0
+  name                = azurerm_container_app_environment.admin_ui[0].default_domain
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "admin_ui" {
+  count                 = local.admin_ui_private_dns_enabled ? 1 : 0
+  name                  = "link-aca-admin"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.admin_ui[0].name
+  virtual_network_id    = var.vnet_id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
+resource "azurerm_private_dns_a_record" "admin_ui_wildcard" {
+  count               = local.admin_ui_private_dns_enabled ? 1 : 0
+  name                = "*"
+  zone_name           = azurerm_private_dns_zone.admin_ui[0].name
+  resource_group_name = var.resource_group_name
+  ttl                 = 300
+  records             = [azurerm_container_app_environment.admin_ui[0].static_ip_address]
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_a_record" "admin_ui_wildcard_internal" {
+  count               = local.admin_ui_private_dns_enabled ? 1 : 0
+  name                = "*.internal"
+  zone_name           = azurerm_private_dns_zone.admin_ui[0].name
+  resource_group_name = var.resource_group_name
+  ttl                 = 300
+  records             = [azurerm_container_app_environment.admin_ui[0].static_ip_address]
   tags                = var.tags
 }
 
@@ -335,7 +401,7 @@ resource "azurerm_container_app_job" "config_sync" {
   name                         = "job-config-sync-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
   location                     = var.location
-  container_app_environment_id = azurerm_container_app_environment.cp.id
+  container_app_environment_id = azurerm_container_app_environment.sidecars.id
   workload_profile_name        = "Consumption"
   replica_timeout_in_seconds   = 300
   replica_retry_limit          = 1
@@ -403,7 +469,7 @@ resource "azurerm_container_app" "admin_ui" {
   count                        = local.admin_ui_enabled ? 1 : 0
   name                         = "ca-adminui-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
-  container_app_environment_id = azurerm_container_app_environment.cp.id
+  container_app_environment_id = azurerm_container_app_environment.admin_ui[0].id
   workload_profile_name        = "Consumption"
   revision_mode                = "Single"
 
@@ -517,16 +583,16 @@ resource "azurerm_container_app" "admin_ui" {
   }
 }
 
-# Codex proxy sidecar. Same CAE as the Admin UI; internal ingress on 8789. APIM's /responses API
-# routes here and authenticates with the hop key. The proxy calls the canonical child-project
-# backend with its managed identity (ManagedIdentityCredential), no keys.
+# Codex proxy sidecar in the always-internal sidecar CAE. APIM's /responses API routes here and
+# authenticates with the hop key. The proxy calls the canonical child-project backend with its
+# managed identity (ManagedIdentityCredential), no keys.
 resource "azurerm_container_app" "codexproxy" {
   depends_on = [time_sleep.codexproxy_acr_pull_settle]
 
   count                        = local.codexproxy_enabled ? 1 : 0
   name                         = "ca-codexproxy-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
-  container_app_environment_id = azurerm_container_app_environment.cp.id
+  container_app_environment_id = azurerm_container_app_environment.sidecars.id
   workload_profile_name        = "Consumption"
   revision_mode                = "Single"
 
@@ -603,7 +669,7 @@ resource "azurerm_container_app" "searchmcp" {
   count                        = local.searchmcp_enabled ? 1 : 0
   name                         = "ca-searchmcp-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
-  container_app_environment_id = azurerm_container_app_environment.cp.id
+  container_app_environment_id = azurerm_container_app_environment.sidecars.id
   workload_profile_name        = "Consumption"
   revision_mode                = "Single"
 
@@ -679,8 +745,8 @@ resource "azurerm_container_app" "searchmcp" {
 }
 
 output "environment_id" {
-  description = "Container Apps environment resource ID."
-  value       = azurerm_container_app_environment.cp.id
+  description = "Internal sidecar Container Apps environment resource ID."
+  value       = azurerm_container_app_environment.sidecars.id
 }
 output "job_name" {
   description = "Config-sync job name (null when worker_image is unset)."
@@ -688,7 +754,7 @@ output "job_name" {
 }
 
 output "admin_ui_fqdn" {
-  description = "Internal FQDN of the Admin UI Container App (null until admin_ui_image is set). Resolves to the env static IP via the ACA private DNS zone, from inside the VNet only."
+  description = "Admin UI Container App FQDN (null until admin_ui_image is set). It is public only when admin_ui_public is true."
   value       = one(azurerm_container_app.admin_ui[*].ingress[0].fqdn)
 }
 
@@ -720,4 +786,20 @@ output "searchmcp_contract" {
 output "searchmcp_fqdn" {
   description = "Internal FQDN of the Search MCP Container App (null until searchmcp_image is set)."
   value       = one(azurerm_container_app.searchmcp[*].ingress[0].fqdn)
+}
+
+output "topology" {
+  description = "Control-plane environment topology for verification and integration."
+  value = {
+    sidecars = {
+      environment_name               = azurerm_container_app_environment.sidecars.name
+      subnet_id                      = azurerm_container_app_environment.sidecars.infrastructure_subnet_id
+      internal_load_balancer_enabled = azurerm_container_app_environment.sidecars.internal_load_balancer_enabled
+    }
+    admin_ui = local.admin_ui_enabled ? {
+      environment_name               = azurerm_container_app_environment.admin_ui[0].name
+      subnet_id                      = azurerm_container_app_environment.admin_ui[0].infrastructure_subnet_id
+      internal_load_balancer_enabled = azurerm_container_app_environment.admin_ui[0].internal_load_balancer_enabled
+    } : null
+  }
 }

@@ -73,7 +73,7 @@ output "config_sync_job_name" {
 }
 
 output "admin_ui_fqdn" {
-  description = "Internal FQDN of the Admin UI (null until admin_ui_image is set). Browse to https://<this> from inside the VNet (jumpbox)."
+  description = "Admin UI FQDN (null until admin_ui_image is set). It is public only when admin_ui_public is true."
   value       = module.control_plane.admin_ui_fqdn
 }
 

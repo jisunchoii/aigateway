@@ -14,11 +14,10 @@ description: Admin UI 배포 — Entra 그룹 방식 결정, 이미지 빌드, t
 * APIM 게이트웨이와 ACR이 이미 준비되어 있다.
 * consumer 등록, 구독 키 발급, 정책 관리를 UI로 처리하고 싶다.
 * Admin UI 쓰기 권한을 Entra admin 그룹으로 제한할 수 있다.
-* `admin_ui_public` 값을 스택의 첫 Terraform apply 전에 결정할 수 있다.
 {% endhint %}
 
-{% hint style="warning" %}
-`admin_ui_public`은 Azure Container Apps 환경 생성 시점에 결정됩니다. 이미지가 비어 있는 core 배포에서도 환경은 생성되므로 스택의 첫 Terraform apply 전에 확정하세요.
+{% hint style="info" %}
+`admin_ui_image`를 설정하면 전용 Admin UI Container Apps 환경이 생성됩니다. `admin_ui_public`은 이 환경만 public/internal으로 선택하며 Codex proxy와 Search MCP는 항상 내부 sidecar 환경에 남습니다.
 {% endhint %}
 
 ## 2. 배포 전 결정
@@ -120,7 +119,7 @@ Git SHA 태그도 기본적으로 덮어쓸 수 있으므로, 위 명령은 buil
 
 ## 5. tfvars 핵심값
 
-아래 값은 `infra/` 디렉터리의 `terraform.tfvars` 파일에서 수정합니다. 첫 apply에서 확정한 `admin_ui_public` 값은 수정하지 않습니다.
+아래 값은 `infra/` 디렉터리의 `terraform.tfvars` 파일에서 수정합니다. `admin_ui_public`은 이 apply에서 생성되는 전용 Admin UI 환경의 노출 방식만 선택합니다.
 
 ```hcl
 admin_ui_image        = "<registry_login_server>/admin-ui:<git-sha>"

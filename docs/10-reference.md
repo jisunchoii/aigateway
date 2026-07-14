@@ -92,7 +92,7 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | `worker_image` | `""` | config-sync worker image. 비어 있으면 job 미배포 |
 | `config_sync_cron` | `*/5 * * * *` | config-sync Container Apps Job cron |
 | `admin_ui_image` | `""` | Admin UI image. 비어 있으면 Admin UI 미배포 |
-| `admin_ui_public` | `false` | `true`면 Admin UI public FQDN 노출. 스택의 첫 apply 후 변경은 ACA 환경 재생성 가능 |
+| `admin_ui_public` | `false` | `admin_ui_image` 배포 시 전용 Admin UI 환경만 public FQDN으로 노출. sidecar 환경에는 영향 없음 |
 | `codexproxy_image` | `""` | Codex proxy image. 비어 있으면 partner/OSS `/responses`는 `503`; GPT-5.6 native Responses는 유지 |
 | `searchmcp_image` | `""` | Search MCP image. 비어 있으면 `/mcp/` API 미배포 |
 | `bff_api_audience` | `""` | Admin UI BFF JWT audience |

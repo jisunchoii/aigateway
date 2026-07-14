@@ -14,7 +14,7 @@ description: 사전 준비 — 권한·도구 확인, 모델 백엔드와 Entra 
 | Azure RBAC     | 배포 실행자는 구독에서 `Contributor` + `User Access Administrator` 또는 동등 권한 필요 |
 | Entra ID 권한    | Admin UI 배포 시 앱 등록/그룹 생성 또는 기존 객체 조회 권한 필요                           |
 | Marketplace 권한 | partner/community 모델을 새로 배포할 경우 Azure Marketplace 약관 동의 권한 필요        |
-| Terraform      | 1.7 이상                                                               |
+| Terraform      | 1.11 이상                                                              |
 | Azure CLI      | 최신 안정 버전                                                             |
 
 ```bash

@@ -7,14 +7,15 @@ resource "azurerm_resource_group" "rg" {
 }
 
 module "network" {
-  source              = "./modules/network"
-  name_suffix         = local.name_suffix
-  suffix              = local.sfx
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
-  tags                = local.tags
-  enable_jumpbox      = var.enable_jumpbox
-  apim_public         = var.apim_public
+  source                   = "./modules/network"
+  name_suffix              = local.name_suffix
+  suffix                   = local.sfx
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = var.location
+  tags                     = local.tags
+  enable_jumpbox           = var.enable_jumpbox
+  apim_public              = var.apim_public
+  admin_ui_aca_subnet_cidr = var.admin_ui_aca_subnet_cidr
 }
 
 module "identity" {
@@ -171,6 +172,7 @@ module "control_plane" {
   location              = var.location
   tags                  = local.tags
   infra_subnet_id       = module.network.aca_subnet_id
+  admin_infra_subnet_id = module.network.admin_ui_aca_subnet_id
   law_id                = module.observability.law_id
   acr_id                = module.registry.id
   acr_login_server      = module.registry.login_server

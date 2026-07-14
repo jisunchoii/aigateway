@@ -85,7 +85,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 |---|---|
 | `location` | 배포 리전 |
 | `apim_public` | VS Code/Copilot CLI 같은 외부 도구에서 APIM을 호출해야 하면 `true` |
-| `admin_ui_public` | Admin UI를 외부 브라우저에서 열어야 하면 첫 apply 전에 `true` |
+| `admin_ui_public` | `admin_ui_image` 배포 시 전용 Admin UI 환경만 public FQDN으로 노출할지 |
 | `reuse_foundry` | 기존 AIServices/Foundry 계정을 재사용할지 |
 | `reuse_foundry_project` | 기존 Foundry 프로젝트를 Terraform 비관리 상태로 재사용할지 |
 | `model_deployments` | 기준 AIServices 계정에 배포할 모델 이름/모델/sku/capacity |
@@ -95,7 +95,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 
 ### 3. 게이트웨이 core 배포
 
-처음에는 `worker_image`, `admin_ui_image`, `codexproxy_image`, `searchmcp_image`를 모두 비워 둔 상태로 APIM, 네트워크, Cosmos, ACR 등을 먼저 만듭니다. 이미지 변수가 비어 있어도 ACR은 생성되고, 해당 Container App 또는 Job만 건너뜁니다. Admin UI를 배포할 예정이면 Container Apps 환경이 생성되기 전인 이 첫 apply에서 `admin_ui_public` 값을 확정해야 합니다.
+처음에는 `worker_image`, `admin_ui_image`, `codexproxy_image`, `searchmcp_image`를 모두 비워 둔 상태로 APIM, 네트워크, Cosmos, ACR 등을 먼저 만듭니다. 이미지 변수가 비어 있어도 ACR은 생성되고, 해당 Container App 또는 Job만 건너뜁니다. `admin_ui_image`를 배포할 때만 전용 Admin UI 환경이 생성되며, `admin_ui_public`은 이 환경에만 적용됩니다. Codex proxy와 Search MCP는 항상 내부 sidecar 환경에 남습니다.
 
 ```bash
 cd infra
@@ -164,7 +164,7 @@ https://login.microsoftonline.com/<tenant id>/adminconsent?client_id=<spa app id
 
 ### 6. Container Apps와 Job 활성화
 
-`terraform.tfvars`의 빈 이미지 값을 교체합니다. 아래 예시는 네 이미지를 모두 빌드한 경우입니다. 일부만 빌드했다면 성공적으로 빌드하고 잠근 image 변수만 교체하고 나머지는 `""`로 유지합니다. 첫 apply에서 확정한 `admin_ui_public` 값은 수정하지 않습니다.
+`terraform.tfvars`의 빈 이미지 값을 교체합니다. 아래 예시는 네 이미지를 모두 빌드한 경우입니다. 일부만 빌드했다면 성공적으로 빌드하고 잠근 image 변수만 교체하고 나머지는 `""`로 유지합니다. `admin_ui_public`은 전용 Admin UI 환경의 노출 방식만 선택하며 sidecar 환경에는 영향을 주지 않습니다.
 
 ```hcl
 worker_image          = "<registry_login_server>/config-sync-worker:<git-sha>"

@@ -60,6 +60,12 @@ variable "aca_subnet_cidr" {
   description = "CIDR for the Container Apps environment infrastructure subnet (min /27, delegated to Microsoft.App/environments)."
 }
 
+variable "admin_ui_aca_subnet_cidr" {
+  type        = string
+  default     = "10.40.5.32/27"
+  description = "CIDR for the dedicated Admin UI Container Apps environment infrastructure subnet (min /27, delegated to Microsoft.App/environments)."
+}
+
 resource "azurerm_virtual_network" "vnet" {
   name                = "vnet-${var.name_suffix}"
   resource_group_name = var.resource_group_name
@@ -117,6 +123,22 @@ resource "azurerm_subnet" "aca" {
 
   delegation {
     name = "aca-delegation"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+resource "azurerm_subnet" "aca_admin" {
+  name                            = "snet-aca-admin"
+  resource_group_name             = var.resource_group_name
+  virtual_network_name            = azurerm_virtual_network.vnet.name
+  address_prefixes                = [var.admin_ui_aca_subnet_cidr]
+  default_outbound_access_enabled = false
+
+  delegation {
+    name = "aca-admin-delegation"
     service_delegation {
       name    = "Microsoft.App/environments"
       actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
@@ -269,4 +291,9 @@ output "jumpbox_subnet_id" {
 output "aca_subnet_id" {
   description = "Container Apps environment infrastructure subnet ID."
   value       = azurerm_subnet.aca.id
+}
+
+output "admin_ui_aca_subnet_id" {
+  description = "Dedicated Admin UI Container Apps environment infrastructure subnet ID."
+  value       = azurerm_subnet.aca_admin.id
 }

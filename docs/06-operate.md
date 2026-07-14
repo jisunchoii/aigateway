@@ -39,7 +39,7 @@ cd infra
 terraform output -raw admin_ui_fqdn
 ```
 
-브라우저에서 출력된 URL을 열고 admin 보안 그룹에 속한 계정으로 로그인합니다. `admin_ui_public=false`인 환경은 VNet 내부, VPN, jumpbox 등 조직 네트워크 경로에서 접근해야 합니다.
+브라우저에서 출력된 URL을 열고 admin 보안 그룹에 속한 계정으로 로그인합니다. `admin_ui_public=false`인 환경은 private DNS를 해석할 수 있는 VNet 연결 경로에서 접근해야 합니다.
 
 ### Consumer와 API key 운영
 
