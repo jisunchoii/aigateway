@@ -130,6 +130,17 @@ variable "model_deployments" {
   }
 }
 
+variable "native_responses_models" {
+  type        = set(string)
+  default     = ["gpt-5.6-sol"]
+  description = "Deployments verified to accept Codex Responses custom tools directly through Foundry."
+
+  validation {
+    condition     = length(setsubtract(var.native_responses_models, toset(keys(var.model_deployments)))) == 0
+    error_message = "native_responses_models must be a subset of model_deployments."
+  }
+}
+
 variable "reuse_foundry" {
   type        = bool
   default     = false

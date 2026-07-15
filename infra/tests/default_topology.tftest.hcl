@@ -122,6 +122,38 @@ run "default_model_topology" {
     })
     error_message = "Admin UI must receive exactly the deployment-derived catalog."
   }
+
+  assert {
+    condition = strcontains(
+      module.apim.rendered_policy_xml.model_gateway,
+      "new string[] { \"gpt-5.6-sol\" }.Contains((string)context.Variables[\"effectiveModel\"])"
+    )
+    error_message = "The default native Responses capability list must route only gpt-5.6-sol directly."
+  }
+}
+
+run "native_responses_models_require_deployments" {
+  command = plan
+
+  variables {
+    location             = "eastus2"
+    owner                = "test@example.com"
+    cost_center          = "TEST"
+    apim_publisher_name  = "Test"
+    apim_publisher_email = "test@example.com"
+    budget_alert_email   = "test@example.com"
+    budget_start_date    = "2026-07-01T00:00:00Z"
+    foundry_account_name = "aisproj-test"
+    codexproxy_image     = ""
+    searchmcp_image      = ""
+
+    native_responses_models = [
+      "gpt-5.6-sol",
+      "not-deployed",
+    ]
+  }
+
+  expect_failures = [var.native_responses_models]
 }
 
 run "sidecar_image_enables_responses" {

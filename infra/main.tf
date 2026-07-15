@@ -125,6 +125,7 @@ module "apim" {
   token_quota                   = var.token_quota
   token_quota_period            = var.token_quota_period
   allowed_model_names           = local.allowed_models
+  native_responses_models       = var.native_responses_models
   rate_tiers                    = var.rate_tiers
   client_auth_mode              = var.client_auth_mode
   entra_tenant_id               = var.entra_tenant_id
