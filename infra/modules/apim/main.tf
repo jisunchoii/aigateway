@@ -118,6 +118,17 @@ variable "allowed_model_names" {
   description = "Allowed deployment aliases."
 }
 
+variable "native_responses_models" {
+  type        = set(string)
+  default     = []
+  description = "Deployments verified to accept Codex Responses custom tools without the Codex proxy."
+
+  validation {
+    condition     = length(setsubtract(var.native_responses_models, toset(var.allowed_model_names))) == 0
+    error_message = "native_responses_models must be a subset of allowed_model_names."
+  }
+}
+
 variable "rate_tiers" {
   type        = map(object({ tpm = number, quota = number, period = string }))
   description = "Named rate-limit tiers (small/medium/large). Each becomes literal APIM named values the policy <choose>s by consumer tier."
@@ -195,7 +206,8 @@ variable "searchmcp_base_url" {
 }
 
 locals {
-  allowed_models = sort(var.allowed_model_names)
+  allowed_models          = sort(var.allowed_model_names)
+  native_responses_models = sort(tolist(var.native_responses_models))
   shared_policy_inputs = {
     entra_tenant_id         = var.entra_tenant_id
     entra_api_audience      = var.entra_api_audience
@@ -203,6 +215,7 @@ locals {
     rate_tiers              = var.rate_tiers
     model_tokens_per_minute = var.model_tokens_per_minute
     deployed_models         = local.allowed_models
+    native_responses_models = local.native_responses_models
     model_openai_v1_base    = var.model_openai_v1_base
     codexproxy_enabled      = var.codexproxy_enabled
     codexproxy_base_url     = var.codexproxy_base_url

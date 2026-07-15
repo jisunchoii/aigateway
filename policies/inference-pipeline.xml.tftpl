@@ -247,7 +247,7 @@
     <choose>
       <when condition='@(context.Operation.Id == "responses")'>
         <choose>
-          <when condition='@((string)context.Variables["effectiveModel"] == "gpt-5.6-sol")'>
+          <when condition='@(new string[] { ${join(", ", [for model in native_responses_models : "\"${model}\""])} }.Contains((string)context.Variables["effectiveModel"]))'>
             <set-backend-service base-url="${model_openai_v1_base}" />
             <authentication-managed-identity resource="https://cognitiveservices.azure.com"
                                              output-token-variable-name="msi-access-token" />

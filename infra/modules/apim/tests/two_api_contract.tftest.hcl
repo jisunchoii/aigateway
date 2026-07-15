@@ -52,6 +52,10 @@ run "two_api_contract" {
     codexproxy_key      = "sk-test-hop-key"
     searchmcp_enabled   = true
     searchmcp_base_url  = "https://searchmcp.example"
+    native_responses_models = [
+      "gpt-5.6-sol",
+      "grok-4.3",
+    ]
   }
 
   assert {
@@ -201,7 +205,14 @@ run "two_api_contract" {
   assert {
     condition = (
       strcontains(output.rendered_policy_xml.model_gateway, "context.Operation.Id == \"responses\"") &&
-      strcontains(output.rendered_policy_xml.model_gateway, "(string)context.Variables[\"effectiveModel\"] == \"gpt-5.6-sol\"") &&
+      strcontains(
+        output.rendered_policy_xml.model_gateway,
+        "new string[] { \"gpt-5.6-sol\", \"grok-4.3\" }.Contains((string)context.Variables[\"effectiveModel\"])"
+      ) &&
+      !strcontains(
+        output.rendered_policy_xml.model_gateway,
+        "'@((string)context.Variables[\"effectiveModel\"] == \"gpt-5.6-sol\")'"
+      ) &&
       strcontains(output.rendered_policy_xml.model_gateway, "base-url=\"https://codexproxy.example\"") &&
       strcontains(output.rendered_policy_xml.model_gateway, "{{codexproxy-key}}") &&
       strcontains(output.rendered_policy_xml.model_gateway, "resource=\"https://cognitiveservices.azure.com\"") &&
@@ -262,15 +273,16 @@ run "responses_bootstrap_without_image" {
     rate_tiers = {
       small = { tpm = 50000, quota = 5000000, period = "Daily" }
     }
-    client_auth_mode    = "subscription-key"
-    entra_tenant_id     = ""
-    entra_api_audience  = ""
-    entra_team_claim    = "groups"
-    codexproxy_enabled  = false
-    codexproxy_base_url = ""
-    codexproxy_key      = ""
-    searchmcp_enabled   = false
-    searchmcp_base_url  = ""
+    client_auth_mode        = "subscription-key"
+    entra_tenant_id         = ""
+    entra_api_audience      = ""
+    entra_team_claim        = "groups"
+    codexproxy_enabled      = false
+    codexproxy_base_url     = ""
+    codexproxy_key          = ""
+    searchmcp_enabled       = false
+    searchmcp_base_url      = ""
+    native_responses_models = ["gpt-5.6-sol"]
   }
 
   assert {
@@ -278,6 +290,10 @@ run "responses_bootstrap_without_image" {
       output.codexproxy_contract.named_value_count == 0 &&
       output.api_contract.search_mcp == null &&
       output.rendered_policy_xml.search_mcp == null &&
+      strcontains(
+        output.rendered_policy_xml.model_gateway,
+        "new string[] { \"gpt-5.6-sol\" }.Contains((string)context.Variables[\"effectiveModel\"])"
+      ) &&
       strcontains(output.rendered_policy_xml.model_gateway, "code=\"503\"") &&
       !strcontains(output.rendered_policy_xml.model_gateway, "{{codexproxy-key}}")
     )
