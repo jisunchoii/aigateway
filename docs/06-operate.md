@@ -136,6 +136,49 @@ customMetrics
 | `llm_prompt_tokens` | 입력 토큰 수 |
 | `llm_completion_tokens` | 출력 토큰 수 |
 
+### APIM Analytics — Language models 대시보드가 비어 있을 때
+
+APIM 포털의 **Analytics → Language models** 대시보드는 LLM 전용 진단 로그(`GatewayLlmLogs` -> Log Analytics `ApiManagementGatewayLlmLog` 테이블)를 데이터 원천으로 사용합니다. 모델을 계속 호출해도 이 대시보드가 텅 비어 있다면, 가장 흔한 원인은 **진단 설정에서 `GatewayLlmLogs` 카테고리가 꺼져 있는 것**입니다. 기본 진단 설정에서는 `GatewayLogs`만 켜져 있고 `GatewayLlmLogs`는 비활성화되어 있는 경우가 많습니다.
+
+**진단 설정 확인 (Azure CLI):**
+
+```bash
+az monitor diagnostic-settings list \
+  --resource <apim-name> \
+  --resource-group <rg-name> \
+  --resource-type Microsoft.ApiManagement/service \
+  --query "[].logs[?category=='GatewayLlmLogs'].enabled"
+```
+
+결과가 `[[false]]`이면 해당 카테고리가 꺼져 있는 상태입니다.
+
+**활성화 방법:**
+
+Azure Portal에서 APIM -> Monitoring -> Diagnostic settings -> 기존 설정 편집 -> **GatewayLlmLogs** 체크 -> 저장하거나, 아래 CLI로 업데이트합니다.
+
+```bash
+az monitor diagnostic-settings update \
+  --name default \
+  --resource <apim-name> \
+  --resource-group <rg-name> \
+  --resource-type Microsoft.ApiManagement/service \
+  --set logs[3].enabled=true
+```
+
+{% hint style="warning" %}
+`--set logs[N].enabled=true`에서 인덱스 `N`은 diagnostic-settings 출력의 `logs` 배열에서 `GatewayLlmLogs`의 위치입니다. 설정마다 순서가 다를 수 있으므로, 업데이트 전에 `az monitor diagnostic-settings list` 출력에서 `GatewayLlmLogs`의 인덱스를 먼저 확인하세요.
+{% endhint %}
+
+활성화 후 LLM 요청을 몇 번 보내고 5~10분 뒤 Log Analytics에서 데이터가 들어오는지 확인합니다.
+
+```kusto
+ApiManagementGatewayLlmLog
+| order by TimeGenerated desc
+| take 50
+```
+
+이 쿼리에 결과가 있으면 Analytics -> Language models 대시보드에도 데이터가 표시됩니다. 결과가 있지만 token 필드가 비어 있다면 백엔드 응답의 `usage` 객체를 확인하세요. 스트리밍 호출은 `stream_options: { include_usage: true }` 옵션으로 usage 정보를 반환받아야 토큰 메트릭이 집계됩니다.
+
 ## 4. 비용 관리
 
 ### 예산 기반 모델 전환

@@ -211,6 +211,7 @@ module "control_plane" {
   codexproxy_client_id       = module.identity.codexproxy_client_id
   codexproxy_key             = local.codexproxy_key
   codexproxy_project_base    = module.foundry.project_responses_base
+  search_model               = var.search_model
 }
 
 # The Admin UI BFF (cp_write identity) reads token metrics + request logs from Log Analytics

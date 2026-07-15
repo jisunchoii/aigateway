@@ -58,8 +58,8 @@ read -r -d '' doc <<'JSON' || true
 {
   "id": "global",
   "allowed_models": ["gpt-5.6-sol", "FW-GLM-5.2", "DeepSeek-V4-Pro", "grok-4.3"],
-  "tokens_per_minute": 1000,
-  "token_quota": 50000,
+  "tokens_per_minute": 150000,
+  "token_quota": 30000000,
   "token_quota_period": "Daily"
 }
 JSON

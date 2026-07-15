@@ -111,8 +111,8 @@ Cosmos DB의 `config` 컨테이너가 런타임 거버넌스의 원천입니다.
 {
   "id": "global",
   "allowed_models": ["gpt-5.6-sol", "FW-GLM-5.2", "DeepSeek-V4-Pro", "grok-4.3"],
-  "tokens_per_minute": 500000,
-  "token_quota": 10000000,
+  "tokens_per_minute": 150000,
+  "token_quota": 30000000,
   "token_quota_period": "Daily"
 }
 ```

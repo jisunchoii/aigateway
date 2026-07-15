@@ -21,13 +21,13 @@ terraform {
   }
 
   # scripts/bootstrap-backend.sh updates this block, then run `terraform init`.
-  backend "azurerm" {
-    resource_group_name  = "rg-aigw-tfstate-dev-eastus2"
-    storage_account_name = "staigwtfstate6gnsb0"
-    container_name       = "tfstate"
-    key                  = "ai-gateway-eus2.tfstate"
-    use_azuread_auth     = true
-  }
+  # backend "azurerm" {
+  #   resource_group_name  = "rg-aigw-tfstate-dev-eastus2"
+  #   storage_account_name = "staigwtfstate6gnsb0"
+  #   container_name       = "tfstate"
+  #   key                  = "ai-gateway-eus2.tfstate"
+  #   use_azuread_auth     = true
+  # }
 }
 
 provider "azurerm" {

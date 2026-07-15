@@ -141,6 +141,12 @@ variable "native_responses_models" {
   }
 }
 
+variable "search_model" {
+  type        = string
+  default     = "gpt-5.6-sol"
+  description = "Foundry deployment name Search MCP uses for its one-call web_search Responses broker. Must support the hosted web_search tool and normally should also be a deployed model key."
+}
+
 variable "reuse_foundry" {
   type        = bool
   default     = false

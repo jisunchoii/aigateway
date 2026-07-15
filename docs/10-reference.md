@@ -56,6 +56,7 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 |---|---|---|
 | `model_deployments` | `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` | 지원 모델 AIServices deployment map. map key가 곧 APIM/Admin UI 모델 이름 |
 | `native_responses_models` | `gpt-5.6-sol` | Codex Responses custom tool 호환성이 검증되어 Foundry로 직접 전달할 deployment 목록. `model_deployments`의 부분집합이어야 함 |
+| `search_model` | `gpt-5.6-sol` | Search MCP가 hosted web_search Responses 브로커 호출에 사용하는 deployment 이름. `model_deployments`의 키와 일치해야 하며 hosted web_search tool을 지원해야 함 |
 | `foundry_project_name` | `codexproj` | 기준 child project 이름 |
 | `foundry_public_network_access_enabled` | `false` | `false`면 기준 모델 계정을 private-only로 유지 |
 

@@ -732,7 +732,7 @@ curl "$base/openai/v1/chat/completions" `
 
 | 제어 | 위치 | 미설정 시 동작 |
 |---|---|---|
-| **토큰 레이트리밋** (`llm-token-limit`) | `policies/*-pipeline.xml.tftpl` | **항상 적용.** 컨슈머별 설정이 없으면 글로벌 기본값으로 제한합니다. `tokens_per_minute`(기본 1000), `token_quota`(기본 50000) / `token_quota_period`(기본 Daily). 초과 시 **429**. 절대 무제한이 아닙니다. |
+| **토큰 레이트리밋** (`llm-token-limit`) | `policies/*-pipeline.xml.tftpl` | **항상 적용.** 컨슈머별 설정이 없으면 글로벌 기본값으로 제한합니다. `tokens_per_minute`(기본 150000), `token_quota`(기본 30000000) / `token_quota_period`(기본 Daily). 초과 시 **429**. 절대 무제한이 아닙니다. |
 | **USD 예산 다운그레이드** (`evaluate_downgrades`) | `app/config-sync-worker/budget.py` | **선택.** 컨슈머에 `daily_budget_usd`와 `downgrade_ladder`가 **둘 다** 있을 때만 동작. 없으면 다운그레이드/차단 없이 요청한 모델 그대로 통과. |
 | **Cost Management 월 예산** (`monthly_budget_amount`, 기본 200) | Azure 구독 예산 | **알림 전용.** 이메일 경고만 보냄, API 트래픽은 **차단하지 않음**. |
 
@@ -740,7 +740,7 @@ curl "$base/openai/v1/chat/completions" `
 allowed_models)에 없으면 예산과 무관하게 **403**입니다.
 
 **결론**: 예산(USD)을 설정하지 않아도 호출은 **통과**하지만, 글로벌 토큰 레이트리밋
-(기본 1000 TPM / 50000 토큰·일)이 항상 상한으로 작동합니다. 진짜로 제한을 풀려면
+(기본 150000 TPM / 30000000 토큰·일)이 항상 상한으로 작동합니다. 진짜로 제한을 풀려면
 `tokens_per_minute`/`token_quota`를 크게 잡고, 비용 보호를 원하면 컨슈머에 `daily_budget_usd` +
 `downgrade_ladder`를 설정하세요.
 

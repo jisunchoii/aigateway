@@ -197,6 +197,11 @@ variable "codexproxy_project_base" {
   default     = ""
   description = "Canonical child-project Responses base URL (FOUNDRY_PROJECT_BASE env)."
 }
+variable "search_model" {
+  type        = string
+  default     = "gpt-5.6-sol"
+  description = "Foundry deployment name Search MCP uses for its one-call web_search Responses broker (SEARCH_MODEL env). Must support the hosted web_search tool."
+}
 
 locals {
   worker_enabled               = var.worker_image != ""
@@ -762,7 +767,7 @@ resource "azurerm_container_app" "searchmcp" {
       }
       env {
         name  = "SEARCH_MODEL"
-        value = "gpt-5.6-sol"
+        value = var.search_model
       }
       env {
         name  = "PORT"
@@ -805,7 +810,7 @@ output "searchmcp_contract" {
     env_names       = sort([for item in one(azurerm_container_app.searchmcp[*].template[0].container[0].env) : item.name])
     known_env = {
       FOUNDRY_PROJECT_BASE = var.codexproxy_project_base
-      SEARCH_MODEL         = "gpt-5.6-sol"
+      SEARCH_MODEL         = var.search_model
       PORT                 = "8790"
     }
   } : null

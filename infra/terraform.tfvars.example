@@ -68,6 +68,10 @@ model_deployments = {
 # 모델 이름이나 provider로 자동 판별하지 않습니다. Responses custom tool 지원을 확인한 모델만 추가하세요.
 native_responses_models = ["gpt-5.6-sol"]
 
+# Search MCP가 web_search Responses 브로커 호출에 사용하는 deployment 이름입니다.
+# hosted web_search tool을 지원하는 모델이어야 하며, 위 model_deployments 키 중 하나와 일치해야 합니다.
+search_model = "gpt-5.6-sol"
+
 # 배포 경로 2: 기존 모델 활용 + 프로젝트 없음
 # reuse_foundry=true, reuse_foundry_project=false로 바꾸고 기존 AIServices 계정의
 # 정확한 이름과 리소스 그룹을 입력합니다.
