@@ -55,6 +55,7 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `model_deployments` | `gpt-5.6-sol`, `FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3` | 지원 모델 AIServices deployment map. map key가 곧 APIM/Admin UI 모델 이름 |
+| `native_responses_models` | `gpt-5.6-sol` | Codex Responses custom tool 호환성이 검증되어 Foundry로 직접 전달할 deployment 목록. `model_deployments`의 부분집합이어야 함 |
 | `foundry_project_name` | `codexproj` | 기준 child project 이름 |
 | `foundry_public_network_access_enabled` | `false` | `false`면 기준 모델 계정을 private-only로 유지 |
 
@@ -93,7 +94,7 @@ description: "부록 — Terraform 변수·출력·문제 해결 사전"
 | `config_sync_cron` | `*/5 * * * *` | config-sync Container Apps Job cron |
 | `admin_ui_image` | `""` | Admin UI image. 비어 있으면 Admin UI 미배포 |
 | `admin_ui_public` | `false` | `admin_ui_image` 배포 시 전용 Admin UI 환경만 public FQDN으로 노출. sidecar 환경에는 영향 없음 |
-| `codexproxy_image` | `""` | Codex proxy image. 비어 있으면 partner/OSS `/responses`는 `503`; GPT-5.6 native Responses는 유지 |
+| `codexproxy_image` | `""` | Codex proxy image. 비어 있으면 `native_responses_models`에 있는 모델의 `/responses`는 직접 전달되지만 목록에 없는 모델 요청은 `503` |
 | `searchmcp_image` | `""` | Search MCP image. 비어 있으면 `/mcp/` API 미배포 |
 | `bff_api_audience` | `""` | Admin UI BFF JWT audience |
 | `spa_client_id` | `""` | SPA app registration client ID |
@@ -174,7 +175,7 @@ az containerapp job start -g "$rg" -n "$job"
 ```
 
 {% hint style="info" %}
-`config_sync_job_name`은 `worker_image=""`이면 `null`, `admin_ui_fqdn`은 `admin_ui_image=""`이면 `null`, `search_mcp_url`은 `searchmcp_image=""`이면 `null`입니다. `codexproxy_image=""`이면 GPT-5.6 native Responses는 유지되지만 partner/OSS `/responses`는 `503`입니다. 이미지를 빌드해 변수에 넣고 `terraform apply`한 뒤 다시 확인하세요.
+`config_sync_job_name`은 `worker_image=""`이면 `null`, `admin_ui_fqdn`은 `admin_ui_image=""`이면 `null`, `search_mcp_url`은 `searchmcp_image=""`이면 `null`입니다. `codexproxy_image=""`이면 `native_responses_models`에 있는 모델의 `/responses`는 직접 전달되지만 목록에 없는 모델 요청은 `503`입니다. 이미지를 빌드해 변수에 넣고 `terraform apply`한 뒤 다시 확인하세요.
 {% endhint %}
 
 ## 4. 문제 해결
