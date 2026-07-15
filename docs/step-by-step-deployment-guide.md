@@ -417,7 +417,7 @@ Write-Host "Admin UI = https://$fqdn"
 terraform output search_mcp_url
 ```
 
-`codexproxy_image`가 비어 있으면 GPT-5.6 native Responses는 유지되지만 partner/OSS `/responses`는 `503`입니다. `searchmcp_image`가 비어 있으면 Search MCP 앱과 APIM `/mcp/` API가 생성되지 않아 `/mcp/`는 `404`입니다.
+`codexproxy_image`가 비어 있으면 `native_responses_models` 목록에 있는 모델(기본값: `gpt-5.6-sol`)은 Foundry로 직접 라우팅되지만, 목록에 없는 `/responses` 모델은 `503`입니다. `searchmcp_image`가 비어 있으면 Search MCP 앱과 APIM `/mcp/` API가 생성되지 않아 `/mcp/`는 `404`입니다.
 
 > **CAE 변경 주의:** `admin_ui_public`은 `admin_ui_image`를 설정할 때 생성되는 전용 Admin UI 환경에만 적용됩니다. 이미 배포된 Admin UI에서 값을 바꾸면 그 전용 환경과 앱이 재생성될 수 있지만, Codex proxy와 Search MCP의 내부 sidecar 환경은 유지됩니다.
 

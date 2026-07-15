@@ -189,7 +189,7 @@ export TF_VAR_jumpbox_admin_password="<12자 이상 비밀번호>"
 | `reuse_foundry_project`                                          | 기존 프로젝트 read-only 재사용 여부              |
 | `model_deployments`                                              | 지원 모델 네 개 또는 운영자가 승인한 동일 schema deployment 정의 |
 | `worker_image`                                                   | 비워 두면 config-sync worker 미배포    |
-| `codexproxy_image`                                               | 비워 두면 partner/OSS `/responses`가 `503`; GPT-5.6 native Responses는 유지 |
+| `codexproxy_image`                                               | 비워 두면 `native_responses_models` 목록에 없는 `/responses` 모델은 `503`; 목록에 있는 모델(기본값: `gpt-5.6-sol`)은 Foundry로 직접 라우팅 |
 | `searchmcp_image`                                                | 비워 두면 `/mcp/` API 미배포 |
 | `admin_ui_image`                                                 | 비워 두면 Admin UI 미배포              |
 
@@ -309,7 +309,7 @@ Terraform은 sidecar용 `AcrPull` 역할 할당 후 90초를 기다린 다음 Co
 
 | 빈 변수 | 실제 결과 |
 |---|---|
-| `codexproxy_image` | `gpt-5.6-sol`은 native Foundry Responses를 계속 사용하고, partner/OSS `/responses`는 `503` |
+| `codexproxy_image` | `native_responses_models` 목록에 있는 모델(기본값: `gpt-5.6-sol`)은 Foundry로 직접 라우팅되고, 목록에 없는 `/responses` 모델은 `503` |
 | `searchmcp_image` | Search MCP 앱과 APIM API가 생성되지 않아 `/mcp/`는 `404` |
 
 이미지 참조 변경은 Container Apps의 새 revision을 만듭니다. 자세한 동작은 [Azure Container Apps revision](https://learn.microsoft.com/azure/container-apps/revisions)을 참고하세요. ACR 원격 빌드와 태그 잠금은 [ACR Tasks 빠른 시작](https://learn.microsoft.com/azure/container-registry/container-registry-quickstart-task-cli) 및 [ACR 이미지 잠금](https://learn.microsoft.com/azure/container-registry/container-registry-image-lock)을 참고하세요.

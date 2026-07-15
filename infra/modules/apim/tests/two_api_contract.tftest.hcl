@@ -220,7 +220,7 @@ run "two_api_contract" {
       strcontains(output.rendered_policy_xml.vscode_models, "context.Request.MatchedParameters.GetValueOrDefault(\"model\", \"\")") &&
       strcontains(output.rendered_policy_xml.vscode_models, "<rewrite-uri template=\"/chat/completions\" copy-unmatched-params=\"false\"")
     )
-    error_message = "Model Gateway Responses must send GPT directly to Foundry and only non-GPT models to the sidecar; VS Code must convert its path model to v1 body routing."
+    error_message = "Model Gateway Responses must send configured native_responses_models directly to Foundry and non-native models through the sidecar; VS Code must convert its path model to v1 body routing."
   }
 
   assert {
