@@ -112,9 +112,23 @@ worker_image         = ""
 admin_ui_image       = ""
 codexproxy_image     = ""
 searchmcp_image      = ""
+
+# Cosmos가 private + 키 인증 비활성화라, 9번 섹션의 초기 설정 시딩은 in-VNet 점프박스로 실행합니다.
+# All-in-one 경로는 이 값이 필요합니다.
+enable_jumpbox = true
 ```
 
 > `admin_ui_image`를 설정할 때만 전용 Admin UI 환경이 생성됩니다. `admin_ui_public=true`이면 이 환경만 public FQDN을 사용하고, Codex proxy와 Search MCP는 항상 별도의 내부 sidecar 환경에 남습니다.
+
+{% hint style="warning" %}
+`enable_jumpbox = true`면 `jumpbox_admin_password`(12자 이상)가 **필수**입니다. 값이 없으면 `terraform plan`/`apply`가 검증 오류로 즉시 실패합니다. 비밀번호는 `terraform.tfvars`에 적지 말고 환경 변수로만 전달하세요.
+
+```bash
+export TF_VAR_jumpbox_admin_password="<12자 이상 비밀번호>"
+```
+
+`run_seed`는 기본값 `true`이므로, 1차 apply에서 jumpbox가 만들어지는 즉시 Cosmos 초기 설정 시딩까지 자동으로 실행됩니다(9번 섹션의 수동 seed 명령은 재실행·검증용). 리전에 따라 기본 VM 크기(`Standard_B2s_v2`)가 capacity 제한에 걸리면 `jumpbox_vm_size`로 다른 크기(예: eastus2는 `Standard_D2s_v7` 계열)를 지정하세요.
+{% endhint %}
 
 ## 5. 1차 apply
 

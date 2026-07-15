@@ -174,6 +174,14 @@ searchmcp_image      = ""
 enable_jumpbox = false
 ```
 
+{% hint style="warning" %}
+`enable_jumpbox = true`로 바꾸면 `jumpbox_admin_password`(12자 이상)가 **필수**입니다. 값이 없으면 `terraform plan`/`apply`가 검증 오류로 즉시 실패합니다. 비밀번호는 `terraform.tfvars`에 적지 말고 환경 변수로만 전달합니다. `terraform apply`는 5번 섹션에서 실행합니다.
+
+```bash
+export TF_VAR_jumpbox_admin_password="<12자 이상 비밀번호>"
+```
+{% endhint %}
+
 | 변수                                                               | 의미                              |
 | ---------------------------------------------------------------- | ------------------------------- |
 | `owner`, `cost_center`, `apim_publisher_*`, `budget_alert_email` | 기본값이 없어 파일에 넣어야 하는 공통 값         |
