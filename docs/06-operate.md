@@ -138,7 +138,43 @@ customMetrics
 
 ### APIM Analytics — Language models 대시보드가 비어 있을 때
 
-APIM 포털의 **Analytics → Language models** 대시보드는 LLM 전용 진단 로그(`GatewayLlmLogs` -> Log Analytics `ApiManagementGatewayLlmLog` 테이블)를 데이터 원천으로 사용합니다. 모델을 계속 호출해도 이 대시보드가 텅 비어 있다면, 가장 흔한 원인은 **진단 설정에서 `GatewayLlmLogs` 카테고리가 꺼져 있는 것**입니다. 기본 진단 설정에서는 `GatewayLogs`만 켜져 있고 `GatewayLlmLogs`는 비활성화되어 있는 경우가 많습니다.
+APIM 포털의 **Analytics → Language models** 대시보드는 LLM 전용 진단 로그(`GatewayLlmLogs` -> Log Analytics `ApiManagementGatewayLlmLog` 테이블)를 데이터 원천으로 사용합니다. 이 로그를 수집하려면 아래 두 설정을 모두 켜야 합니다.
+
+| 설정 | 역할 | Portal 경로 |
+|---|---|---|
+| Generative AI gateway 진단 설정 | 생성된 LLM 로그를 Log Analytics workspace로 전송 | APIM -> Monitoring -> Diagnostic settings |
+| Azure Monitor API 진단의 LLM logs | API 요청에서 토큰·모델 LLM 로그 자체를 생성 | APIM -> APIs -> All APIs -> Settings -> Diagnostic Logs -> Azure Monitor |
+
+첫 번째 설정만 켜면 로그 전송 경로는 생기지만 LLM 로그 자체가 생성되지 않아 `ApiManagementGatewayLlmLog`가 비어 있을 수 있습니다.
+
+#### 1. Log Analytics 전송 활성화
+
+1. Azure Portal에서 APIM 인스턴스를 엽니다.
+2. **Monitoring -> Diagnostic settings**로 이동합니다.
+3. 기존 설정을 편집하거나 새 설정을 추가합니다.
+<img src="images/monitoring-1.png" alt="">
+4. 아래 로그 카테고리를 선택합니다.
+
+| 로그 카테고리 | 용도 | 권장 |
+|---|---|---|
+| **Logs related to ApiManagement Gateway** | 요청 상태, backend 응답 코드, APIM 정책 오류와 `429` 원인 확인 | 운영 환경 권장 |
+| **Logs related to generative AI gateway** | 요청별 모델과 prompt/completion/total token 확인 | LLM 관측에 필수 |
+
+5. **Send to Log Analytics workspace**를 선택하고 대상 workspace를 지정합니다.
+6. **Resource specific** destination table을 선택하고 저장합니다.
+
+`Resource specific`을 선택하면 로그가 용도별 전용 테이블에 저장됩니다.
+
+| 로그 카테고리 | Log Analytics 테이블 |
+|---|---|
+| Logs related to ApiManagement Gateway | `ApiManagementGatewayLogs` |
+| Logs related to generative AI gateway | `ApiManagementGatewayLlmLog` |
+
+`Azure diagnostics`를 선택하면 로그가 공용 `AzureDiagnostics` 테이블에 저장되어 서로 다른 로그가 섞이고 쿼리가 복잡해지므로 이 가이드에서는 사용하지 않습니다.
+
+<figure><img src="images/monitoring-2.png" alt=""><figcaption><p>APIM -> Monitoring -> Diagnostic settings: GatewayLogs와 GatewayLlmLogs를 Log Analytics workspace로 전송</p></figcaption></figure>
+
+`ApiManagementGatewayLlmLog`만 필요하면 generative AI gateway 로그만 선택할 수 있습니다. 다만 APIM에서 backend 호출 전에 차단된 `429`는 LLM 로그에 남지 않을 수 있으므로, 운영과 문제 해결을 위해 ApiManagement Gateway 로그도 함께 선택하는 것을 권장합니다.
 
 **진단 설정 확인 (Azure CLI):**
 
@@ -152,9 +188,7 @@ az monitor diagnostic-settings list \
 
 결과가 `[[false]]`이면 해당 카테고리가 꺼져 있는 상태입니다.
 
-**활성화 방법:**
-
-Azure Portal에서 APIM -> Monitoring -> Diagnostic settings -> 기존 설정 편집 -> **GatewayLlmLogs** 체크 -> 저장하거나, 아래 CLI로 업데이트합니다.
+CLI로 기존 진단 설정을 갱신할 수도 있습니다.
 
 ```bash
 az monitor diagnostic-settings update \
@@ -169,7 +203,47 @@ az monitor diagnostic-settings update \
 `--set logs[N].enabled=true`에서 인덱스 `N`은 diagnostic-settings 출력의 `logs` 배열에서 `GatewayLlmLogs`의 위치입니다. 설정마다 순서가 다를 수 있으므로, 업데이트 전에 `az monitor diagnostic-settings list` 출력에서 `GatewayLlmLogs`의 인덱스를 먼저 확인하세요.
 {% endhint %}
 
-활성화 후 LLM 요청을 몇 번 보내고 5~10분 뒤 Log Analytics에서 데이터가 들어오는지 확인합니다.
+#### 2. API의 LLM 로그 생성 활성화
+
+1. APIM 인스턴스에서 **APIs -> APIs -> All APIs**를 선택합니다.
+2. 상단 **Settings**를 선택합니다.
+3. **Diagnostic Logs -> Azure Monitor**를 엽니다.
+4. **Log LLM messages** 또는 **LLM logs**를 `Enabled`로 설정합니다.
+5. 토큰 수와 모델 정보만 필요하면 **Log prompts**와 **Log completions**는 선택하지 않습니다.
+6. 아직 저장하지 않고 아래 **3. 429 상세 응답 로깅** 설정으로 계속 진행합니다.
+
+<figure><img src="images/monitoring-3.png" alt=""><figcaption><p>APIM -> APIs -> All APIs -> Settings -> Diagnostic Logs -> Azure Monitor: 기본 LLM logs 활성화</p></figcaption></figure>
+
+특정 API에만 적용하려면 **All APIs** 대신 해당 API를 선택해 같은 설정을 적용합니다. 이 설정은 내부적으로 Azure Monitor diagnostic의 `largeLanguageModel.logs=enabled`에 해당합니다.
+
+{% hint style="warning" %}
+Prompt와 completion 로깅을 활성화하면 요청·응답 내용이 Log Analytics에 저장될 수 있습니다. 토큰 사용량과 모델 정보만 필요하다면 메시지 본문 로깅은 끈 상태로 유지하세요.
+{% endhint %}
+
+#### 3. 429 상세 응답 로깅
+
+`429 Too Many Requests`가 APIM 정책에서 발생했는지, 모델 backend의 RPM 또는 TPM 한도에서 발생했는지 구분하려면 Gateway 로그에 backend 응답 코드, 본문, rate-limit 헤더를 남겨야 합니다.
+
+1. 같은 **Diagnostic Logs -> Azure Monitor** 화면에서 **Advanced Options**를 엽니다.
+2. 아래와 같이 응답 로깅을 설정합니다.
+<img src="images/monitoring-4.png" alt="">
+
+| 구간 | Headers to log | Number of payload bytes to log | 용도 |
+|---|---|---:|---|
+| Backend response | `retry-after-ms`, `x-ratelimit-limit-requests`, `x-ratelimit-remaining-requests`, `x-ratelimit-limit-tokens`, `x-ratelimit-remaining-tokens` | `8192` | backend의 정확한 오류와 RPM/TPM 잔여량 확인 |
+| Frontend response | 없음 | `0` | 원인 판정에는 불필요. 클라이언트에 전달된 오류 본문까지 비교할 때만 일시적으로 `8192` 사용 |
+| Frontend request | 없음 | `0` | `429` 원인 판정에는 불필요 |
+| Backend request | 없음 | `0` | `429` 원인 판정에는 불필요 |
+
+**Always log errors**를 활성화하면 sampling 대상에서 제외된 오류도 기록할 수 있습니다. **Verbosity**는 APIM 정책의 `<trace>` 출력 수준을 제어하며, backend 응답 본문이나 rate-limit 헤더를 자동으로 기록하지는 않습니다.
+
+3. LLM 로그와 429 상세 응답 설정을 모두 확인한 뒤 저장합니다.
+
+{% hint style="warning" %}
+응답 payload 로깅은 모델 응답이나 오류 세부 정보가 Log Analytics에 저장되게 할 수 있습니다. 운영 환경에서는 backend response만 필요한 바이트 수만큼 기록하고, 진단이 끝나면 payload 로깅 범위를 다시 줄이세요.
+{% endhint %}
+
+저장한 뒤 성공하는 LLM 요청을 새로 보내고 Log Analytics workspace의 **Logs**에서 확인합니다. 기존 workspace도 수집에 약 15분이 걸릴 수 있으며, 새 workspace는 초기 수집에 최대 2시간이 걸릴 수 있습니다.
 
 ```kusto
 ApiManagementGatewayLlmLog
@@ -177,7 +251,60 @@ ApiManagementGatewayLlmLog
 | take 50
 ```
 
-이 쿼리에 결과가 있으면 Analytics -> Language models 대시보드에도 데이터가 표시됩니다. 결과가 있지만 token 필드가 비어 있다면 백엔드 응답의 `usage` 객체를 확인하세요. 스트리밍 호출은 `stream_options: { include_usage: true }` 옵션으로 usage 정보를 반환받아야 토큰 메트릭이 집계됩니다.
+이 쿼리에 결과가 있으면 Analytics -> Language models 대시보드에도 데이터가 표시됩니다. 결과가 없으면 두 설정 중 하나가 빠지지 않았는지 확인합니다. 결과가 있지만 token 필드가 비어 있다면 백엔드 응답의 `usage` 객체를 확인하세요. 스트리밍 호출은 `stream_options: { include_usage: true }` 옵션으로 usage 정보를 반환받아야 토큰 메트릭이 집계됩니다.
+
+#### 4. 429 원인 조회
+
+APIM 인스턴스의 **Monitoring -> Logs** 또는 연결된 Log Analytics workspace의 **Logs**에서 아래 KQL을 실행합니다.
+
+```kusto
+ApiManagementGatewayLogs
+| where TimeGenerated > ago(1h)
+| where ResponseCode == 429
+| extend Headers = parse_json(tostring(BackendResponseHeaders))
+| extend RemainingRequests = tolong(Headers['x-ratelimit-remaining-requests']),
+         RemainingTokens = tolong(Headers['x-ratelimit-remaining-tokens']),
+         RetryAfterMs = tolong(Headers['retry-after-ms'])
+| extend Cause = case(
+    tostring(BackendResponseCode) != '429', 'Possible APIM policy limit',
+    RemainingRequests <= 0 and RemainingTokens > 0, 'Backend RPM limit',
+    RemainingTokens <= 0 and RemainingRequests > 0, 'Backend TPM limit',
+    RemainingRequests <= 0 and RemainingTokens <= 0, 'Backend RPM/TPM limits exhausted',
+    'Check backend response body'
+)
+| project
+    TimeGenerated,
+    CorrelationId,
+    Cause,
+    ResponseCode,
+    BackendResponseCode,
+    BackendTime,
+    RemainingRequests,
+    RemainingTokens,
+    RetryAfterMs,
+    BackendResponseBody,
+    ResponseBody
+| order by TimeGenerated desc
+```
+
+<figure><img src="images/monitoring-5.png" alt=""><figcaption><p>Log Analytics: ApiManagementGatewayLogs에서 backend RPM/TPM 원인 조회</p></figcaption></figure>
+
+판정할 때는 다음 필드를 함께 확인합니다.
+
+| 로그 상태 | 판정 |
+|---|---|
+| `BackendResponseCode=429`이고 `BackendTime>0` | 요청이 backend에 도달했고 backend가 `429`를 반환 |
+| backend `429`, remaining requests가 `0` 이하, remaining tokens가 남음 | 요청 횟수 한도인 **RPM 초과** |
+| backend `429`, remaining tokens가 `0` 이하, remaining requests가 남음 | 토큰 한도인 **TPM 초과** |
+| `ResponseCode=429`이지만 backend 응답 코드가 없음 | backend 호출 전 APIM 정책에서 차단되었을 가능성 |
+
+remaining requests는 동시 요청 처리 시 `-1`처럼 표시될 수 있으며, `0` 이하이면 요청 한도가 소진된 것으로 판단합니다. 예를 들어 `remainingRequests=0`, `remainingTokens=488893`이면 500,000 TPM 중 약 488,000 토큰이 남아 있으므로 TPM이 아니라 RPM이 먼저 소진된 상황입니다. 정확한 backend 오류 코드는 `BackendResponseBody`의 `error.code`에서 확인합니다.
+
+Microsoft 공식 문서:
+
+* [Log token usage, prompts, and completions for language model APIs](https://learn.microsoft.com/azure/api-management/api-management-howto-llm-logs)
+* [Monitor API Management](https://learn.microsoft.com/azure/api-management/monitor-api-management)
+* [Monitoring data reference for API Management](https://learn.microsoft.com/azure/api-management/monitor-api-management-reference)
 
 ## 4. 비용 관리
 
