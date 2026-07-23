@@ -93,13 +93,13 @@ variable "openai_deployments" {
       model_name    = "gpt-5.4"
       model_version = "2026-03-05"
       sku_name      = "GlobalStandard"
-      capacity      = 200
+      capacity      = 500
     }
     "gpt-5.4-mini" = {
       model_name    = "gpt-5.4-mini"
       model_version = "2026-03-17"
       sku_name      = "GlobalStandard"
-      capacity      = 200
+      capacity      = 500
     }
   }
   description = "Azure OpenAI deployments. Deployment name = real model name (no alias indirection); gpt-5.4-nano removed."
@@ -115,16 +115,17 @@ variable "foundry_deployments" {
   }))
   # PAYG-first (GlobalStandard). PTU models (FW-Kimi-K2.6 / FW-GLM-5.1) deferred — large reserved
   # minimums. Kimi-K2.6 (PAYG) also deferred: 0 free quota in koreacentral (a bench deployment in
-  # another RG holds the entire 100-unit limit). Capacities fit available quota (verified live
-  # 2026-06): grok-4.3 has ~490 free; DeepSeek-V4-Pro catalog default is 5000 but only 500 is free,
-  # and for GlobalStandard (PAYG) capacity is a TPM rate ceiling (not reserved cost), so 500 is safe.
+  # another RG holds the entire 100-unit limit). Capacities are set to the approved default 500 for
+  # grok-4.3 and the current free quota must still be confirmed in-region before apply; DeepSeek-V4-
+  # Pro catalog default is 5000 but only 500 is free, and for GlobalStandard (PAYG) capacity is a
+  # TPM rate ceiling (not reserved cost), so 500 is safe.
   default = {
     "grok-4.3" = {
       model_name    = "grok-4.3"
       model_format  = "xAI"
       model_version = "1"
       sku_name      = "GlobalStandard"
-      capacity      = 10
+      capacity      = 500
     }
     "DeepSeek-V4-Pro" = {
       model_name    = "DeepSeek-V4-Pro"

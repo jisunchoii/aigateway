@@ -131,6 +131,17 @@ run "main_aligned_default_values" {
 
   assert {
     condition = (
+      length(regexall("\"gpt-5\\.4\"\\s*=\\s*\\{[^}]*capacity\\s*=\\s*500\\s*\\}", file("../../variables.tf"))) == 1 &&
+      length(regexall("\"gpt-5\\.4-mini\"\\s*=\\s*\\{[^}]*capacity\\s*=\\s*500\\s*\\}", file("../../variables.tf"))) == 1 &&
+      length(regexall("\"grok-4\\.3\"\\s*=\\s*\\{[^}]*capacity\\s*=\\s*500\\s*\\}", file("../../variables.tf"))) == 1 &&
+      length(regexall("\"DeepSeek-V4-Pro\"\\s*=\\s*\\{[^}]*capacity\\s*=\\s*500\\s*\\}", file("../../variables.tf"))) == 1 &&
+      length(azurerm_api_management.apim.name) > 0
+    )
+    error_message = "Every default OpenAI and Foundry deployment must use capacity 500."
+  }
+
+  assert {
+    condition = (
       strcontains(file("../../../scripts/seed-config.sh"), "\"tokens_per_minute\": 150000") &&
       strcontains(file("../../../scripts/seed-config.sh"), "\"token_quota\": 30000000") &&
       strcontains(file("../../../scripts/seed-cosmos-jumpbox.sh"), "\"tokens_per_minute\": 150000") &&
