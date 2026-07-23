@@ -5,9 +5,9 @@ import os
 from dataclasses import dataclass, field
 
 _DEFAULT_RATE_TIERS = {
-    "small": {"tpm": 500, "quota": 20000, "period": "Daily"},
-    "medium": {"tpm": 2000, "quota": 100000, "period": "Daily"},
-    "large": {"tpm": 10000, "quota": 500000, "period": "Monthly"},
+    "small": {"tpm": 50000, "quota": 5000000, "period": "Daily"},
+    "medium": {"tpm": 150000, "quota": 30000000, "period": "Daily"},
+    "large": {"tpm": 300000, "quota": 1000000000, "period": "Monthly"},
 }
 
 # model id (= APIM deployment name) -> display label. No alias indirection: the deployment name

@@ -72,8 +72,9 @@
     <!-- [Cost] Per-consumer RATE LIMIT via fixed tiers. APIM llm-token-limit requires LITERAL tpm/quota
          (rejects policy expressions), so each tier is a pre-baked llm-token-limit block with literal
          named values, and we <choose> by the consumer's tier. The tier set + branches are generated from
-         the rate_tiers Terraform variable (single source of truth). Unknown/absent tier → global
-         fallback. counter-key = consumerId in every branch (one counter axis per consumer across tier changes). -->
+         the rate_tiers Terraform variable (single source of truth). Unknown/absent tier: model TPM lookup
+         (derived from deployment capacity), then global fallback. counter-key = consumerId in every
+         branch (one counter axis per consumer across tier changes). -->
     <set-variable name="effectiveTier" value="@{
         if (context.Variables["consumerCfg"] != null) {
             var cfg = Newtonsoft.Json.Linq.JObject.Parse((string)context.Variables["consumerCfg"]);
@@ -171,6 +172,14 @@
         <llm-token-limit counter-key="@((string)context.Variables["consumerId"])"
                          tokens-per-minute="{{tier-${name}-tpm}}" token-quota="{{tier-${name}-quota}}"
                          token-quota-period="{{tier-${name}-period}}" estimate-prompt-tokens="false"
+                         remaining-tokens-variable-name="remainingTokens" />
+      </when>
+%{ endfor ~}
+%{ for model, tpm in model_tokens_per_minute ~}
+      <when condition='@((string)context.Variables["effectiveTier"] == "default" &amp;&amp; (string)context.Variables["effectiveDeployment"] == "${model}")'>
+        <llm-token-limit counter-key="@((string)context.Variables["consumerId"])"
+                         tokens-per-minute="${tpm}" token-quota="{{token-quota}}"
+                         token-quota-period="{{token-quota-period}}" estimate-prompt-tokens="false"
                          remaining-tokens-variable-name="remainingTokens" />
       </when>
 %{ endfor ~}

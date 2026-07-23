@@ -31,4 +31,15 @@ locals {
     owner      = var.owner
     costCenter = var.cost_center
   }
+
+  model_tokens_per_minute = merge(
+    {
+      for model, deployment in var.openai_deployments :
+      model => deployment.capacity * 1000
+    },
+    {
+      for model, deployment in var.foundry_deployments :
+      model => deployment.capacity * 1000
+    },
+  )
 }

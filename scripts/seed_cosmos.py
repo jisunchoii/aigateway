@@ -28,8 +28,8 @@ def main() -> int:
     parser.add_argument("--container", default=CONTAINER)
     parser.add_argument("--allowed-models", nargs="+",
                         default=["gpt-5.4", "gpt-5.4-mini", "grok-4.3", "DeepSeek-V4-Pro"])
-    parser.add_argument("--tokens-per-minute", type=int, default=1000)
-    parser.add_argument("--token-quota", type=int, default=50000)
+    parser.add_argument("--tokens-per-minute", type=int, default=150000)
+    parser.add_argument("--token-quota", type=int, default=30000000)
     parser.add_argument("--token-quota-period", default="Daily",
                         choices=["Hourly", "Daily", "Weekly", "Monthly"])
     args = parser.parse_args()

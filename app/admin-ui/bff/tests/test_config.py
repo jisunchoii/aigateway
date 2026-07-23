@@ -22,8 +22,11 @@ def test_settings_read_from_env(monkeypatch):
     # derives from the default alias-models map keys (incl. the Foundry OSS aliases).
     assert set(s.allowed_model_aliases) == set(s.alias_models.keys())
     assert "grok-4.3" in s.allowed_model_aliases
-    assert set(s.rate_tiers.keys()) == {"small", "medium", "large"}
-    assert s.rate_tiers["medium"]["tpm"] == 2000
+    assert s.rate_tiers == {
+        "small": {"tpm": 50000, "quota": 5000000, "period": "Daily"},
+        "medium": {"tpm": 150000, "quota": 30000000, "period": "Daily"},
+        "large": {"tpm": 300000, "quota": 1000000000, "period": "Monthly"},
+    }
     assert s.issuer == "https://login.microsoftonline.com/entra_tenant_id/v2.0"
     assert s.jwks_uri == (
         "https://login.microsoftonline.com/entra_tenant_id/discovery/v2.0/keys"

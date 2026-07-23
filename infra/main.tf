@@ -124,6 +124,7 @@ module "apim" {
   appinsights_id                = module.observability.appi_id
   appinsights_connection_string = module.observability.appi_connection_string
   tokens_per_minute             = var.tokens_per_minute
+  model_tokens_per_minute       = local.model_tokens_per_minute
   token_quota                   = var.token_quota
   token_quota_period            = var.token_quota_period
   allowed_models                = var.allowed_models

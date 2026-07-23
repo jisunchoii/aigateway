@@ -138,6 +138,16 @@ variable "tokens_per_minute" {
   description = "Per-consumer token-per-minute limit."
 }
 
+variable "model_tokens_per_minute" {
+  type        = map(number)
+  description = "Default per-model token-per-minute limits, derived from deployment capacity."
+
+  validation {
+    condition     = alltrue([for value in values(var.model_tokens_per_minute) : value > 0])
+    error_message = "model_tokens_per_minute values must be positive numbers."
+  }
+}
+
 variable "token_quota" {
   type        = number
   description = "Per-consumer token quota per period."
@@ -256,16 +266,17 @@ resource "azurerm_api_management_api_policy" "openai" {
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode   = var.client_auth_mode
-    entra_tenant_id    = var.entra_tenant_id
-    entra_api_audience = var.entra_api_audience
-    entra_team_claim   = var.entra_team_claim
-    rate_tiers         = var.rate_tiers
-    openai_aliases     = var.openai_aliases
-    foundry_aliases    = var.foundry_aliases
-    openai_path_base   = var.openai_path_base
-    foundry_v1_base    = var.foundry_v1_base
-    openai_api_version = var.openai_api_version
+    client_auth_mode        = var.client_auth_mode
+    entra_tenant_id         = var.entra_tenant_id
+    entra_api_audience      = var.entra_api_audience
+    entra_team_claim        = var.entra_team_claim
+    rate_tiers              = var.rate_tiers
+    model_tokens_per_minute = var.model_tokens_per_minute
+    openai_aliases          = var.openai_aliases
+    foundry_aliases         = var.foundry_aliases
+    openai_path_base        = var.openai_path_base
+    foundry_v1_base         = var.foundry_v1_base
+    openai_api_version      = var.openai_api_version
   })
 
   depends_on = [
@@ -317,16 +328,17 @@ resource "azurerm_api_management_api_policy" "vscode_openai" {
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   xml_content = templatefile(var.policy_template_path, {
-    client_auth_mode   = "subscription-key"
-    entra_tenant_id    = var.entra_tenant_id
-    entra_api_audience = var.entra_api_audience
-    entra_team_claim   = var.entra_team_claim
-    rate_tiers         = var.rate_tiers
-    openai_aliases     = var.openai_aliases
-    foundry_aliases    = var.foundry_aliases
-    openai_path_base   = var.openai_path_base
-    foundry_v1_base    = var.foundry_v1_base
-    openai_api_version = var.openai_api_version
+    client_auth_mode        = "subscription-key"
+    entra_tenant_id         = var.entra_tenant_id
+    entra_api_audience      = var.entra_api_audience
+    entra_team_claim        = var.entra_team_claim
+    rate_tiers              = var.rate_tiers
+    model_tokens_per_minute = var.model_tokens_per_minute
+    openai_aliases          = var.openai_aliases
+    foundry_aliases         = var.foundry_aliases
+    openai_path_base        = var.openai_path_base
+    foundry_v1_base         = var.foundry_v1_base
+    openai_api_version      = var.openai_api_version
   })
 
   depends_on = [
@@ -441,16 +453,17 @@ resource "azurerm_api_management_api_policy" "foundry" {
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = var.resource_group_name
   xml_content = templatefile(var.foundry_policy_template_path, {
-    client_auth_mode   = var.client_auth_mode
-    entra_tenant_id    = var.entra_tenant_id
-    entra_api_audience = var.entra_api_audience
-    entra_team_claim   = var.entra_team_claim
-    rate_tiers         = var.rate_tiers
-    openai_aliases     = var.openai_aliases
-    foundry_aliases    = var.foundry_aliases
-    openai_path_base   = var.openai_path_base
-    foundry_v1_base    = var.foundry_v1_base
-    openai_api_version = var.openai_api_version
+    client_auth_mode        = var.client_auth_mode
+    entra_tenant_id         = var.entra_tenant_id
+    entra_api_audience      = var.entra_api_audience
+    entra_team_claim        = var.entra_team_claim
+    rate_tiers              = var.rate_tiers
+    model_tokens_per_minute = var.model_tokens_per_minute
+    openai_aliases          = var.openai_aliases
+    foundry_aliases         = var.foundry_aliases
+    openai_path_base        = var.openai_path_base
+    foundry_v1_base         = var.foundry_v1_base
+    openai_api_version      = var.openai_api_version
   })
 
   depends_on = [
