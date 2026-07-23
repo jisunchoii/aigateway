@@ -61,8 +61,42 @@ run "default_model_topology" {
     budget_alert_email   = "test@example.com"
     budget_start_date    = "2026-07-01T00:00:00Z"
     foundry_account_name = "aisproj-test"
-    codexproxy_image     = ""
-    searchmcp_image      = ""
+    enable_jumpbox       = false
+    worker_image         = ""
+    admin_ui_image       = ""
+    native_responses_models = [
+      "gpt-5.6-sol",
+    ]
+    model_deployments = {
+      "gpt-5.6-sol" = {
+        model_name    = "gpt-5.6-sol"
+        model_format  = "OpenAI"
+        model_version = "2026-07-09"
+        sku_name      = "GlobalStandard"
+        capacity      = 500
+      }
+      "FW-GLM-5.2" = {
+        model_name    = "FW-GLM-5.2"
+        model_format  = "Fireworks"
+        model_version = "1"
+        sku_name      = "DataZoneStandard"
+        capacity      = 500
+      }
+      "DeepSeek-V4-Pro" = {
+        model_name    = "DeepSeek-V4-Pro"
+        model_format  = "DeepSeek"
+        model_version = "2026-04-23"
+        sku_name      = "GlobalStandard"
+        capacity      = 500
+      }
+      "grok-4.3" = {
+        model_name    = "grok-4.3"
+        model_format  = "xAI"
+        model_version = "1"
+        sku_name      = "GlobalStandard"
+        capacity      = 500
+      }
+    }
   }
 
   assert {
@@ -90,27 +124,10 @@ run "default_model_topology" {
 
   assert {
     condition = (
-      length(random_password.codexproxy_key) == 0 &&
-      length(azurerm_role_assignment.codexproxy_to_project_account) == 0 &&
-      module.apim.codexproxy_contract.named_value_count == 0 &&
-      strcontains(module.apim.rendered_policy_xml.model_gateway, "code=\"503\"")
+      strcontains(module.apim.rendered_policy_xml.model_gateway, "new string[] { \"gpt-5.6-sol\" }.Contains((string)context.Variables[\"effectiveModel\"])") &&
+      strcontains(module.apim.rendered_policy_xml.model_gateway, "Responses API is not enabled for the selected model")
     )
-    error_message = "The bootstrap apply must not create a fake sidecar route or direct Responses fallback."
-  }
-
-  assert {
-    condition     = output.search_mcp_url == null
-    error_message = "search_mcp_url must stay null until the Search MCP sidecar is enabled."
-  }
-
-  assert {
-    condition     = module.control_plane.searchmcp_fqdn == null
-    error_message = "searchmcp_fqdn must stay null until the Search MCP sidecar is enabled."
-  }
-
-  assert {
-    condition     = module.control_plane.searchmcp_contract == null
-    error_message = "searchmcp_contract must stay null until the Search MCP sidecar is enabled."
+    error_message = "Responses must route only verified deployments directly and reject unsupported deployments explicitly."
   }
 
   assert {
@@ -121,14 +138,6 @@ run "default_model_topology" {
       "grok-4.3"        = "grok-4.3"
     })
     error_message = "Admin UI must receive exactly the deployment-derived catalog."
-  }
-
-  assert {
-    condition = strcontains(
-      module.apim.rendered_policy_xml.model_gateway,
-      "new string[] { \"gpt-5.6-sol\" }.Contains((string)context.Variables[\"effectiveModel\"])"
-    )
-    error_message = "The default native Responses capability list must route only gpt-5.6-sol directly."
   }
 }
 
@@ -144,8 +153,9 @@ run "native_responses_models_require_deployments" {
     budget_alert_email   = "test@example.com"
     budget_start_date    = "2026-07-01T00:00:00Z"
     foundry_account_name = "aisproj-test"
-    codexproxy_image     = ""
-    searchmcp_image      = ""
+    enable_jumpbox       = false
+    worker_image         = ""
+    admin_ui_image       = ""
 
     native_responses_models = [
       "gpt-5.6-sol",
@@ -154,179 +164,6 @@ run "native_responses_models_require_deployments" {
   }
 
   expect_failures = [var.native_responses_models]
-}
-
-run "sidecar_image_enables_responses" {
-  command = plan
-
-  override_module {
-    target          = module.control_plane
-    override_during = plan
-    outputs = {
-      codexproxy_fqdn = "codexproxy.internal.example"
-    }
-  }
-
-  variables {
-    location             = "eastus2"
-    owner                = "test@example.com"
-    cost_center          = "TEST"
-    apim_publisher_name  = "Test"
-    apim_publisher_email = "test@example.com"
-    budget_alert_email   = "test@example.com"
-    budget_start_date    = "2026-07-01T00:00:00Z"
-    foundry_account_name = "aisproj-test"
-    codexproxy_image     = "example.azurecr.io/codexproxy:immutable"
-    searchmcp_image      = ""
-  }
-
-  assert {
-    condition = (
-      length(random_password.codexproxy_key) == 1 &&
-      length(azurerm_role_assignment.codexproxy_to_project_account) == 1 &&
-      module.apim.codexproxy_contract.enabled &&
-      module.apim.codexproxy_contract.base_url == "https://codexproxy.internal.example" &&
-      module.apim.codexproxy_contract.named_value_count == 1 &&
-      strcontains(module.apim.rendered_policy_xml.model_gateway, "{{codexproxy-key}}") &&
-      !strcontains(module.apim.rendered_policy_xml.model_gateway, "Responses backend is not configured")
-    )
-    error_message = "Setting codexproxy_image must atomically enable the only Responses backend."
-  }
-
-  assert {
-    condition     = azurerm_role_assignment.codexproxy_to_project_account[0].scope == module.foundry.id
-    error_message = "The sidecar identity must receive Cognitive Services User on the canonical account."
-  }
-}
-
-run "searchmcp_image_enables_container_app_wiring" {
-  command = plan
-
-  override_module {
-    target          = module.control_plane
-    override_during = plan
-    outputs = {
-      searchmcp_fqdn = "searchmcp.internal.example"
-      searchmcp_contract = {
-        name            = "ca-searchmcp-aigw-dev-eus2"
-        target_port     = 8790
-        identity_source = "codexproxy"
-        env_names = [
-          "AZURE_CLIENT_ID",
-          "FOUNDRY_PROJECT_BASE",
-          "PORT",
-          "PROXY_KEY",
-          "PROXY_KEY_VERSION",
-          "SEARCH_MODEL",
-        ]
-        known_env = {
-          FOUNDRY_PROJECT_BASE = "https://aisproj-test.services.ai.azure.com/api/projects/codexproj/openai/v1"
-          SEARCH_MODEL         = "gpt-5.6-sol"
-          PORT                 = "8790"
-        }
-      }
-    }
-  }
-
-  variables {
-    location             = "eastus2"
-    owner                = "test@example.com"
-    cost_center          = "TEST"
-    apim_publisher_name  = "Test"
-    apim_publisher_email = "test@example.com"
-    budget_alert_email   = "test@example.com"
-    budget_start_date    = "2026-07-01T00:00:00Z"
-    foundry_account_name = "aisproj-test"
-    codexproxy_image     = ""
-    searchmcp_image      = "example.azurecr.io/searchmcp:immutable"
-  }
-
-  assert {
-    condition = (
-      length(random_password.codexproxy_key) == 1 &&
-      length(azurerm_role_assignment.codexproxy_to_project_account) == 1 &&
-      can(module.control_plane.searchmcp_contract) &&
-      module.control_plane.searchmcp_contract.name == "ca-searchmcp-aigw-dev-eus2" &&
-      module.control_plane.searchmcp_contract.target_port == 8790 &&
-      module.control_plane.searchmcp_contract.identity_source == "codexproxy" &&
-      toset(module.control_plane.searchmcp_contract.env_names) == toset([
-        "AZURE_CLIENT_ID",
-        "FOUNDRY_PROJECT_BASE",
-        "PORT",
-        "PROXY_KEY",
-        "PROXY_KEY_VERSION",
-        "SEARCH_MODEL",
-      ]) &&
-      module.control_plane.searchmcp_contract.known_env == {
-        FOUNDRY_PROJECT_BASE = module.foundry.project_responses_base
-        SEARCH_MODEL         = "gpt-5.6-sol"
-        PORT                 = "8790"
-      } &&
-      module.apim.codexproxy_contract.enabled == false &&
-      module.apim.codexproxy_contract.named_value_count == 1 &&
-      module.apim.api_contract.search_mcp.service_url == "https://searchmcp.internal.example" &&
-      module.apim.api_contract.search_mcp.operations.mcp.policy.authorization_header == "Bearer {{codexproxy-key}}" &&
-      output.search_mcp_url == "${module.apim.gateway_url}/mcp/"
-    )
-    error_message = "Setting searchmcp_image must create the Search MCP app on port 8790 with the shared identity, shared hop key/base, and the /mcp/ root output."
-  }
-
-  assert {
-    condition = (
-      can(module.control_plane.searchmcp_contract) &&
-      length(regexall(
-        "(?s)resource \"azurerm_container_app\" \"searchmcp\" \\{.*?ingress \\{\\s*external_enabled = true\\s*target_port\\s*=\\s*8790",
-        file("modules/control_plane/main.tf")
-      )) == 1
-    )
-    error_message = "The Search MCP container app must be VNet-reachable on the environment load balancer so APIM can forward /mcp traffic to it."
-  }
-
-  assert {
-    condition = (
-      can(module.control_plane.searchmcp_contract) &&
-      length(regexall(
-        "(?s)resource \"azurerm_container_app\" \"codexproxy\" \\{.*?secret \\{\\s*name\\s*=\\s*\"proxy-key\"\\s*value\\s*=\\s*var.codexproxy_key\\s*\\}.*?env \\{\\s*name\\s*=\\s*\"PROXY_KEY\"\\s*secret_name\\s*=\\s*\"proxy-key\"\\s*\\}",
-        file("modules/control_plane/main.tf")
-      )) == 1 &&
-      length(regexall(
-        "(?s)resource \"azurerm_container_app\" \"searchmcp\" \\{.*?secret \\{\\s*name\\s*=\\s*\"proxy-key\"\\s*value\\s*=\\s*var.codexproxy_key\\s*\\}.*?env \\{\\s*name\\s*=\\s*\"PROXY_KEY\"\\s*secret_name\\s*=\\s*\"proxy-key\"\\s*\\}",
-        file("modules/control_plane/main.tf")
-      )) == 1 &&
-      length(regexall(
-        "proxy_key_revision\\s*=\\s*nonsensitive\\(substr\\(sha256\\(var.codexproxy_key\\), 0, 16\\)\\)",
-        file("modules/control_plane/main.tf")
-      )) == 1 &&
-      length(regexall(
-        "(?s)resource \"azurerm_container_app\" \"codexproxy\" \\{.*?env \\{\\s*name\\s*=\\s*\"PROXY_KEY_VERSION\"\\s*value\\s*=\\s*local.proxy_key_revision\\s*\\}",
-        file("modules/control_plane/main.tf")
-      )) == 1 &&
-      length(regexall(
-        "(?s)resource \"azurerm_container_app\" \"searchmcp\" \\{.*?env \\{\\s*name\\s*=\\s*\"PROXY_KEY_VERSION\"\\s*value\\s*=\\s*local.proxy_key_revision\\s*\\}",
-        file("modules/control_plane/main.tf")
-      )) == 1
-    )
-    error_message = "Both sidecars must reference PROXY_KEY as a Container App secret and include a non-secret revision marker so key rotation restarts them."
-  }
-
-  assert {
-    condition = (
-      can(module.control_plane.searchmcp_contract) &&
-      length(regexall(
-        "(?s)resource \"time_sleep\" \"codexproxy_acr_pull_settle\" \\{.*?depends_on\\s*=\\s*\\[azurerm_role_assignment\\.codexproxy_acr_pull\\].*?create_duration\\s*=\\s*\"90s\"",
-        file("modules/control_plane/main.tf")
-      )) == 1 &&
-      length(regexall(
-        "resource \"azurerm_container_app\" \"codexproxy\" \\{\\s*depends_on\\s*=\\s*\\[time_sleep\\.codexproxy_acr_pull_settle\\]",
-        file("modules/control_plane/main.tf")
-      )) == 1 &&
-      length(regexall(
-        "resource \"azurerm_container_app\" \"searchmcp\" \\{\\s*depends_on\\s*=\\s*\\[time_sleep\\.codexproxy_acr_pull_settle\\]",
-        file("modules/control_plane/main.tf")
-      )) == 1
-    )
-    error_message = "Both sidecars must wait for AcrPull creation and RBAC propagation before Azure attempts their first private-image revision."
-  }
 }
 
 run "existing_foundry_project_is_reused_read_only" {
@@ -368,8 +205,9 @@ run "existing_foundry_project_is_reused_read_only" {
     existing_foundry_name = "foundry-account-live"
     existing_foundry_rg   = "rg-existing-eus2"
     foundry_project_name  = "reusedproj"
-    codexproxy_image      = ""
-    searchmcp_image       = ""
+    enable_jumpbox        = false
+    worker_image          = ""
+    admin_ui_image        = ""
   }
 
   assert {
@@ -401,14 +239,15 @@ run "existing_project_reuse_requires_account_reuse" {
     budget_alert_email    = "test@example.com"
     budget_start_date     = "2026-07-01T00:00:00Z"
     reuse_foundry_project = true
-    codexproxy_image      = ""
-    searchmcp_image       = ""
+    enable_jumpbox        = false
+    worker_image          = ""
+    admin_ui_image        = ""
   }
 
   expect_failures = [var.reuse_foundry_project]
 }
 
-run "public_admin_ui_isolated_from_internal_sidecars" {
+run "public_admin_ui_isolated_from_internal_worker" {
   command = plan
 
   override_resource {
@@ -440,22 +279,22 @@ run "public_admin_ui_isolated_from_internal_sidecars" {
     foundry_account_name = "aisproj-test"
     admin_ui_image       = "example.azurecr.io/admin-ui:immutable"
     admin_ui_public      = true
-    codexproxy_image     = "example.azurecr.io/codexproxy:immutable"
-    searchmcp_image      = "example.azurecr.io/searchmcp:immutable"
+    enable_jumpbox       = false
+    worker_image         = ""
   }
 
   assert {
     condition = (
-      module.control_plane.topology.sidecars.environment_name == "cae-${local.name_suffix}" &&
-      module.control_plane.topology.sidecars.subnet_id == module.network.aca_subnet_id &&
-      module.control_plane.topology.sidecars.internal_load_balancer_enabled &&
+      module.control_plane.topology.internal.environment_name == "cae-${local.name_suffix}" &&
+      module.control_plane.topology.internal.subnet_id == module.network.aca_subnet_id &&
+      module.control_plane.topology.internal.internal_load_balancer_enabled &&
       module.control_plane.topology.admin_ui != null &&
       module.control_plane.topology.admin_ui.environment_name == "cae-admin-${local.name_suffix}" &&
       module.control_plane.topology.admin_ui.subnet_id == module.network.admin_ui_aca_subnet_id &&
       !module.control_plane.topology.admin_ui.internal_load_balancer_enabled &&
-      module.control_plane.topology.sidecars.environment_name != module.control_plane.topology.admin_ui.environment_name &&
-      module.control_plane.topology.sidecars.subnet_id != module.control_plane.topology.admin_ui.subnet_id
+      module.control_plane.topology.internal.environment_name != module.control_plane.topology.admin_ui.environment_name &&
+      module.control_plane.topology.internal.subnet_id != module.control_plane.topology.admin_ui.subnet_id
     )
-    error_message = "A public Admin UI must use a distinct external CAE while Codex proxy and Search MCP remain in the internal sidecar CAE."
+    error_message = "A public Admin UI must use a distinct external CAE while worker workloads remain in the internal CAE."
   }
 }

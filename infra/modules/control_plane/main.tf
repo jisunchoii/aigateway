@@ -16,7 +16,7 @@ variable "tags" {
 }
 variable "infra_subnet_id" {
   type        = string
-  description = "Internal sidecar Container Apps environment infrastructure subnet ID (delegated to Microsoft.App/environments)."
+  description = "Internal worker Container Apps environment infrastructure subnet ID (delegated to Microsoft.App/environments)."
 }
 variable "admin_infra_subnet_id" {
   type        = string
@@ -114,7 +114,7 @@ variable "admin_ui_public" {
     When admin_ui_image is set, false (default) creates the dedicated Admin UI Container Apps
     environment as an internal ILB and true creates it as an external environment with a public FQDN.
     The BFF remains protected by Entra OIDC and the admin-group check. This setting never changes the
-    always-internal sidecar environment used by config-sync, Codex proxy, and Search MCP.
+    always-internal worker environment used by config-sync.
   EOT
 }
 
@@ -159,57 +159,9 @@ variable "log_analytics_workspace_id" {
   description = "Log Analytics workspace customerId (GUID) the BFF queries via azure-monitor-query for the Dashboard/Monitoring pages."
 }
 
-variable "codexproxy_image" {
-  type        = string
-  default     = ""
-  description = "Codex proxy sidecar image reference. Empty disables the app."
-}
-
-variable "searchmcp_image" {
-  type        = string
-  default     = ""
-  description = "Search MCP sidecar image reference. Empty disables the app."
-}
-
-variable "codexproxy_identity_id" {
-  type        = string
-  default     = ""
-  description = "Resource ID of the Codex proxy user-assigned identity."
-}
-variable "codexproxy_principal_id" {
-  type        = string
-  default     = ""
-  description = "Principal (object) ID of the Codex proxy identity (for ACR pull RBAC)."
-}
-variable "codexproxy_client_id" {
-  type        = string
-  default     = ""
-  description = "Client ID of the Codex proxy identity (AZURE_CLIENT_ID)."
-}
-variable "codexproxy_key" {
-  type        = string
-  sensitive   = true
-  default     = ""
-  description = "APIM<->sidecar hop secret (PROXY_KEY env)."
-}
-variable "codexproxy_project_base" {
-  type        = string
-  default     = ""
-  description = "Canonical child-project Responses base URL (FOUNDRY_PROJECT_BASE env)."
-}
-variable "search_model" {
-  type        = string
-  default     = "gpt-5.6-sol"
-  description = "Foundry deployment name Search MCP uses for its one-call web_search Responses broker (SEARCH_MODEL env). Must support the hosted web_search tool."
-}
-
 locals {
   worker_enabled               = var.worker_image != ""
   admin_ui_enabled             = var.admin_ui_image != ""
-  codexproxy_enabled           = var.codexproxy_image != ""
-  searchmcp_enabled            = var.searchmcp_image != ""
-  proxy_key_revision           = nonsensitive(substr(sha256(var.codexproxy_key), 0, 16))
-  sidecars_private_dns_enabled = local.codexproxy_enabled || local.searchmcp_enabled
   admin_ui_private_dns_enabled = local.admin_ui_enabled && !var.admin_ui_public
 }
 
@@ -223,7 +175,6 @@ resource "azurerm_role_assignment" "worker_acr_pull" {
 # AcrPull role assignments take time to propagate to the Container Apps control plane. Without
 # this settle delay, the first config-sync Job revision can fail with "unable to pull image using
 # Managed identity ... for registry" even though the role assignment already succeeded in ARM.
-# Mirrors time_sleep.codexproxy_acr_pull_settle below.
 resource "time_sleep" "worker_acr_pull_settle" {
   count           = local.worker_enabled ? 1 : 0
   depends_on      = [azurerm_role_assignment.worker_acr_pull]
@@ -251,7 +202,7 @@ resource "azurerm_role_assignment" "admin_ui_acr_pull" {
   principal_id         = var.admin_ui_principal_id
 }
 
-# Same ACR pull propagation issue as the worker/codexproxy identities above: the Admin UI
+# Same ACR pull propagation issue as the worker identity above: the Admin UI
 # Container App's first private-image revision can fail without this settle delay.
 resource "time_sleep" "admin_ui_acr_pull_settle" {
   count           = local.admin_ui_enabled ? 1 : 0
@@ -282,49 +233,12 @@ resource "azurerm_role_assignment" "admin_ui_start_job" {
   principal_id         = var.admin_ui_principal_id
 }
 
-resource "azurerm_role_assignment" "codexproxy_acr_pull" {
-  count                = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
-  scope                = var.acr_id
-  role_definition_name = "AcrPull"
-  principal_id         = var.codexproxy_principal_id
-}
-
-resource "time_sleep" "codexproxy_acr_pull_settle" {
-  count           = local.codexproxy_enabled || local.searchmcp_enabled ? 1 : 0
-  depends_on      = [azurerm_role_assignment.codexproxy_acr_pull]
-  create_duration = "90s"
-
-  triggers = {
-    role_assignment_id = azurerm_role_assignment.codexproxy_acr_pull[0].id
-  }
-}
-
 moved {
-  from = azurerm_container_app_environment.cp
-  to   = azurerm_container_app_environment.sidecars
+  from = azurerm_container_app_environment.sidecars
+  to   = azurerm_container_app_environment.internal
 }
 
-moved {
-  from = azurerm_private_dns_zone.aca
-  to   = azurerm_private_dns_zone.sidecars
-}
-
-moved {
-  from = azurerm_private_dns_zone_virtual_network_link.aca
-  to   = azurerm_private_dns_zone_virtual_network_link.sidecars
-}
-
-moved {
-  from = azurerm_private_dns_a_record.aca_wildcard
-  to   = azurerm_private_dns_a_record.sidecars_wildcard
-}
-
-moved {
-  from = azurerm_private_dns_a_record.aca_wildcard_internal
-  to   = azurerm_private_dns_a_record.sidecars_wildcard_internal
-}
-
-resource "azurerm_container_app_environment" "sidecars" {
+resource "azurerm_container_app_environment" "internal" {
   name                           = "cae-${var.name_suffix}"
   resource_group_name            = var.resource_group_name
   location                       = var.location
@@ -351,43 +265,6 @@ resource "azurerm_container_app_environment" "admin_ui" {
   lifecycle {
     ignore_changes = [workload_profile]
   }
-}
-
-resource "azurerm_private_dns_zone" "sidecars" {
-  count               = local.sidecars_private_dns_enabled ? 1 : 0
-  name                = azurerm_container_app_environment.sidecars.default_domain
-  resource_group_name = var.resource_group_name
-  tags                = var.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "sidecars" {
-  count                 = local.sidecars_private_dns_enabled ? 1 : 0
-  name                  = "link-aca"
-  resource_group_name   = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.sidecars[0].name
-  virtual_network_id    = var.vnet_id
-  registration_enabled  = false
-  tags                  = var.tags
-}
-
-resource "azurerm_private_dns_a_record" "sidecars_wildcard" {
-  count               = local.sidecars_private_dns_enabled ? 1 : 0
-  name                = "*"
-  zone_name           = azurerm_private_dns_zone.sidecars[0].name
-  resource_group_name = var.resource_group_name
-  ttl                 = 300
-  records             = [azurerm_container_app_environment.sidecars.static_ip_address]
-  tags                = var.tags
-}
-
-resource "azurerm_private_dns_a_record" "sidecars_wildcard_internal" {
-  count               = local.sidecars_private_dns_enabled ? 1 : 0
-  name                = "*.internal"
-  zone_name           = azurerm_private_dns_zone.sidecars[0].name
-  resource_group_name = var.resource_group_name
-  ttl                 = 300
-  records             = [azurerm_container_app_environment.sidecars.static_ip_address]
-  tags                = var.tags
 }
 
 resource "azurerm_private_dns_zone" "admin_ui" {
@@ -433,7 +310,7 @@ resource "azurerm_container_app_job" "config_sync" {
   name                         = "job-config-sync-${var.name_suffix}"
   resource_group_name          = var.resource_group_name
   location                     = var.location
-  container_app_environment_id = azurerm_container_app_environment.sidecars.id
+  container_app_environment_id = azurerm_container_app_environment.internal.id
   workload_profile_name        = "Consumption"
   replica_timeout_in_seconds   = 300
   replica_retry_limit          = 1
@@ -616,170 +493,9 @@ resource "azurerm_container_app" "admin_ui" {
   }
 }
 
-# Codex proxy sidecar in the always-internal sidecar CAE. APIM's /responses API routes here and
-# authenticates with the hop key. The proxy calls the canonical child-project backend with its
-# managed identity (ManagedIdentityCredential), no keys.
-resource "azurerm_container_app" "codexproxy" {
-  depends_on = [time_sleep.codexproxy_acr_pull_settle]
-
-  count                        = local.codexproxy_enabled ? 1 : 0
-  name                         = "ca-codexproxy-${var.name_suffix}"
-  resource_group_name          = var.resource_group_name
-  container_app_environment_id = azurerm_container_app_environment.sidecars.id
-  workload_profile_name        = "Consumption"
-  revision_mode                = "Single"
-
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [var.codexproxy_identity_id]
-  }
-
-  registry {
-    server   = var.acr_login_server
-    identity = var.codexproxy_identity_id
-  }
-
-  secret {
-    name  = "proxy-key"
-    value = var.codexproxy_key
-  }
-
-  ingress {
-    external_enabled = true
-    target_port      = 8789
-    transport        = "auto"
-    traffic_weight {
-      latest_revision = true
-      percentage      = 100
-    }
-  }
-
-  template {
-    min_replicas = 1
-    max_replicas = 3
-
-    container {
-      name   = "codexproxy"
-      image  = var.codexproxy_image
-      cpu    = 0.5
-      memory = "1Gi"
-
-      startup_probe {
-        transport               = "TCP"
-        port                    = 8789
-        initial_delay           = 5
-        interval_seconds        = 5
-        failure_count_threshold = 30
-      }
-
-      env {
-        name  = "FOUNDRY_PROJECT_BASE"
-        value = var.codexproxy_project_base
-      }
-      env {
-        name  = "AZURE_CLIENT_ID"
-        value = var.codexproxy_client_id
-      }
-      env {
-        name        = "PROXY_KEY"
-        secret_name = "proxy-key"
-      }
-      env {
-        name  = "PROXY_KEY_VERSION"
-        value = local.proxy_key_revision
-      }
-      env {
-        name  = "PORT"
-        value = "8789"
-      }
-    }
-  }
-}
-
-resource "azurerm_container_app" "searchmcp" {
-  depends_on = [time_sleep.codexproxy_acr_pull_settle]
-
-  count                        = local.searchmcp_enabled ? 1 : 0
-  name                         = "ca-searchmcp-${var.name_suffix}"
-  resource_group_name          = var.resource_group_name
-  container_app_environment_id = azurerm_container_app_environment.sidecars.id
-  workload_profile_name        = "Consumption"
-  revision_mode                = "Single"
-
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [var.codexproxy_identity_id]
-  }
-
-  registry {
-    server   = var.acr_login_server
-    identity = var.codexproxy_identity_id
-  }
-
-  secret {
-    name  = "proxy-key"
-    value = var.codexproxy_key
-  }
-
-  ingress {
-    external_enabled = true
-    target_port      = 8790
-    transport        = "auto"
-    traffic_weight {
-      latest_revision = true
-      percentage      = 100
-    }
-  }
-
-  template {
-    min_replicas = 1
-    max_replicas = 3
-
-    container {
-      name   = "searchmcp"
-      image  = var.searchmcp_image
-      cpu    = 0.5
-      memory = "1Gi"
-
-      startup_probe {
-        transport               = "TCP"
-        port                    = 8790
-        initial_delay           = 5
-        interval_seconds        = 5
-        failure_count_threshold = 30
-      }
-
-      env {
-        name  = "FOUNDRY_PROJECT_BASE"
-        value = var.codexproxy_project_base
-      }
-      env {
-        name  = "AZURE_CLIENT_ID"
-        value = var.codexproxy_client_id
-      }
-      env {
-        name        = "PROXY_KEY"
-        secret_name = "proxy-key"
-      }
-      env {
-        name  = "PROXY_KEY_VERSION"
-        value = local.proxy_key_revision
-      }
-      env {
-        name  = "SEARCH_MODEL"
-        value = var.search_model
-      }
-      env {
-        name  = "PORT"
-        value = "8790"
-      }
-    }
-  }
-}
-
 output "environment_id" {
-  description = "Internal sidecar Container Apps environment resource ID."
-  value       = azurerm_container_app_environment.sidecars.id
+  description = "Internal Container Apps environment resource ID."
+  value       = azurerm_container_app_environment.internal.id
 }
 output "job_name" {
   description = "Config-sync job name (null when worker_image is unset)."
@@ -796,38 +512,13 @@ output "alias_models_json_input" {
   value       = var.alias_models_json
 }
 
-output "codexproxy_fqdn" {
-  description = "Internal FQDN of the Codex proxy Container App (null until codexproxy_image is set). APIM /openai/v1/responses backend."
-  value       = one(azurerm_container_app.codexproxy[*].ingress[0].fqdn)
-}
-
-output "searchmcp_contract" {
-  description = "Search MCP Container App contract for root assertions."
-  value = local.searchmcp_enabled ? {
-    name            = one(azurerm_container_app.searchmcp[*].name)
-    target_port     = one(azurerm_container_app.searchmcp[*].ingress[0].target_port)
-    identity_source = "codexproxy"
-    env_names       = sort([for item in one(azurerm_container_app.searchmcp[*].template[0].container[0].env) : item.name])
-    known_env = {
-      FOUNDRY_PROJECT_BASE = var.codexproxy_project_base
-      SEARCH_MODEL         = var.search_model
-      PORT                 = "8790"
-    }
-  } : null
-}
-
-output "searchmcp_fqdn" {
-  description = "Internal FQDN of the Search MCP Container App (null until searchmcp_image is set)."
-  value       = one(azurerm_container_app.searchmcp[*].ingress[0].fqdn)
-}
-
 output "topology" {
   description = "Control-plane environment topology for verification and integration."
   value = {
-    sidecars = {
-      environment_name               = azurerm_container_app_environment.sidecars.name
-      subnet_id                      = azurerm_container_app_environment.sidecars.infrastructure_subnet_id
-      internal_load_balancer_enabled = azurerm_container_app_environment.sidecars.internal_load_balancer_enabled
+    internal = {
+      environment_name               = azurerm_container_app_environment.internal.name
+      subnet_id                      = azurerm_container_app_environment.internal.infrastructure_subnet_id
+      internal_load_balancer_enabled = azurerm_container_app_environment.internal.internal_load_balancer_enabled
     }
     admin_ui = local.admin_ui_enabled ? {
       environment_name               = azurerm_container_app_environment.admin_ui[0].name

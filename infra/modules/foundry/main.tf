@@ -87,7 +87,7 @@ variable "account_name" {
 
 variable "project_name" {
   type        = string
-  default     = "codexproj"
+  default     = "gatewayproj"
   description = "Foundry project used by Responses clients. Set the exact existing project name when reuse_existing_project is true."
 }
 
@@ -304,5 +304,5 @@ output "project_account_id" {
 
 output "project_responses_base" {
   value       = local.project_responses_base
-  description = "Foundry project OpenAI/v1 base used by the Codex proxy."
+  description = "Foundry project OpenAI/v1 base."
 }

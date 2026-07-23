@@ -256,18 +256,11 @@
             </set-header>
           </when>
           <otherwise>
-%{ if codexproxy_enabled ~}
-            <set-backend-service base-url="${codexproxy_base_url}" />
-            <set-header name="Authorization" exists-action="override">
-              <value>@("Bearer " + "{{codexproxy-key}}")</value>
-            </set-header>
-%{ else ~}
             <return-response>
-              <set-status code="503" reason="Service Unavailable" />
+              <set-status code="400" reason="Bad Request" />
               <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
-              <set-body>{"error":"Responses backend is not configured"}</set-body>
+              <set-body>{"error":"Responses API is not enabled for the selected model"}</set-body>
             </return-response>
-%{ endif ~}
           </otherwise>
         </choose>
       </when>

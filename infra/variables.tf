@@ -133,18 +133,12 @@ variable "model_deployments" {
 variable "native_responses_models" {
   type        = set(string)
   default     = ["gpt-5.6-sol"]
-  description = "Deployments verified to accept Codex Responses custom tools directly through Foundry."
+  description = "Deployments verified to accept Responses API requests directly through Foundry."
 
   validation {
     condition     = length(setsubtract(var.native_responses_models, toset(keys(var.model_deployments)))) == 0
     error_message = "native_responses_models must be a subset of model_deployments."
   }
-}
-
-variable "search_model" {
-  type        = string
-  default     = "gpt-5.6-sol"
-  description = "Foundry deployment name Search MCP uses for its one-call web_search Responses broker. Must support the hosted web_search tool and normally should also be a deployed model key."
 }
 
 variable "reuse_foundry" {
@@ -192,7 +186,7 @@ variable "foundry_account_name" {
 
 variable "foundry_project_name" {
   type        = string
-  default     = "codexproj"
+  default     = "gatewayproj"
   description = "Foundry project name. Terraform creates and manages it unless reuse_foundry_project is true, in which case the existing project is read only."
 }
 
@@ -308,7 +302,7 @@ variable "admin_ui_image" {
 variable "admin_ui_public" {
   type        = bool
   default     = false
-  description = "When admin_ui_image is set, true creates its dedicated Admin UI Container Apps environment with a public FQDN (still gated by Entra OIDC + admin group); false keeps that dedicated environment internal. It does not change the always-internal sidecar environment."
+  description = "When admin_ui_image is set, true creates its dedicated Admin UI Container Apps environment with a public FQDN (still gated by Entra OIDC + admin group); false keeps that dedicated environment internal. It does not change the internal worker environment."
 }
 
 variable "admin_ui_aca_subnet_cidr" {
@@ -333,18 +327,6 @@ variable "admin_group_object_id" {
   type        = string
   default     = ""
   description = "Entra ID security group object id whose members are gateway admins (prereq P1). The BFF gates writes on membership."
-}
-
-variable "codexproxy_image" {
-  type        = string
-  default     = ""
-  description = "Full image reference for the Codex proxy sidecar, e.g. acrllmgwxxxx.azurecr.io/codexproxy:latest. Empty disables the Container App."
-}
-
-variable "searchmcp_image" {
-  type        = string
-  default     = ""
-  description = "Full image reference for the Search MCP sidecar, e.g. acrllmgwxxxx.azurecr.io/searchmcp:latest. Empty disables the Container App."
 }
 
 variable "rate_tiers" {

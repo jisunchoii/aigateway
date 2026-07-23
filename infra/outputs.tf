@@ -19,12 +19,12 @@ output "apim_name" {
 }
 
 output "model_gateway_base_url" {
-  description = "Base URL for GitHub Copilot CLI, OpenCode, Codex, and direct clients."
+  description = "Base URL for GitHub Copilot CLI, OpenCode, and direct clients."
   value       = module.apim.model_gateway_base_url
 }
 
 output "responses_endpoint" {
-  description = "Codex CLI base URL; Codex appends /responses."
+  description = "Base URL for clients that call the Responses API."
   value       = module.apim.model_gateway_base_url
 }
 
@@ -75,11 +75,4 @@ output "config_sync_job_name" {
 output "admin_ui_fqdn" {
   description = "Admin UI FQDN (null until admin_ui_image is set). It is public only when admin_ui_public is true."
   value       = module.control_plane.admin_ui_fqdn
-}
-
-output "search_mcp_url" {
-  # Cross-task contract: Task 2 keeps the canonical /mcp/ root URL while Task 3
-  # maps APIM to the exact mcp path segment.
-  description = "APIM MCP endpoint for Codex web search (null until searchmcp_image is set)."
-  value       = local.searchmcp_enabled ? "${module.apim.gateway_url}/mcp/" : null
 }

@@ -23,9 +23,9 @@ Azure API Management(APIM)을 중심으로 하나의 project-enabled AIServices 
 |---|---|---|---|
 | GitHub Copilot CLI | `/openai/v1/chat/completions` | `api-key` | Azure provider 사용, `COPILOT_PROVIDER_AZURE_API_VERSION`은 설정하지 않음 |
 | VS Code BYOK | `/vscode/models/deployments/<model>/chat/completions` | `Ocp-Apim-Subscription-Key` | VS Code provider는 **Custom Endpoint** 사용 |
-| Codex CLI | `/openai/v1/responses` | `api-key` | Responses API 사용. partner/OSS 모델 요청은 Codex proxy sidecar가 payload를 정규화 |
 | OpenCode | `/openai/v1/chat/completions` 또는 `/openai/v1/responses` | `api-key` | provider별 wire API만 구분하고 같은 통합 base URL 사용 |
 | 직접 API 호출 | `/openai/v1/chat/completions` 또는 `/openai/v1/responses` | `api-key` | body의 `model`로 배포 선택 |
+| Codex CLI | 별도 브랜치 참조 | - | [`feat/codex-cli-onboarding`](https://github.com/jisunchoii/apim-foundry-governance/tree/feat/codex-cli-onboarding)에 전용 proxy와 연결 구성을 보존 |
 
 `api-key`와 `Ocp-Apim-Subscription-Key`는 서로 다른 credential이 아니라, 같은 APIM subscription key를 어떤 헤더 이름으로 보내는지만 다릅니다.
 
@@ -37,7 +37,6 @@ Azure API Management(APIM)을 중심으로 하나의 project-enabled AIServices 
 | `policies/` | Terraform이 렌더링하는 APIM policy template |
 | `app/admin-ui/` | React SPA + FastAPI BFF. 하나의 Admin UI 컨테이너 이미지로 배포 |
 | `app/config-sync-worker/` | Cosmos consumer config와 pricing 정보를 읽어 APIM named value/active downgrade를 동기화하는 Container Apps Job |
-| `app/search-mcp/` | OSS 모델용 bounded web search MCP 서버. APIM `/mcp/` 뒤에서 hosted `web_search`를 단일 Responses 요청으로 실행 |
 | `scripts/` | 배포/운영 보조 스크립트 |
 | `docs/` | GitBook 배포·운영 가이드 |
 
@@ -95,7 +94,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 
 ### 3. 게이트웨이 core 배포
 
-처음에는 `worker_image`, `admin_ui_image`, `codexproxy_image`, `searchmcp_image`를 모두 비워 둔 상태로 APIM, 네트워크, Cosmos, ACR 등을 먼저 만듭니다. 이미지 변수가 비어 있어도 ACR은 생성되고, 해당 Container App 또는 Job만 건너뜁니다. `admin_ui_image`를 배포할 때만 전용 Admin UI 환경이 생성되며, `admin_ui_public`은 이 환경에만 적용됩니다. Codex proxy와 Search MCP는 항상 내부 sidecar 환경에 남습니다.
+처음에는 `worker_image`, `admin_ui_image`를 모두 비워 둔 상태로 APIM, 네트워크, Cosmos, ACR 등을 먼저 만듭니다. 이미지 변수가 비어 있어도 ACR은 생성되고, 해당 Container App 또는 Job만 건너뜁니다. `admin_ui_image`를 배포할 때만 전용 Admin UI 환경이 생성되며, `admin_ui_public`은 이 환경에만 적용됩니다.
 
 ```bash
 cd infra
@@ -123,10 +122,8 @@ az acr repository list --name "$reg" -o table
 
 az acr build --registry "$reg" --image "config-sync-worker:${tag}" ../app/config-sync-worker
 az acr build --registry "$reg" --image "admin-ui:${tag}" ../app/admin-ui
-az acr build --registry "$reg" --image "codexproxy:${tag}" ../app/codex-proxy
-az acr build --registry "$reg" --image "searchmcp:${tag}" ../app/search-mcp
 
-for image in config-sync-worker admin-ui codexproxy searchmcp; do
+for image in config-sync-worker admin-ui; do
   az acr repository update \
     --name "$reg" \
     --image "${image}:${tag}" \
@@ -164,13 +161,11 @@ https://login.microsoftonline.com/<tenant id>/adminconsent?client_id=<spa app id
 
 ### 6. Container Apps와 Job 활성화
 
-`terraform.tfvars`의 빈 이미지 값을 교체합니다. 아래 예시는 네 이미지를 모두 빌드한 경우입니다. 일부만 빌드했다면 성공적으로 빌드하고 잠근 image 변수만 교체하고 나머지는 `""`로 유지합니다. `admin_ui_public`은 전용 Admin UI 환경의 노출 방식만 선택하며 sidecar 환경에는 영향을 주지 않습니다.
+`terraform.tfvars`의 빈 이미지 값을 교체합니다. 일부만 빌드했다면 성공적으로 빌드하고 잠근 image 변수만 교체하고 나머지는 `""`로 유지합니다. `admin_ui_public`은 전용 Admin UI 환경의 노출 방식만 선택하며 worker 환경에는 영향을 주지 않습니다.
 
 ```hcl
-worker_image          = "<registry_login_server>/config-sync-worker:<git-sha>"
-admin_ui_image        = "<registry_login_server>/admin-ui:<git-sha>"
-codexproxy_image      = "<registry_login_server>/codexproxy:<git-sha>"
-searchmcp_image       = "<registry_login_server>/searchmcp:<git-sha>"
+worker_image   = "<registry_login_server>/config-sync-worker:<git-sha>"
+admin_ui_image = "<registry_login_server>/admin-ui:<git-sha>"
 ```
 
 적용합니다.

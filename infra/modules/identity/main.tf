@@ -83,27 +83,3 @@ output "worker_id" {
   description = "Resource ID of the config-sync worker identity (to attach to the Container Apps Job)."
   value       = azurerm_user_assigned_identity.config_sync_worker.id
 }
-
-# Codex proxy sidecar identity. Calls the canonical AIServices account with this identity
-# (ManagedIdentityCredential), so it needs Cognitive Services User on that account.
-resource "azurerm_user_assigned_identity" "codex_proxy" {
-  name                = "id-codexproxy-${var.name_suffix}"
-  resource_group_name = var.resource_group_name
-  location            = var.location
-  tags                = var.tags
-}
-
-output "codexproxy_principal_id" {
-  description = "Object ID of the Codex proxy identity (for backend Cognitive Services + ACR RBAC)."
-  value       = azurerm_user_assigned_identity.codex_proxy.principal_id
-}
-
-output "codexproxy_client_id" {
-  description = "Client ID of the Codex proxy identity (AZURE_CLIENT_ID for ManagedIdentityCredential)."
-  value       = azurerm_user_assigned_identity.codex_proxy.client_id
-}
-
-output "codexproxy_id" {
-  description = "Resource ID of the Codex proxy identity (to attach to the Container App)."
-  value       = azurerm_user_assigned_identity.codex_proxy.id
-}

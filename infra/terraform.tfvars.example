@@ -15,7 +15,7 @@ apim_sku_name        = "Developer_1"
 apim_public = false
 
 # Admin UI 이미지를 배포할 때 외부 브라우저에서 열어야 하면 true로 설정합니다.
-# 이 값은 전용 Admin UI 환경에만 적용되며, sidecar 환경은 항상 내부 ILB로 유지됩니다.
+# 이 값은 전용 Admin UI 환경에만 적용되며, worker 환경은 항상 내부 ILB로 유지됩니다.
 admin_ui_public = false
 # 전용 Admin UI Container Apps 환경 subnet입니다. 다른 VNet subnet과 겹치지 않아야 합니다.
 # admin_ui_aca_subnet_cidr = "10.40.5.32/27"
@@ -26,10 +26,10 @@ admin_ui_public = false
 
 # 배포 경로 1: 신규 모델 배포
 # reuse_foundry=false, reuse_foundry_project=false로 두면 Terraform이 AIServices 계정,
-# codexproj 프로젝트, 아래 지원 모델 배포, Private Endpoint, RBAC를 생성합니다.
+# gatewayproj 프로젝트, 아래 지원 모델 배포, Private Endpoint, RBAC를 생성합니다.
 reuse_foundry                         = false
 reuse_foundry_project                 = false
-foundry_project_name                  = "codexproj"
+foundry_project_name                  = "gatewayproj"
 foundry_public_network_access_enabled = false
 
 # 신규 모델 배포에서 Terraform이 생성할 지원 모델입니다. 배포 이름은 실제 모델 이름과 같습니다.
@@ -64,18 +64,14 @@ model_deployments = {
   }
 }
 
-# Codex Responses 요청을 Foundry로 직접 전달할 호환성 검증 완료 deployment 목록입니다.
-# 모델 이름이나 provider로 자동 판별하지 않습니다. Responses custom tool 지원을 확인한 모델만 추가하세요.
+# Responses 요청을 Foundry로 직접 전달할 호환성 검증 완료 deployment 목록입니다.
+# 모델 이름이나 provider로 자동 판별하지 않습니다. Responses API 지원을 확인한 모델만 추가하세요.
 native_responses_models = ["gpt-5.6-sol"]
-
-# Search MCP가 web_search Responses 브로커 호출에 사용하는 deployment 이름입니다.
-# hosted web_search tool을 지원하는 모델이어야 하며, 위 model_deployments 키 중 하나와 일치해야 합니다.
-search_model = "gpt-5.6-sol"
 
 # 배포 경로 2: 기존 모델 활용 + 프로젝트 없음
 # reuse_foundry=true, reuse_foundry_project=false로 바꾸고 기존 AIServices 계정의
 # 정확한 이름과 리소스 그룹을 입력합니다.
-# Terraform은 기존 모델 배포를 관리하지 않고 codexproj 프로젝트, 게이트웨이용 Private Endpoint,
+# Terraform은 기존 모델 배포를 관리하지 않고 gatewayproj 프로젝트, 게이트웨이용 Private Endpoint,
 # APIM 역할 할당을 생성합니다.
 #
 # 배포 경로 3: 기존 모델 활용 + 프로젝트 있음
@@ -95,20 +91,18 @@ existing_foundry_rg   = ""
 # =============================================================================
 
 # 첫 번째 apply:
-# - 아래 네 값은 모두 빈 문자열로 둡니다.
+# - 아래 두 값은 모두 빈 문자열로 둡니다.
 # - Terraform은 ACR을 만들지만, 아직 존재하지 않는 이미지를 참조하는
 #   Container App과 Container Apps Job은 만들지 않습니다.
 #
 # 이미지 빌드 후 두 번째 apply:
-# - 아래 기존 네 줄의 빈 문자열을 전체 이미지 URI로 교체합니다.
+# - 아래 기존 두 줄의 빈 문자열을 전체 이미지 URI로 교체합니다.
 # - 같은 변수를 새로 추가하면 중복 정의 오류가 나므로 기존 값을 교체하세요.
 # - <registry_login_server>는 `terraform output -raw registry_login_server`로 확인합니다.
 # - <git-sha>는 `git rev-parse --short=12 HEAD` 결과를 사용합니다.
 # - build 후 배포할 Git SHA 태그를 ACR에서 write-disabled 상태로 잠급니다.
-worker_image     = ""
-admin_ui_image   = ""
-codexproxy_image = ""
-searchmcp_image  = ""
+worker_image   = ""
+admin_ui_image = ""
 
 # Admin UI를 배포할 때 아래 빈 값을 Entra 구성값으로 교체합니다.
 entra_tenant_id       = ""
@@ -117,10 +111,8 @@ bff_api_audience      = ""
 spa_client_id         = ""
 
 # 두 번째 apply 교체 형식:
-# worker_image     = "<registry_login_server>/config-sync-worker:<git-sha>"
-# admin_ui_image   = "<registry_login_server>/admin-ui:<git-sha>"
-# codexproxy_image = "<registry_login_server>/codexproxy:<git-sha>"
-# searchmcp_image  = "<registry_login_server>/searchmcp:<git-sha>"
+# worker_image   = "<registry_login_server>/config-sync-worker:<git-sha>"
+# admin_ui_image = "<registry_login_server>/admin-ui:<git-sha>"
 
 # =============================================================================
 # 4. 비용 한도

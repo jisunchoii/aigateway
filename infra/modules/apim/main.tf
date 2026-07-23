@@ -121,7 +121,7 @@ variable "allowed_model_names" {
 variable "native_responses_models" {
   type        = set(string)
   default     = []
-  description = "Deployments verified to accept Codex Responses custom tools without the Codex proxy."
+  description = "Deployments verified to accept Responses API requests directly through Foundry."
 
   validation {
     condition     = length(setsubtract(var.native_responses_models, toset(var.allowed_model_names))) == 0
@@ -159,52 +159,6 @@ variable "entra_team_claim" {
   description = "JWT claim used to derive consumerId."
 }
 
-variable "codexproxy_enabled" {
-  type        = bool
-  default     = false
-  description = "Whether the Responses operation dispatches to the Codex proxy."
-}
-
-variable "codexproxy_base_url" {
-  type        = string
-  default     = ""
-  description = "HTTPS base URL of the Codex proxy Container App."
-
-  validation {
-    condition     = !var.codexproxy_enabled || startswith(var.codexproxy_base_url, "https://")
-    error_message = "codexproxy_base_url must be HTTPS when codexproxy_enabled is true."
-  }
-}
-
-variable "codexproxy_key" {
-  type        = string
-  default     = ""
-  sensitive   = true
-  description = "APIM-to-sidecar hop key."
-
-  validation {
-    condition     = !(var.codexproxy_enabled || var.searchmcp_enabled) || length(var.codexproxy_key) > 0
-    error_message = "codexproxy_key is required when either codexproxy_enabled or searchmcp_enabled is true."
-  }
-}
-
-variable "searchmcp_enabled" {
-  type        = bool
-  default     = false
-  description = "Whether the Search MCP API is published through APIM."
-}
-
-variable "searchmcp_base_url" {
-  type        = string
-  default     = ""
-  description = "HTTPS base URL of the Search MCP Container App."
-
-  validation {
-    condition     = !var.searchmcp_enabled || startswith(var.searchmcp_base_url, "https://")
-    error_message = "searchmcp_base_url must be HTTPS when searchmcp_enabled is true."
-  }
-}
-
 locals {
   allowed_models          = sort(var.allowed_model_names)
   native_responses_models = sort(tolist(var.native_responses_models))
@@ -217,8 +171,6 @@ locals {
     deployed_models         = local.allowed_models
     native_responses_models = local.native_responses_models
     model_openai_v1_base    = var.model_openai_v1_base
-    codexproxy_enabled      = var.codexproxy_enabled
-    codexproxy_base_url     = var.codexproxy_base_url
   }
   model_gateway_policy_xml = templatefile(var.policy_template_path, merge(local.shared_policy_inputs, {
     client_auth_mode   = var.client_auth_mode
@@ -232,49 +184,6 @@ locals {
     supports_responses = false
     rewrite_chat_path  = true
   }))
-  search_mcp_policy_xml = var.searchmcp_enabled ? trimspace(<<-XML
-    <policies>
-      <inbound>
-        <base />
-        <rewrite-uri template="/mcp" />
-        <set-header name="api-key" exists-action="delete" />
-        <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
-        <set-query-parameter name="subscription-key" exists-action="delete" />
-        <set-header name="Authorization" exists-action="override">
-          <value>@("Bearer " + "{{codexproxy-key}}")</value>
-        </set-header>
-      </inbound>
-      <backend>
-        <forward-request timeout="300" fail-on-error-status-code="false" buffer-response="false" />
-      </backend>
-      <outbound>
-        <base />
-      </outbound>
-      <on-error>
-        <base />
-      </on-error>
-    </policies>
-  XML
-  ) : null
-  search_mcp_contract = var.searchmcp_enabled ? {
-    name        = "search-mcp"
-    path        = "mcp"
-    header      = "api-key"
-    service_url = var.searchmcp_base_url
-    operations = {
-      mcp = {
-        method       = "POST"
-        url_template = "/"
-        policy = {
-          authorization_header    = "Bearer {{codexproxy-key}}"
-          buffer_response         = false
-          remove_headers          = ["api-key", "Ocp-Apim-Subscription-Key"]
-          remove_query_parameters = ["subscription-key"]
-          rewrite_uri             = "/mcp"
-        }
-      }
-    }
-  } : null
 }
 
 resource "terraform_data" "model_gateway_policy_hash" {
@@ -283,12 +192,6 @@ resource "terraform_data" "model_gateway_policy_hash" {
 
 resource "terraform_data" "vscode_models_policy_hash" {
   triggers_replace = sha256(local.vscode_models_policy_xml)
-}
-
-resource "terraform_data" "search_mcp_policy_hash" {
-  count = var.searchmcp_enabled ? 1 : 0
-
-  triggers_replace = sha256(local.search_mcp_policy_xml)
 }
 
 resource "azurerm_api_management" "apim" {
@@ -387,24 +290,6 @@ resource "azurerm_api_management_api" "vscode_models" {
   }
 }
 
-resource "azurerm_api_management_api" "search_mcp" {
-  count                 = var.searchmcp_enabled ? 1 : 0
-  name                  = "search-mcp"
-  resource_group_name   = var.resource_group_name
-  api_management_name   = azurerm_api_management.apim.name
-  revision              = "1"
-  display_name          = "Search MCP"
-  path                  = "mcp"
-  protocols             = ["https"]
-  subscription_required = true
-  service_url           = var.searchmcp_base_url
-
-  subscription_key_parameter_names {
-    header = "api-key"
-    query  = "subscription-key"
-  }
-}
-
 resource "azurerm_api_management_api_operation" "vscode_chat" {
   operation_id        = "vscode-chat-completions"
   api_name            = azurerm_api_management_api.vscode_models.name
@@ -419,27 +304,6 @@ resource "azurerm_api_management_api_operation" "vscode_chat" {
     required = true
     type     = "string"
   }
-}
-
-resource "azurerm_api_management_api_operation" "search_mcp" {
-  count               = var.searchmcp_enabled ? 1 : 0
-  operation_id        = "search-mcp"
-  api_name            = one(azurerm_api_management_api.search_mcp[*].name)
-  api_management_name = azurerm_api_management.apim.name
-  resource_group_name = var.resource_group_name
-  display_name        = "Search MCP"
-  method              = "POST"
-  url_template        = "/"
-}
-
-resource "azurerm_api_management_named_value" "codexproxy_key" {
-  count               = var.codexproxy_enabled || var.searchmcp_enabled ? 1 : 0
-  name                = "codexproxy-key"
-  api_management_name = azurerm_api_management.apim.name
-  resource_group_name = var.resource_group_name
-  display_name        = "codexproxy-key"
-  value               = var.codexproxy_key
-  secret              = true
 }
 
 resource "azurerm_api_management_api_policy" "model_gateway" {
@@ -459,7 +323,6 @@ resource "azurerm_api_management_api_policy" "model_gateway" {
     azurerm_api_management_named_value.tier,
     azurerm_api_management_api_operation.model_gateway_chat,
     azurerm_api_management_api_operation.model_gateway_responses,
-    azurerm_api_management_named_value.codexproxy_key,
     azurerm_api_management_api_diagnostic.model_gateway,
   ]
 
@@ -496,25 +359,6 @@ resource "azurerm_api_management_api_policy" "vscode_models" {
   lifecycle {
     ignore_changes       = [xml_content]
     replace_triggered_by = [terraform_data.vscode_models_policy_hash]
-  }
-}
-
-resource "azurerm_api_management_api_operation_policy" "search_mcp" {
-  count               = var.searchmcp_enabled ? 1 : 0
-  operation_id        = one(azurerm_api_management_api_operation.search_mcp[*].operation_id)
-  api_name            = one(azurerm_api_management_api.search_mcp[*].name)
-  api_management_name = azurerm_api_management.apim.name
-  resource_group_name = var.resource_group_name
-  xml_content         = local.search_mcp_policy_xml
-
-  depends_on = [
-    azurerm_api_management_api_operation.search_mcp,
-    azurerm_api_management_named_value.codexproxy_key,
-  ]
-
-  lifecycle {
-    ignore_changes       = [xml_content]
-    replace_triggered_by = [terraform_data.search_mcp_policy_hash[0]]
   }
 }
 
@@ -658,7 +502,6 @@ output "api_contract" {
         chat = azurerm_api_management_api_operation.vscode_chat.url_template
       }
     }
-    search_mcp = local.search_mcp_contract
   }
 }
 
@@ -667,15 +510,6 @@ output "rendered_policy_xml" {
   value = {
     model_gateway = local.model_gateway_policy_xml
     vscode_models = local.vscode_models_policy_xml
-    search_mcp    = local.search_mcp_policy_xml
-  }
-}
-
-output "codexproxy_contract" {
-  value = {
-    enabled           = var.codexproxy_enabled
-    base_url          = var.codexproxy_base_url
-    named_value_count = length(azurerm_api_management_named_value.codexproxy_key)
   }
 }
 

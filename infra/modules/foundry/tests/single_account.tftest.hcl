@@ -40,7 +40,7 @@ run "greenfield_single_account_defaults" {
       "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.cognitiveservices.azure.com",
       "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-aigw-test-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.services.ai.azure.com",
     ]
-    project_name                  = "codexproj"
+    project_name                  = "gatewayproj"
     public_network_access_enabled = false
     deployments = {
       "gpt-5.6-sol" = {
@@ -110,12 +110,12 @@ run "greenfield_single_account_defaults" {
   }
 
   assert {
-    condition     = try(azapi_resource.project_account[0].body.properties.associatedProjects == ["codexproj"], false)
+    condition     = try(azapi_resource.project_account[0].body.properties.associatedProjects == ["gatewayproj"], false)
     error_message = "The canonical account must keep the configured project association."
   }
 
   assert {
-    condition     = try(azapi_resource.project_account[0].body.properties.defaultProject == "codexproj", false)
+    condition     = try(azapi_resource.project_account[0].body.properties.defaultProject == "gatewayproj", false)
     error_message = "The canonical project must remain the account default."
   }
 
@@ -219,7 +219,7 @@ run "greenfield_single_account_defaults" {
   }
 
   assert {
-    condition     = output.project_responses_base == "https://aisproj-abc123.services.ai.azure.com/api/projects/codexproj/openai/v1"
+    condition     = output.project_responses_base == "https://aisproj-abc123.services.ai.azure.com/api/projects/gatewayproj/openai/v1"
     error_message = "The Responses base must use the canonical services.ai host."
   }
 }

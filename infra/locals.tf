@@ -38,7 +38,4 @@ locals {
     for model, deployment in var.model_deployments :
     model => deployment.capacity * 1000
   }
-
-  codexproxy_enabled = var.codexproxy_image != ""
-  searchmcp_enabled  = var.searchmcp_image != ""
 }
