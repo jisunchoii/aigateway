@@ -25,6 +25,10 @@ Codex proxy와 Search MCP는 모두 APIM 뒤에 있으며 동일한 APIM subscri
 * OSS 모델에서 bounded web search를 사용하고 싶다.
 {% endhint %}
 
+{% hint style="info" %}
+**GPT 계열만 사용한다면 Search MCP 설정은 필요하지 않습니다.** 기본 native 모델인 `gpt-5.6-sol`만 사용할 때는 아래 `mcp_servers.web_search` 블록을 생략할 수 있습니다. Search MCP는 Codex proxy를 거치는 OSS 모델(`FW-GLM-5.2`, `DeepSeek-V4-Pro`, `grok-4.3`)에서 웹 검색이 필요할 때만 추가합니다.
+{% endhint %}
+
 ## 2. 준비값
 
 | 값                     | 예시                        |
@@ -32,7 +36,7 @@ Codex proxy와 Search MCP는 모두 APIM 뒤에 있으며 동일한 APIM subscri
 | APIM host             | `https://<apim-host>`     |
 | APIM subscription key | `<APIM subscription key>` |
 | Responses base URL    | `/openai/v1`              |
-| Search MCP URL        | `/mcp/`                   |
+| Search MCP URL        | `/mcp/` (OSS 모델 웹 검색 시에만 필요) |
 | 인증 헤더                 | `api-key`                 |
 
 APIM subscription key는 환경 변수로 둡니다.
@@ -60,7 +64,11 @@ wire_api = "responses"
 
 [model_providers.aigateway.env_http_headers]
 "api-key" = "GATEWAY_KEY"
+```
 
+`gpt-5.6-sol`만 사용한다면 여기까지 설정하면 됩니다. OSS 모델에서 웹 검색도 사용하려면 다음 Search MCP 설정을 추가합니다.
+
+```toml
 [mcp_servers.web_search]
 url = "https://<apim-host>/mcp/"
 required = true
@@ -82,7 +90,7 @@ required = true
 | APIM 인증  | `api-key` 헤더 |
 | backend 인증 | APIM/sidecar 관리 ID(Entra ID) → AIServices 계정 |
 | 라우팅      | 요청 body `model` 필드로 backend deployment 선택 |
-| 웹 검색     | OSS 모델은 Codex client MCP → APIM `/mcp/` → Search MCP |
+| 웹 검색     | GPT 전용 사용 시 Search MCP 불필요. OSS 모델 웹 검색 시 Codex client MCP → APIM `/mcp/` → Search MCP |
 
 ## 5. 모델별 지원 매트릭스
 
@@ -191,7 +199,7 @@ az monitor log-analytics query \
 * `GATEWAY_KEY` 환경 변수가 올바른 APIM subscription key인지
 * `env_http_headers`로 `api-key`를 전달하는지
 * 선택한 모델이 consumer allowed models에 포함되어 있는지
-* Search MCP URL이 `/mcp/`로 끝나는지
+* OSS 모델의 웹 검색을 설정했다면 Search MCP URL이 `/mcp/`로 끝나는지
 
 | HTTP 상태 | 의미 |
 |---|---|
